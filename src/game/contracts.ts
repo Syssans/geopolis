@@ -78,6 +78,13 @@ export function capacity(s: GameState, w: World, id: Id): Partial<Record<Good, n
   return cap;
 }
 
+/** Ce que le joueur peut s'engager à livrer chaque mois : sa production + ses achats sous contrat. */
+export function supply(s: GameState, w: World): Partial<Record<Good, number>> {
+  const cap = capacity(s, w, s.player);
+  for (const p of s.purchases ?? []) cap[p.good] = (cap[p.good] ?? 0) + p.volume;
+  return cap;
+}
+
 export function committed(s: GameState): Partial<Record<Good, number>> {
   const c: Partial<Record<Good, number>> = {};
   for (const k of s.contracts) c[k.good] = (c[k.good] ?? 0) + k.volume;
@@ -118,7 +125,7 @@ export function piracyRisk(route: Route, escort: number, s?: GameState): number 
 }
 
 export function escortsUsed(s: GameState): number {
-  return s.contracts.reduce((a, c) => a + c.escort, 0);
+  return s.contracts.reduce((a, c) => a + c.escort, 0) + (s.purchases ?? []).reduce((a, p) => a + p.escort, 0);
 }
 
 // ————— Offres —————
@@ -127,7 +134,7 @@ export function generateOffers(s: GameState, w: World, force = false) {
   if (!force) s.offers = s.offers.filter((o) => --o.expires > 0 && s.nations[o.buyer].alive);
   if (!force && (s.offers.length >= 3 || rand(s) > 0.25)) return;
   const me = s.player;
-  const cap = capacity(s, w, me);
+  const cap = supply(s, w);
   const com = committed(s);
   const goods = (Object.keys(cap) as Good[]).filter(
     (g) => !s.notForSale.includes(g) && (cap[g] ?? 0) - (com[g] ?? 0) > Math.max(0.05, (cap[g] ?? 0) * 0.15),
@@ -186,9 +193,9 @@ export interface Result {
 export function acceptOffer(s: GameState, w: World, offerId: number, routeIdx: number): Result {
   const o = s.offers.find((x) => x.id === offerId);
   if (!o) return { ok: false, msg: 'Offre expirée' };
-  const cap = capacity(s, w, s.player)[o.good] ?? 0;
+  const cap = supply(s, w)[o.good] ?? 0;
   const com = committed(s)[o.good] ?? 0;
-  if (com + o.volume > cap * 1.02) return { ok: false, msg: 'Production insuffisante pour honorer ce contrat' };
+  if (com + o.volume > cap * 1.02) return { ok: false, msg: 'Production et achats insuffisants pour honorer ce contrat' };
   const route = o.routes[routeIdx] ?? o.routes[0];
   s.offers = s.offers.filter((x) => x !== o);
   s.contracts.push({
@@ -270,11 +277,17 @@ export interface ContractNews {
   pirated: Contract[];
 }
 
-export function processContracts(s: GameState, w: World): { revenue: number; news: ContractNews } {
+export function processContracts(
+  s: GameState,
+  w: World,
+): { revenue: number; news: ContractNews; delivered: Partial<Record<Good, number>>; spareEscorts: number } {
   const me = s.nations[s.player];
   const news: ContractNews = { blocked: [], pirated: [] };
+  const delivered: Partial<Record<Good, number>> = {};
   let revenue = 0;
+  // Livrables : la production du mois et les stocks (achats compris)
   const cap = capacity(s, w, s.player);
+  for (const [g, q] of Object.entries(s.stock ?? {}) as [Good, number][]) cap[g] = (cap[g] ?? 0) + q;
   const com = committed(s);
   // Escortes limitées par la flotte réelle
   let spare = Math.floor(me.navy);
@@ -316,6 +329,7 @@ export function processContracts(s: GameState, w: World): { revenue: number; new
         const ratio = Math.min(1, (cap[c.good] ?? 0) / Math.max(com[c.good] ?? 0, 1e-6));
         c.lastRevenue = e.net * ratio;
         c.lastStatus = 'ok';
+        delivered[c.good] = (delivered[c.good] ?? 0) + c.volume * ratio;
         revenue += c.lastRevenue;
         for (const st of c.route.straits) {
           const owner = straitOwner(s, w, st);
@@ -331,7 +345,7 @@ export function processContracts(s: GameState, w: World): { revenue: number; new
       log(s, `Contrat honoré avec ${buyer.name} (+1 point).`, 'trade', [s.player]);
     }
   }
-  return { revenue, news };
+  return { revenue, news, delivered, spareEscorts: spare };
 }
 
 export const nodeName = (id: string) => NODES.get(id)?.name ?? id;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { iconize } from '../src/ui/format';
+import * as P from '../src/game/purchases';
 import { WORLD as world } from '../src/game/world';
 import { createGame } from '../src/game/setup';
 import { advanceMonth } from '../src/game/tick';
@@ -13,6 +14,7 @@ import {
 import { RELIGIONS } from '../src/data/religions';
 import { CAMPAIGNS } from '../src/data/campaign';
 import { acceptOffer, capacity, committed, findRoutes } from '../src/game/contracts';
+import * as C from '../src/game/contracts';
 import { toggleForSale, upgrade } from '../src/game/economy';
 import { output } from '../src/game/trade';
 import { STRAITS } from '../src/data/trade';
@@ -327,5 +329,53 @@ describe('marchés et interface', () => {
 
   it('la campagne dure 10 ans', () => {
     expect(createGame(world, 'France', 1).endYear).toBe(2036);
+  });
+});
+
+describe('achats, stocks et besoins', () => {
+  it('un contrat d’achat livre chaque mois dans les stocks et nourrit la population', () => {
+    const s = createGame(world, 'Japan', 4);
+    advanceMonth(s, world);
+    expect(s.needs!.lines.cereales!.market).toBeGreaterThan(0); // le Japon manque de céréales
+    const sup = P.suppliers(s, world, 'cereales').find((x) => x.q.ok)!;
+    expect(sup).toBeTruthy();
+    const need = s.needs!.lines.cereales!.need;
+    const r = P.proposePurchase(s, world, sup.id, 'cereales', need * 2, 12);
+    expect(r.ok).toBe(true);
+    const p = s.purchases[0];
+    expect(p.unitPrice).toBeGreaterThan(0);
+    const seller0 = s.nations[sup.id].treasury;
+    advanceMonth(s, world);
+    if (p.lastStatus === 'ok') {
+      expect(s.needs!.lines.cereales!.market).toBeLessThan(1e-6); // couvert par la livraison
+      expect(s.stock.cereales ?? 0).toBeGreaterThan(0); // le surplus est stocké
+    }
+    expect(s.nations[sup.id].treasury).toBeGreaterThan(seller0 - 1e3);
+    expect(s.needs!.purchases).toBeGreaterThan(0);
+  });
+
+  it('achat-revente au comptant avec un écart de prix', () => {
+    const s = createGame(world, 'France', 4);
+    const t0 = s.nations.France.treasury;
+    expect(P.buySpot(s, 'petrole', 2).ok).toBe(true);
+    expect(s.stock.petrole).toBe(2);
+    s.prices.petrole *= 1.5; // flambée des cours
+    expect(P.sellSpot(s, 'petrole', 2).ok).toBe(true);
+    expect(s.stock.petrole).toBe(0);
+    expect(s.nations.France.treasury).toBeGreaterThan(t0); // plus-value
+  });
+
+  it('les stocks permettent d’honorer des contrats de vente au-delà de la production', () => {
+    const s = createGame(world, 'Japan', 4);
+    expect(C.supply(s, world).petrole ?? 0).toBe(0);
+    const sup = P.suppliers(s, world, 'petrole').find((x) => x.q.ok)!;
+    P.proposePurchase(s, world, sup.id, 'petrole', 1, 12);
+    expect(C.supply(s, world).petrole).toBeGreaterThan(0.5);
+  });
+
+  it('pas d’achat en guerre ni sous embargo', () => {
+    const s = createGame(world, 'France', 4);
+    s.embargoes.push('Russia>France');
+    expect(P.quote(s, world, 'Russia', 'petrole').ok).toBe(false);
   });
 });

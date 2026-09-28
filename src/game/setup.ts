@@ -10,7 +10,7 @@ import { computeTrade } from './trade';
 import { initCampaign } from './missions';
 import type { GameState, Id, Nation, Policy, World } from './types';
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 export const ARMY_UPKEEP = 0.25;
 export const NAVY_UPKEEP = 0.5;
 
@@ -32,6 +32,9 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
     offers: [],
     contracts: [],
     convoys: [],
+    purchases: [],
+    stock: {},
+    needs: null,
     missions: [],
     score: 0,
     passes: {},

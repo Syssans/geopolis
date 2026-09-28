@@ -184,7 +184,41 @@ export interface Convoy {
   depart: number; // temps absolu (mois)
   duration: number; // mois
   escort: number;
-  contract?: number; // contrat du joueur
+  contract?: number; // contrat de vente du joueur
+  purchase?: number; // contrat d'achat du joueur
+}
+
+/** Contrat d'achat : un fournisseur livre chaque mois une quantité à prix verrouillé. */
+export interface Purchase {
+  id: number;
+  seller: Id;
+  good: Good;
+  volume: number; // unités par mois
+  unitPrice: number; // prix payé par unité (verrouillé)
+  monthsLeft: number;
+  months: number;
+  route: Route;
+  alternatives: Route[];
+  escort: number;
+  blocked: number;
+  lastStatus: 'ok' | 'blocked' | 'piracy';
+  lastCost: number;
+}
+
+export interface NeedLine {
+  need: number; // unités consommées par mois
+  own: number; // couvertes par la production nationale
+  stock: number; // puisées dans les stocks
+  market: number; // achetées en urgence au marché
+  cost: number; // coût des achats d'urgence (Md$)
+}
+
+export interface NeedsReport {
+  lines: Partial<Record<Good, NeedLine>>;
+  cost: number; // achats d'urgence + stockage
+  purchases: number; // paiements des contrats d'achat
+  sales: number; // reventes au comptant du mois
+  expensive: boolean; // vie chère : pénurie couverte à prix fort
 }
 
 export interface MissionState extends MissionDef {
@@ -200,6 +234,9 @@ export interface GameState {
   offers: ContractOffer[];
   contracts: Contract[];
   convoys: Convoy[];
+  purchases: Purchase[]; // contrats d'achat du joueur
+  stock: Partial<Record<Good, number>>; // stocks du joueur (unités)
+  needs: NeedsReport | null; // bilan du dernier mois : besoins de la population
   missions: MissionState[];
   score: number; // points de missions et d'événements
   passes: Record<string, number>; // droits de passage achetés : détroit → mois restants

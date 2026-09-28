@@ -72,8 +72,27 @@ export function monthlyConvoys(s: GameState, w: World) {
     });
   }
 
+  // Convois de vos achats (payés et mis en stock par processPurchases)
+  for (const p of s.purchases ?? []) {
+    if (p.lastStatus !== 'ok' || p.lastCost <= 0) continue;
+    s.convoys.push({
+      id: s.nextUid++,
+      from: p.seller,
+      to: s.player,
+      good: p.good,
+      qty: p.volume,
+      value: p.lastCost,
+      nodes: p.route.nodes,
+      straits: p.route.straits,
+      depart: now + rand(s) * 0.5,
+      duration: durationOf(p.route.nodes),
+      escort: p.escort,
+      purchase: p.id,
+    });
+  }
+
   // Échanges mondiaux : exportateurs tirés selon leur production, importateurs selon leurs besoins
-  const foreign = s.convoys.filter((c) => c.contract === undefined).length;
+  const foreign = s.convoys.filter((c) => c.contract === undefined && c.purchase === undefined).length;
   const exporters = alive(s)
     .filter((n) => n.id !== s.player)
     .map((n) => ({ n, v: n.income.production }))
@@ -167,6 +186,7 @@ export function canIntercept(s: GameState, w: World, c: Convoy, t: number): Inte
   const legal = !!warBetween(s, s.player, c.from) || !!warBetween(s, s.player, c.to);
   const fail = (reason: string): InterceptCheck => ({ ok: false, reason, chance: 0, legal });
   if (c.from === s.player) return fail('C’est l’un de vos convois');
+  if (c.to === s.player) return fail('Cette cargaison vous est destinée');
   if (me.navy < 1) return fail('Il vous faut au moins une flotte');
   if ((s.passes['intercept'] ?? 0) > 0) return fail('Vos navires se réarment (une interception par mois)');
   const node = currentNode(c, t);

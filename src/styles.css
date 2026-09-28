@@ -322,3 +322,22 @@ button.link.danger { color: var(--bad); }
 .market-row .mine-tag { font-style: normal; font-size: 10px; color: var(--gold); border: 1px solid #d4a01766; border-radius: 4px; padding: 0 3px; margin-left: 2px; }
 .market-row .val { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
 .market-row .val small { display: block; font-size: 11px; }
+
+/* ——— Besoins, stocks, achats ——— */
+.need { background: #0d1117; border: 1px solid #8e2b2b; border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; }
+.need.ok { border-color: var(--line); }
+.need .mh small { color: var(--muted); }
+.needbar { display: flex; height: 10px; background: #30363d; border-radius: 5px; overflow: hidden; margin: 6px 0 4px; gap: 1px; }
+.needbar i { display: block; height: 100%; }
+.needbar i.own, .cap-legend .k.own { background: var(--good); }
+.needbar i.stock, .cap-legend .k.stock { background: var(--blue); }
+.needbar i.market, .cap-legend .k.market { background: var(--bad); }
+.needtxt { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+.stock-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.stock-row .seg button { font-size: 12px; padding: 5px 8px; }
+.supplier { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; line-height: 1.4; }
+.supplier.off { opacity: .6; }
+.supplier .chip { white-space: nowrap; max-width: 45%; white-space: normal; text-align: center; }
+.pick-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.on { border-color: var(--gold); color: var(--gold); font-weight: 600; }
+.chip:disabled { opacity: .7; cursor: default; }

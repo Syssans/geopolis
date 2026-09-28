@@ -11,18 +11,19 @@ import {
 import { advanceMonth } from '../game/tick';
 import * as C from '../game/contracts';
 import * as V from '../game/convoys';
+import * as P from '../game/purchases';
 import * as E from '../game/economy';
 import { progress, scoreBreakdown, monthlyIncome } from '../game/missions';
 import { CAMPAIGNS } from '../data/campaign';
 import { computeTrade, homeNode, NODES, output, production, straitClosed, straitOwner, TOLL, unitPrice as unitPriceOf, type TradeReport } from '../game/trade';
-import type { GameState, Id, PeaceTerms, Pid, Policy, War, World } from '../game/types';
+import type { GameState, Id, NeedLine, PeaceTerms, Pid, Policy, War, World } from '../game/types';
 import {
   aiAcceptsPeace, annexable, applyPeace, canDeclareWar, enemyLeader, isLeader, scoreFor, termsCost,
 } from '../game/war';
 import { RELIGIONS, type Religion } from '../data/religions';
 import { GOODS, STRAITS, TRADE_NODES } from '../data/trade';
 import type { Topology } from 'topojson-specification';
-import { cls, esc, iconize, money, num, pct, pop, signed } from './format';
+import { cls, esc, iconize, money, num, partitive, pct, pop, signed } from './format';
 import { MapView, type MapMode } from './map';
 import { chartPointer, priceChart, sparkline } from './charts';
 import { clock as clockOf } from '../game/convoys';
@@ -59,6 +60,7 @@ export class App {
   private contractsTab = 'resources';
   private selConvoy: number | null = null;
   private marketGood: string | null = null;
+  private pf: { seller: Id; good: keyof typeof GOODS; volume: number; months: number; route: number } | null = null;
 
   constructor(private root: HTMLElement, private world: World, topo: Topology) {
     this.map = new MapView(root, topo, world);
@@ -180,7 +182,10 @@ export class App {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return null;
       const s = JSON.parse(raw) as GameState;
-      if (s.version === 4 || s.version === 5) {
+      if (s.version === 4 || s.version === 5 || s.version === 6) {
+        s.purchases ??= [];
+        s.stock ??= {};
+        s.needs ??= null;
         // Sauvegardes antérieures : convois et historique des cours reprennent au mois suivant
         s.convoys ??= [];
         s.priceHistory ??= Object.fromEntries(Object.keys(GOODS).map((g) => [g, [s.prices[g] ?? 1]]));
@@ -345,6 +350,44 @@ export class App {
       const [id, d] = v.split(':').map(Number);
       refresh(C.setEscort(this.state, id, d));
     };
+    h.suppliers = (g) => this.showSuppliers(g as keyof typeof GOODS);
+    h.buyFrom = (id) => this.showSellerGoods(id);
+    h.pForm = (v) => {
+      const [seller, good] = v.split('|');
+      this.pf = { seller, good: good as keyof typeof GOODS, volume: 0, months: 24, route: 0 };
+      this.showPurchaseForm();
+    };
+    h.pSet = (v) => {
+      const [k, x] = v.split(':');
+      if (k === 'v') this.pf!.volume = Number(x);
+      if (k === 'm') this.pf!.months = Number(x);
+      if (k === 'r') this.pf!.route = Number(x);
+      this.showPurchaseForm();
+    };
+    h.pSign = () => {
+      const f = this.pf!;
+      const r = P.proposePurchase(this.state, this.world, f.seller, f.good, f.volume, f.months, f.route);
+      this.toast(r.msg, r.ok ? 'good' : 'bad');
+      if (r.ok) this.showContracts('active');
+      this.renderHud();
+    };
+    h.spotBuy = (g) => {
+      const r = P.buySpot(this.state, g as keyof typeof GOODS, this.lot(g as keyof typeof GOODS));
+      refresh(r);
+    };
+    h.spotSell = (v) => {
+      const [g, f] = v.split(':');
+      refresh(P.sellSpot(this.state, g as keyof typeof GOODS, (this.state.stock[g as keyof typeof GOODS] ?? 0) * Number(f)));
+    };
+    h.pEscort = (v) => {
+      const [id, d] = v.split(':').map(Number);
+      refresh(P.setPurchaseEscort(this.state, id, d, C.escortsUsed(this.state)));
+    };
+    h.pReroute = (v) => {
+      const [id, idx] = v.split(':').map(Number);
+      refresh(P.setPurchaseRoute(this.state, id, idx));
+    };
+    h.cancelPurchase = (id) => refresh(P.cancelPurchase(this.state, Number(id)));
     h.intercept = (id) => {
       const r = V.intercept(this.state, this.world, Number(id), this.map.now);
       this.selConvoy = null;
@@ -483,7 +526,7 @@ export class App {
     if (!s || this.picking) return;
     const me = s.nations[s.player];
     const inc = me.income;
-    const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep;
+    const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
     if (!this.el.hud.firstChild)
       this.el.hud.innerHTML = `<button class="me" data-a="me"></button>
         <div class="time"><span class="date"></span><div class="speed"></div></div><div class="res"></div>`;
@@ -639,7 +682,7 @@ export class App {
       const minority = p.religion !== owner.religion || p.core !== p.owner;
       html += `<h3>Actions</h3><div class="actions">
         ${this.action('support', 'Armer les insurgés', A.COSTS.support(), { disabled: !minority ? 'Aucune minorité' : sameBloc(s, me.id, owner.id) ? 'Allié' : p.supportedBy ? 'Déjà soutenus' : !inReach(s, this.world, me.id, owner.id) ? 'Hors de portée' : undefined })}
-        <button class="act" data-a="tab" data-p="nation"><span class="t">Diplomatie avec ${esc(owner.name)}</span><span class="c">Relations ${signed(rel(s, me.id, owner.id))}</span></button>
+        <button class="act" data-a="tab" data-p="nation"><span class="t">Diplomatie avec ${esc(owner.name)}</span><span class="c">🌍 ${signed(rel(s, me.id, owner.id))}</span></button>
       </div>`;
     }
     return html;
@@ -681,7 +724,7 @@ export class App {
     const s = this.state;
     const me = this.me;
     const inc = me.income;
-    const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep;
+    const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
     const report = this.trade();
     const home = homeNode(s, this.world, me.id);
     const slots = A.merchantSlots(s, me.id);
@@ -849,7 +892,7 @@ export class App {
     if (embargoes(s, id, me.id)) badges.push('<span class="badge-i war">Vous impose un embargo</span>');
     for (const w of warsOf(s, id)) badges.push(`<span class="badge-i war">⚔️ ${esc(w.name)}</span>`);
     return `<div class="badges">${badges.join('')}</div>
-      <div class="row" style="border:0"><span>Relations avec vous</span><b class="${cls(r)}">${signed(r)}</b></div>
+      <div class="row" style="border:0"><span>🌍 Relations avec vous</span><b class="${cls(r)}">${signed(r)}</b></div>
       <div class="relbar"><i style="left:${(r + 100) / 2}%"></i></div>
       <div class="stats">
         ${stat('Religion', `${RELIGIONS[n.religion].icon} ${RELIGIONS[n.religion].name}`)}${stat('Politique', POLICIES[n.policy].name)}
@@ -862,6 +905,7 @@ export class App {
         ${trade ? this.action('untrade', 'Rompre l’accord', 'Relations −15') : this.action('trade', 'Accord commercial', A.COSTS.trade(), { disabled: war ? 'En guerre' : emb || embargoes(s, id, me.id) ? 'Embargo' : undefined })}
         ${emb ? this.action('embargo', 'Lever l’embargo', 'Relations +10') : this.action('embargo', 'Décréter un embargo', A.COSTS.embargo(), { disabled: allied ? 'Allié' : undefined })}
         ${this.action('aid', 'Aide financière', A.COSTS.aid(s, me.id), { disabled: war ? 'En guerre' : undefined })}
+        <button class="act" data-a="buyFrom" data-p="${esc(id)}"><span class="t">📥 Acheter à ce pays</span><span class="c">contrat d’achat</span></button>
         ${allied ? '' : this.action('alliance', 'Proposer une alliance', A.COSTS.alliance(), { disabled: war ? 'En guerre' : blocInvite })}
         ${!allied && n.bloc && !me.bloc ? this.action('joinBloc', `Rejoindre ${esc(s.blocs[n.bloc].name)}`, A.COSTS.alliance()) : ''}
       </div>
@@ -950,11 +994,11 @@ export class App {
     let title = '';
     let html = '';
     if (key === 'treasury') {
-      const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep;
+      const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
       title = '💰 Trésor';
       html = `<p>L’argent de l’État : <b>${money(me.treasury)}</b>. S’il devient négatif, c’est la faillite : l’armée déserte et la stabilité chute.</p>
         <h3>Chaque mois</h3><div class="rows">
-        ${row('Contrats commerciaux', inc.contracts ?? 0, 'Md$')}${row('Production vendue localement', inc.production, 'Md$')}${row('Commerce (nœuds)', inc.trade, 'Md$')}${row('Péages des détroits', inc.tolls, 'Md$')}${row('Entretien armée et flotte', -inc.upkeep, 'Md$')}
+        ${row('Contrats commerciaux', inc.contracts ?? 0, 'Md$')}${row('Production vendue localement', inc.production, 'Md$')}${row('Commerce (nœuds)', inc.trade, 'Md$')}${row('Péages des détroits', inc.tolls, 'Md$')}${row('Entretien armée et flotte', -inc.upkeep, 'Md$')}${row('Contrats d’achat', -(s.needs?.purchases ?? 0), 'Md$')}${row('Besoins de la population (achats d’urgence, stockage)', -(s.needs?.cost ?? 0), 'Md$')}
         <div class="row"><span><b>Solde</b></span><span class="${cls(net)}"><b>${net >= 0 ? '+' : ''}${money(net)}</b></span></div></div>
         <h3>À quoi il sert</h3><p class="muted">Moderniser, reconvertir ou prospecter vos provinces · recruter armée et flotte · acheter des droits de passage · aide aux pays amis.</p>
         <h3>Comment l’augmenter</h3><p class="muted">Signer des contrats (📦 Économie), moderniser les provinces qui produisent les marchandises chères, placer vos marchands, contrôler un détroit.</p>`;
@@ -1054,12 +1098,13 @@ export class App {
     const s = this.state;
     const cap = C.capacity(s, this.world, s.player);
     const com = C.committed(s);
+    const sup = C.supply(s, this.world);
     const qty = (v: number) => num(v, v < 10 ? 2 : 1);
     const tabDefs: [string, string][] = [
-      ['resources', '📦<span>Production</span>'],
+      ['resources', '📦<span>Ressources</span>'],
       ['markets', '📈<span>Cours</span>'],
       ['offers', `✉️<span>Offres${s.offers.length ? ` <i class="count">${s.offers.length}</i>` : ''}</span>`],
-      ['active', `🚢<span>Contrats${s.contracts.length ? ` <i class="count dim">${s.contracts.length}</i>` : ''}</span>`],
+      ['active', `🚢<span>Contrats${s.contracts.length + s.purchases.length ? ` <i class="count dim">${s.contracts.length + s.purchases.length}</i>` : ''}</span>`],
     ];
     let html = `<div class="tabs icon-tabs">${tabDefs.map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-a="contracts" data-p="${k}">${l}</button>`).join('')}</div>`;
     const trendOf = (g: keyof typeof GOODS, months: number) => {
@@ -1069,7 +1114,8 @@ export class App {
     };
     if (tab === 'resources') {
       const goods = (Object.keys(cap) as (keyof typeof GOODS)[]).sort((a, b) => (cap[b] ?? 0) * unitPriceOf(s, b) - (cap[a] ?? 0) * unitPriceOf(s, a));
-      html += `<p class="hint">Ce que vos provinces produisent chaque mois. La part <b class="gold">sous contrat</b> est vendue à prix garanti ; le <b>disponible</b> part sur le marché et peut être proposé aux acheteurs. Touchez une province pour la moderniser.</p>`;
+      html += this.needsHtml();
+      html += `<h3>🏭 Production</h3><p class="hint">Ce que vos provinces produisent chaque mois. La part <b class="gold">sous contrat</b> est vendue à prix garanti ; le <b>disponible</b> part sur le marché et peut être proposé aux acheteurs. Touchez une province pour la moderniser.</p>`;
       html += goods.map((g) => {
         const d = GOODS[g];
         const c = cap[g] ?? 0;
@@ -1103,7 +1149,8 @@ export class App {
         <div class="card market-main"><div class="mh"><b>${d.icon} ${d.name}</b><small>par ${esc(d.unit)}</small></div>
         <div class="stats three">${stat('Cours actuel', money(unitPriceOf(s, g)))}${stat('Sur 1 mois', `<span class="${cls(t1)}">${pct(t1)}</span>`)}${stat('Sur 12 mois', `<span class="${cls(t12)}">${pct(t12)}</span>`)}</div>
         ${priceChart(hist, clockOf(s), refs)}
-        ${cap[g] ? `<small class="muted">Vous en produisez ${qty(cap[g]!)} ${esc(d.unit)}/mois, dont ${qty(com[g] ?? 0)} sous contrat.</small>` : '<small class="muted">Vous n’en produisez pas.</small>'}</div>
+        ${cap[g] ? `<small class="muted">Vous en produisez ${qty(cap[g]!)} ${esc(d.unit)}/mois, dont ${qty(com[g] ?? 0)} sous contrat.</small>` : '<small class="muted">Vous n’en produisez pas.</small>'}
+        ${this.tradeButtons(g)}</div>
         <div class="market-list">${[...mine, ...all.filter((x) => !mine.includes(x))].map((x) => {
           const h = (s.priceHistory[x] ?? []).slice(-24);
           const tr = trendOf(x, 12);
@@ -1121,7 +1168,7 @@ export class App {
             const route = o.routes[sel] ?? o.routes[0];
             const est = route ? C.estimate(o.volume, o.bonus, route, o.unitPrice) : null;
             const risk = route ? C.piracyRisk(route, 0, s) : 0;
-            const c = cap[o.good] ?? 0;
+            const c = sup[o.good] ?? 0;
             const used = com[o.good] ?? 0;
             const left = c - used - o.volume;
             const tooMuch = left < -c * 0.02;
@@ -1129,14 +1176,14 @@ export class App {
             const market = o.volume * unitPriceOf(s, o.good);
             const vsMarket = est ? (est.net / Math.max(market, 1e-6) - 1) * 100 : 0;
             const verdict = tooMuch
-              ? `<div class="verdict bad">❌ Production insuffisante : il manque <b>${qty(-left)} ${esc(g.unit)}/mois</b>. Modernisez une province productrice ou attendez la fin d’un contrat.</div>`
+              ? `<div class="verdict bad">❌ Production insuffisante : il manque <b>${qty(-left)} ${esc(g.unit)}/mois</b>. Modernisez une province, attendez la fin d’un contrat ou achetez-en à l’étranger (📈 Cours).</div>`
               : blocked
                 ? `<div class="verdict warn">⛔ Cet itinéraire passe par un détroit fermé : choisissez-en un autre.</div>`
                 : `<div class="verdict ok">✅ <b>+${money(est!.net)}/mois</b> pendant ${o.months} mois <small>(≈ ${money(est!.net * o.months)} au total · ${pct(vsMarket, 0)} vs cours actuel)</small></div>`;
-            return `<div class="card offer"><div class="offer-head"><span class="big">${g.icon}</span><div><b>${esc(nm(s, o.buyer))}</b> achète du ${esc(g.name.toLowerCase())}<br><small class="muted">Répondre sous ${o.expires} mois</small></div></div>
+            return `<div class="card offer"><div class="offer-head"><span class="big">${g.icon}</span><div><b>${esc(nm(s, o.buyer))}</b> achète ${esc(partitive(g.name))}<br><small class="muted">Répondre sous ${o.expires} mois</small></div></div>
               ${verdict}
               <div class="stats three">${stat('Chaque mois', `${qty(o.volume)} <small>${esc(g.unit)}</small>`)}${stat('Prix garanti', `${money(o.unitPrice * (1 + o.bonus))} <small class="pos">+${Math.round(o.bonus * 100)} %</small>`)}${stat('Durée', `${o.months} mois`)}</div>
-              <div class="cap-line"><span>Votre production</span><span>${qty(c)} ${esc(g.unit)}/mois</span></div>
+              <div class="cap-line"><span>Production${(P.purchased(s)[o.good] ?? 0) > 0 ? ' + achats' : ''}</span><span>${qty(c)} ${esc(g.unit)}/mois</span></div>
               ${this.gauge(c, used, o.volume)}
               <div class="cap-legend"><span><i class="k used"></i>déjà vendu ${qty(used)}</span><span><i class="k add"></i>ce contrat ${qty(o.volume)}</span><span><i class="k free"></i>reste ${qty(Math.max(0, left))}</span></div>
               <details class="route-pick" data-k="o${o.id}"><summary>🚢 Itinéraire : ${route ? this.routeLabel(route) : '—'}${risk > 0 ? ` · <span class="neg">pirates ${Math.round(risk * 100)} %/mois</span>` : ''}</summary>
@@ -1153,7 +1200,8 @@ export class App {
       const navy = Math.floor(this.me.navy);
       const used = C.escortsUsed(s);
       const total = s.contracts.reduce((a, c) => a + (c.lastStatus === 'ok' ? c.lastRevenue : 0), 0);
-      html += `<div class="stats three">${stat('Revenu ce mois', `<span class="pos">${money(total)}</span>`)}${stat('Contrats', String(s.contracts.length))}${stat('Escortes', `${used}/${navy} flottes`)}</div>`;
+      const spent = s.purchases.reduce((a, p) => a + p.lastCost, 0);
+      html += `<div class="stats three">${stat('Ventes ce mois', `<span class="pos">${money(total)}</span>`)}${stat('Achats ce mois', `<span class="neg">${money(spent)}</span>`)}${stat('Escortes', `${used}/${navy} flottes`)}</div><h3>📤 Ventes</h3>`;
       html += s.contracts.length
         ? s.contracts.map((c) => {
             const g = GOODS[c.good];
@@ -1168,7 +1216,23 @@ export class App {
                 ${c.alternatives.map((r, i) => `<label class="check"><input type="radio" name="c${c.id}" data-a="reroute" data-p="${c.id}:${i}" ${r.nodes.join() === c.route.nodes.join() ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}</details>
               <button class="link danger" data-a="cancelContract" data-p="${c.id}">Rompre le contrat (🌍 −20 avec ${esc(nm(s, c.buyer))})</button></div>`;
           }).join('')
-        : '<p class="muted">Aucun contrat en cours. Signez des offres dans l’onglet ✉️ Offres.</p>';
+        : '<p class="muted">Aucun contrat de vente. Signez des offres dans l’onglet ✉️ Offres.</p>';
+      html += `<h3>📥 Achats</h3>`;
+      html += s.purchases.length
+        ? s.purchases.map((p) => {
+            const g = GOODS[p.good];
+            const vs = (p.unitPrice / unitPriceOf(s, p.good) - 1) * 100;
+            const status = p.lastStatus === 'ok' ? (p.lastCost > 0 ? `<div class="verdict ok">✅ Reçu ce mois : ${qty(p.volume)} ${esc(g.unit)} pour ${money(p.lastCost)}</div>` : '<div class="verdict">⏳ Première livraison le mois prochain</div>') : p.lastStatus === 'blocked' ? `<div class="verdict bad">⛔ Bloqué depuis ${p.blocked} mois : changez d’itinéraire</div>` : '<div class="verdict bad">🏴‍☠️ Cargaison pillée (payée mais perdue) : ajoutez une escorte</div>';
+            const risk = C.piracyRisk(p.route, p.escort, s);
+            return `<div class="card"><div class="offer-head"><span class="big">${g.icon}</span><div>de <b>${esc(nm(s, p.seller))}</b> · ${esc(g.name.toLowerCase())}<br><small class="muted">${qty(p.volume)} ${esc(g.unit)}/mois à ${money(p.unitPrice)} (<span class="${cls(-vs)}">${pct(vs, 0)} vs cours</span>) · encore ${p.monthsLeft} mois</small></div></div>
+              ${status}
+              <div class="escort"><span>🛡️ Escorte <b>${p.escort}</b> · pirates <b class="${risk > 0.05 ? 'neg' : ''}">${Math.round(risk * 100)} %</b>/mois</span>
+                <span class="seg"><button data-a="pEscort" data-p="${p.id}:-1" ${p.escort ? '' : 'disabled'}>−</button><button data-a="pEscort" data-p="${p.id}:1" ${used < navy ? '' : 'disabled'}>+</button></span></div>
+              <details class="route-pick" data-k="p${p.id}"><summary>🚢 Itinéraire : ${this.routeLabel(p.route)}</summary>
+                ${p.alternatives.map((r, i) => `<label class="check"><input type="radio" name="p${p.id}" data-a="pReroute" data-p="${p.id}:${i}" ${r.nodes.join() === p.route.nodes.join() ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}</details>
+              <button class="link danger" data-a="cancelPurchase" data-p="${p.id}">Rompre (🌍 −10 avec ${esc(nm(s, p.seller))})</button></div>`;
+          }).join('')
+        : '<p class="muted">Aucun contrat d’achat. Achetez à l’étranger depuis l’onglet 📈 Cours, la fiche d’un pays, ou vos besoins (📦 Ressources).</p>';
     }
     const scroll = this.el.overlay.querySelector('.content')?.scrollTop ?? 0;
     const open = [...this.el.overlay.querySelectorAll<HTMLDetailsElement>('details[open][data-k]')].map((d) => d.dataset.k);
@@ -1176,6 +1240,116 @@ export class App {
     for (const k of open) this.el.overlay.querySelector<HTMLDetailsElement>(`details[data-k="${k}"]`)?.setAttribute('open', '');
     const content = this.el.overlay.querySelector('.content');
     if (content) content.scrollTop = scroll;
+  }
+
+  // ——— Besoins, stocks et achats ———
+
+  private needsHtml(): string {
+    const s = this.state;
+    const qty = (v: number) => num(v, v < 10 ? 2 : 1);
+    const rep = s.needs;
+    let html = `<h3>🍞 Besoins de la population</h3><p class="hint">Chaque mois, votre population consomme ces biens. Ce que vous ne produisez pas est pris dans vos stocks (alimentés par vos achats), puis acheté <b>en urgence au cours du jour +${Math.round(P.EMERGENCY * 100)} %</b>. Un contrat d’achat coûte moins cher et fixe le prix.</p>`;
+    if (!rep) return html + '<p class="muted">Premier bilan à la fin du mois.</p>';
+    html += (Object.entries(rep.lines) as [keyof typeof GOODS, NeedLine][]).map(([g, l]) => {
+      const d = GOODS[g];
+      const w = (v: number) => `${Math.max(0, Math.min(100, (v / Math.max(l.need, 1e-6)) * 100)).toFixed(1)}%`;
+      const ok = l.market < 1e-3;
+      return `<div class="need ${ok ? 'ok' : ''}"><div class="mh"><b>${d.icon} ${d.name}</b><small>${esc(P.NEED_LABEL[g] ?? '')}</small></div>
+        <div class="needbar"><i class="own" style="width:${w(l.own)}"></i><i class="stock" style="width:${w(l.stock)}"></i><i class="market" style="width:${w(l.market)}"></i></div>
+        <div class="needtxt"><span>${qty(l.need)} ${esc(d.unit)}/mois</span>${ok ? '<span class="pos">✅ couvert</span>' : `<span class="neg">urgence ${qty(l.market)} ${esc(d.unit)} · −${money(l.cost)}</span>`}</div>
+        ${ok ? '' : `<button class="chip" data-a="suppliers" data-p="${g}">📥 Trouver un fournisseur</button>`}</div>`;
+    }).join('');
+    html += `<div class="cap-legend"><span><i class="k own"></i>production</span><span><i class="k stock"></i>stocks et achats</span><span><i class="k market"></i>achat d’urgence</span></div>`;
+    if (rep.expensive) html += '<div class="verdict bad">🔥 Vie chère : les pénuries se paient au prix fort, la stabilité baisse (⚖️ −0,4/mois).</div>';
+    const stocked = (Object.entries(s.stock) as [keyof typeof GOODS, number][]).filter(([, q]) => q > 1e-3);
+    html += `<h3>🏬 Stocks</h3>`;
+    html += stocked.length
+      ? `<p class="hint">Vos réserves servent d’abord vos contrats de vente, puis votre population. Stockage : ${num(P.STORAGE * 100, 1)} % de la valeur par mois. Revendez quand le cours monte.</p>` +
+        stocked.map(([g, q]) => {
+          const d = GOODS[g];
+          const v = q * unitPriceOf(s, g) * (1 - P.SPOT_SELL);
+          return `<div class="stock-row"><span>${d.icon} <b>${qty(q)}</b> ${esc(d.unit)} <small class="muted">≈ ${money(q * unitPriceOf(s, g))}</small></span>
+            <span class="seg"><button data-a="spotSell" data-p="${g}:0.5">Vendre ½</button><button data-a="spotSell" data-p="${g}:1">Tout (+${money(v)})</button></span></div>`;
+        }).join('')
+      : '<p class="muted">Aucun stock. Vos contrats d’achat et vos achats au comptant (📈 Cours) remplissent vos entrepôts.</p>';
+    return html;
+  }
+
+  /** Lot d'achat au comptant : un mois de besoins, sinon une unité. */
+  private lot(g: keyof typeof GOODS): number {
+    return Math.max(0.5, Math.round((P.needsOf(this.state, this.state.player)[g] ?? 1) * 100) / 100);
+  }
+
+  private tradeButtons(g: keyof typeof GOODS): string {
+    const s = this.state;
+    const lot = this.lot(g);
+    const q = s.stock[g] ?? 0;
+    const qty = (v: number) => num(v, v < 10 ? 2 : 1);
+    return `<div class="actions" style="margin-top:8px">
+      <button class="act" data-a="suppliers" data-p="${g}"><span class="t">📥 Contrat d’achat</span><span class="c">prix fixe, livré chaque mois</span></button>
+      <button class="act" data-a="spotBuy" data-p="${g}"><span class="t">🛒 Acheter ${qty(lot)} ${esc(GOODS[g].unit)}</span><span class="c">au comptant · −${money(lot * unitPriceOf(s, g) * (1 + P.SPOT_BUY))}</span></button>
+      ${q > 1e-3 ? `<button class="act wide" data-a="spotSell" data-p="${g}:1"><span class="t">💰 Vendre mon stock (${qty(q)} ${esc(GOODS[g].unit)})</span><span class="c">+${money(q * unitPriceOf(s, g) * (1 - P.SPOT_SELL))} au cours du jour −${Math.round(P.SPOT_SELL * 100)} %</span></button>` : ''}
+    </div>`;
+  }
+
+  private supplierRow(id: Id, g: keyof typeof GOODS, q: P.Quote): string {
+    const s = this.state;
+    const n = s.nations[id];
+    const vs = q.markup * 100;
+    return `<div class="supplier ${q.ok ? '' : 'off'}"><div><i class="dot" style="background:${n.color}"></i><b>${esc(n.name)}</b> <small class="muted">🌍 ${signed(Math.round(rel(s, s.player, id)))}</small><br>
+      <small>${GOODS[g].icon} ${money(q.unitPrice)}/${esc(GOODS[g].unit)} <span class="neg">+${Math.round(vs)} %</span> · jusqu’à ${num(q.max, 2)}/mois</small></div>
+      <button class="chip" data-a="pForm" data-p="${esc(id)}|${g}" ${q.ok ? '' : 'disabled'}>${q.ok ? 'Choisir' : esc(q.reason ?? '')}</button></div>`;
+  }
+
+  private showSuppliers(g: keyof typeof GOODS) {
+    const s = this.state;
+    const list = P.suppliers(s, this.world, g, 8);
+    const d = GOODS[g];
+    const html = `<p class="hint">Les pays qui produisent ${esc(partitive(d.name))}, du moins cher au plus cher. Leur marge sur le cours (${money(unitPriceOf(s, g))}/${esc(d.unit)}) baisse quand vos relations sont bonnes ; votre rival exige davantage.</p>
+      ${list.length ? list.map((x) => this.supplierRow(x.id, g, x.q)).join('') : '<p class="muted">Personne n’en produit assez pour exporter.</p>'}`;
+    this.modal(`📥 Acheter : ${d.icon} ${esc(d.name)}`, html, [
+      { label: 'Retour', a: 'contracts', p: 'markets' },
+      { label: 'Fermer', a: 'closeModal' },
+    ]);
+  }
+
+  private showSellerGoods(id: Id) {
+    const s = this.state;
+    const cap = C.capacity(s, this.world, id);
+    const goods = (Object.keys(cap) as (keyof typeof GOODS)[]).filter((g) => (cap[g] ?? 0) > 0.05).sort((a, b) => (cap[b] ?? 0) * unitPriceOf(s, b) - (cap[a] ?? 0) * unitPriceOf(s, a));
+    const html = `<p class="hint">Ce que ${esc(nm(s, id))} peut vous vendre chaque mois (la moitié de sa production au plus), au cours du jour plus sa marge.</p>
+      ${goods.length ? goods.map((g) => this.supplierRow(id, g, P.quote(s, this.world, id, g))).join('') : '<p class="muted">Ce pays ne produit rien d’exportable.</p>'}`;
+    this.modal(`📥 Acheter à ${esc(nm(s, id))}`, html, [{ label: 'Fermer', a: 'closeModal' }]);
+  }
+
+  private showPurchaseForm() {
+    const s = this.state;
+    const f = this.pf!;
+    const g = f.good;
+    const d = GOODS[g];
+    const q = P.quote(s, this.world, f.seller, g);
+    const qty = (v: number) => num(v, v < 10 ? 2 : 1);
+    const need = s.needs?.lines[g]?.market ?? 0;
+    const opts: [string, number][] = [];
+    if (need > 0.01 && need < q.max) opts.push([`Mes besoins (${qty(need)})`, need]);
+    for (const [l, k] of [['¼', 0.25], ['½', 0.5], ['Max', 1]] as [string, number][]) opts.push([`${l} (${qty(q.max * k)})`, Math.round(q.max * k * 100) / 100]);
+    if (!f.volume || f.volume > q.max) f.volume = opts[0][1];
+    const route = q.routes[f.route] ?? q.routes[0];
+    const value = f.volume * q.unitPrice;
+    const tolls = route ? value * TOLL * route.straits.length : 0;
+    const monthly = value + tolls;
+    const urgent = f.volume * unitPriceOf(s, g) * (1 + P.EMERGENCY);
+    const risk = route ? C.piracyRisk(route, 0, s) : 0;
+    const html = `<div class="offer-head"><span class="big">${d.icon}</span><div><b>${esc(nm(s, f.seller))}</b> vous vend ${esc(partitive(d.name))}<br><small class="muted">Prix verrouillé : ${money(q.unitPrice)}/${esc(d.unit)} (cours ${money(unitPriceOf(s, g))}, marge +${Math.round(q.markup * 100)} %)</small></div></div>
+      <div class="verdict ${q.ok ? 'ok' : 'bad'}">${q.ok ? `💸 <b>−${money(monthly)}/mois</b> pendant ${f.months} mois <small>(≈ ${money(monthly * f.months)} au total${P.NEEDS[g] ? ` · achat d’urgence équivalent : ${money(urgent)}/mois` : ''})</small>` : `❌ ${esc(q.reason ?? '')}`}</div>
+      <h3>Quantité par mois</h3><div class="pick-row">${opts.map(([l, v]) => `<button class="chip ${Math.abs(v - f.volume) < 1e-6 ? 'on' : ''}" data-a="pSet" data-p="v:${v}">${l}</button>`).join('')}</div>
+      <h3>Durée</h3><div class="pick-row">${[12, 24, 36].map((m) => `<button class="chip ${m === f.months ? 'on' : ''}" data-a="pSet" data-p="m:${m}">${m} mois</button>`).join('')}</div>
+      <h3>Itinéraire</h3>${q.routes.map((r, i) => `<label class="check"><input type="radio" name="pf" data-a="pSet" data-p="r:${i}" ${i === f.route ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}
+      <p class="hint">Vous payez à l’expédition : une cargaison pillée (🏴‍☠️ ${Math.round(risk * 100)} %/mois sans escorte) est perdue. Les marchandises reçues vont dans vos stocks : elles nourrissent votre population, servent vos contrats de vente ou se revendent au comptant.</p>`;
+    this.modal('📥 Contrat d’achat', html, [
+      { label: '✍️ Signer', hint: '🌍 +5', a: 'pSign', primary: true, disabled: !q.ok },
+      { label: 'Retour', a: 'suppliers', p: g },
+    ]);
   }
 
   private showHelp() {

@@ -53,3 +53,11 @@ export function iconize(text: string): string {
     out = out.replace(new RegExp(`${re.source}\\s*([+−-]\\s?\\d)`, 'gi'), `${icon} $1`);
   return out;
 }
+
+/** « du pétrole », « des céréales », « du café et du cacao ». */
+export function partitive(name: string): string {
+  const n = name.toLowerCase();
+  if (n === 'café et cacao') return 'du café et du cacao';
+  if (/(s|x)$/.test(n.split(' ')[0])) return `des ${n}`;
+  return `du ${n}`;
+}

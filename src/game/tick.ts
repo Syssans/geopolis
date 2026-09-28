@@ -2,6 +2,7 @@ import { processPeace, runAI } from './ai';
 import { maybeRandomEvent } from './events';
 import { generateOffers, processContracts } from './contracts';
 import { monthlyConvoys } from './convoys';
+import { consumeNeeds, processPurchases } from './purchases';
 import { contractCrises, marketCrisis, runRival } from './crises';
 import { processMissions } from './missions';
 import { monthlyWorks } from './economy';
@@ -10,6 +11,7 @@ import { rand } from './rng';
 import { alive, atWar, clamp, invalidate, log, nm, owned } from './state';
 import { computeTrade, recordPrices, updatePrices } from './trade';
 import { checkElimination, involvesNuclearClash, resolveWarMonth } from './war';
+import { GOODS } from '../data/trade';
 import type { GameState, World } from './types';
 
 /** Avance la simulation d'un mois. */
@@ -22,7 +24,12 @@ export function advanceMonth(s: GameState, w: World) {
   recordPrices(s);
   monthlyWorks(s, w);
   const report = computeTrade(s, w);
+  const escortsLeft = Math.floor(s.nations[s.player].navy) - s.contracts.reduce((a, c) => a + c.escort, 0);
+  const bought = processPurchases(s, w, escortsLeft);
   const contracts = processContracts(s, w);
+  s.needs = consumeNeeds(s, w, contracts.delivered, bought.cost);
+  for (const p of bought.news.pirated) log(s, `🏴‍☠️ Des pirates ont saisi votre cargaison de ${GOODS[p.good].name.toLowerCase()} venue de ${nm(s, p.seller)}.`, 'trade', [s.player]);
+  for (const p of bought.news.blocked) if (p.blocked === 1) log(s, `⛔ Votre achat auprès de ${nm(s, p.seller)} est bloqué par un détroit fermé : changez d’itinéraire.`, 'trade', [s.player]);
   const ranked = alive(s)
     .map((n) => ({ id: n.id, v: (report.income[n.id]?.trade ?? 0) + (report.income[n.id]?.tolls ?? 0) }))
     .sort((a, b) => b.v - a.v);
