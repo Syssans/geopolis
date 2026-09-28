@@ -1,68 +1,40 @@
 import { processPeace, runAI } from './ai';
 import { maybeRandomEvent } from './events';
+import { monthlyReligion } from './religion';
 import { rand } from './rng';
-import {
-  alive, atWar, budget, clamp, gdpOf, growthOf, invalidate, log, milEfficiency, nm, ownedTerritories, popOf, power, sanctionersOf,
-} from './state';
-import { involvesNuclearClash, resolveWarMonth } from './war';
+import { alive, atWar, clamp, invalidate, log, nm, owned } from './state';
+import { computeTrade, updatePrices } from './trade';
+import { checkElimination, involvesNuclearClash, resolveWarMonth } from './war';
 import type { GameState, World } from './types';
 
 /** Avance la simulation d'un mois. */
 export function advanceMonth(s: GameState, w: World) {
   if (s.gameOver) return;
-  const nations = alive(s);
-  const byGdp = nations.map((n) => ({ id: n.id, g: gdpOf(s, n.id) })).sort((a, b) => b.g - a.g);
-  const topGdp = new Set(byGdp.slice(0, 10).map((x) => x.id));
-  const byPow = nations.slice().sort((a, b) => power(b) - power(a));
-  const topPow = new Set(byPow.slice(0, 10).map((x) => x.id));
 
-  // Croissance (calculée avant de modifier les PIB)
-  const growth: Record<string, number> = {};
-  for (const n of nations) growth[n.id] = growthOf(s, n.id);
+  // Commerce et revenus
+  updatePrices(s, w, () => rand(s));
+  const report = computeTrade(s, w);
+  const ranked = alive(s)
+    .map((n) => ({ id: n.id, v: (report.income[n.id]?.trade ?? 0) + (report.income[n.id]?.tolls ?? 0) }))
+    .sort((a, b) => b.v - a.v);
+  const topTraders = new Set(ranked.slice(0, 10).map((x) => x.id));
 
-  for (const t of Object.values(s.territories)) {
-    let g = growth[t.owner] ?? 0;
-    if (t.occupiedBy) g -= 8;
-    if (t.integration < 100) g -= 1;
-    t.gdp = Math.max(0.01, t.gdp * (1 + g / 100 / 12));
-    t.pop *= 1 + 0.008 / 12;
-    if (t.integration < 100 && !t.occupiedBy) {
-      t.integration = Math.min(100, t.integration + 1);
-      if (t.integration >= 100) t.core = t.owner;
+  for (const n of alive(s)) {
+    const inc = report.income[n.id] ?? { production: 0, trade: 0, tolls: 0, byNode: {} };
+    const upkeep = n.army * n.upkeepRate + n.navy * n.upkeepRate * 2;
+    n.income = { ...inc, upkeep };
+    n.treasury += inc.production + inc.trade + inc.tolls - upkeep;
+    if (n.treasury < 0) {
+      // Faillite : désertions et mécontentement
+      n.stability = clamp(n.stability - 0.5, 0, 100);
+      n.army *= 0.98;
+      n.navy *= 0.98;
     }
-  }
-  invalidate(s);
 
-  for (const n of nations) {
-    // Points
-    n.points.pol = Math.min(999, n.points.pol + 3 + (n.stability >= 70 ? 1 : 0));
-    n.points.dip = Math.min(999, n.points.dip + 3 + (topGdp.has(n.id) ? 1 : 0));
-    n.points.mil = Math.min(999, n.points.mil + 3 + (topPow.has(n.id) ? 1 : 0));
-
-    // Budget
-    const b = budget(s, n.id);
-    n.treasury += b.net;
-    const gdp = gdpOf(s, n.id);
-
-    // Armée : investissement mensuel moins dépréciation
-    n.strength = n.strength * 0.99 + b.military * milEfficiency(gdp, popOf(s, n.id));
-
-    // Stabilité
-    let ds = (n.baseStability - n.stability) * 0.02;
-    if (n.treasury < -gdp * 0.3) ds -= 0.3;
-    ds -= Math.min(0.5, sanctionersOf(s, n.id).length * 0.1);
-    for (const t of ownedTerritories(s, n.id)) {
-      if (t.occupiedBy) ds -= 0.5;
-      if (t.integration < 100) ds -= 0.1;
-    }
-    for (const m of n.modifiers) ds += m.stabilityPerMonth ?? 0;
-    n.stability = clamp(n.stability + ds, 0, 100);
-
+    n.influence = Math.min(999, n.influence + 3 + (topTraders.has(n.id) ? 1 : 0) + (n.bloc && s.blocs[n.bloc]?.leader === n.id ? 1 : 0));
+    n.stability = clamp(n.stability + (n.baseStability - n.stability) * 0.02, 0, 100);
     n.aggression = Math.max(0, n.aggression * 0.97 - 0.2);
     if (!atWar(s, n.id)) n.exhaustion = Math.max(0, n.exhaustion - 1.5);
-
-    for (const m of n.modifiers) m.months--;
-    n.modifiers = n.modifiers.filter((m) => m.months > 0);
 
     if (n.cbProgress && --n.cbProgress.months <= 0) {
       const target = n.cbProgress.target;
@@ -80,7 +52,14 @@ export function advanceMonth(s: GameState, w: World) {
     }
   }
 
-  // Les relations s'érodent lentement vers la neutralité (demi-vie ≈ 19 ans)
+  // Intégration des conquêtes
+  for (const p of s.provinces)
+    if (p.integration < 100 && !p.occupiedBy && !p.revolt) {
+      p.integration = Math.min(100, p.integration + 1);
+      if (p.integration >= 100) p.core = p.owner;
+    }
+
+  // La part « historique » des relations s'efface lentement (demi-vie ≈ 19 ans)
   for (const k of Object.keys(s.relations)) {
     const v = s.relations[k] * 0.997;
     if (Math.abs(v) < 0.5) delete s.relations[k];
@@ -88,30 +67,18 @@ export function advanceMonth(s: GameState, w: World) {
   }
 
   // Guerres
-  for (const war of s.wars) resolveWarMonth(s, war);
-  processPeace(s);
+  for (const war of s.wars) resolveWarMonth(s, w, war);
+  processPeace(s, w);
 
-  // Révoltes dans les territoires mal intégrés
-  for (const t of Object.values(s.territories)) {
-    const owner = s.nations[t.owner];
-    if (t.integration < 40 && t.core !== t.owner && owner.stability < 35 && !t.occupiedBy && rand(s) < 0.02) {
-      const core = s.nations[t.core];
-      t.owner = t.core;
-      t.integration = 100;
-      if (!core.alive) {
-        core.alive = true;
-        core.strength = power(owner) * 0.05;
-        core.stability = 40;
-        core.treasury = 0;
-      }
-      invalidate(s);
-      log(s, `Soulèvement : ${t.name} proclame son indépendance vis-à-vis de ${owner.name} !`, 'war', [owner.id, core.id]);
-    }
-  }
+  // Religion : agitation, insurrections, conversions
+  monthlyReligion(s, w);
+  invalidate(s);
+  for (const n of alive(s)) if (!owned(s, n.id).length) checkElimination(s, n.id);
 
   // Tension mondiale & risque nucléaire
   const clash = s.wars.some((war) => involvesNuclearClash(s, war));
-  const target = 15 + 5 * s.wars.length;
+  const closed = alive(s).reduce((a, n) => a + n.closedStraits.length, 0);
+  const target = 15 + 5 * s.wars.length + 8 * closed;
   s.tension = clamp(s.tension + Math.sign(target - s.tension) * 0.4, 0, 100);
   if (clash && s.tension >= 95 && rand(s) < 0.04) {
     s.gameOver = 'Escalade nucléaire : les missiles ont été lancés. Personne ne gagne une guerre nucléaire.';
@@ -120,7 +87,7 @@ export function advanceMonth(s: GameState, w: World) {
   }
 
   runAI(s, w);
-  maybeRandomEvent(s);
+  maybeRandomEvent(s, w);
 
   s.month++;
   if (s.month > 12) {

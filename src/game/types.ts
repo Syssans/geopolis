@@ -1,30 +1,51 @@
-export type Id = string;
+import type { Religion } from '../data/religions';
+import type { Good } from '../data/trade';
 
-export interface Points {
-  pol: number; // Capital politique (≈ ADM)
-  dip: number; // Influence diplomatique (≈ DIP)
-  mil: number; // Doctrine militaire (≈ MIL)
-}
+export type Id = string; // identifiant de nation (nom world-atlas)
+export type Pid = number; // identifiant de province
 
-export interface Modifier {
-  id: string;
-  label: string;
-  months: number;
-  growth?: number; // points de croissance annuelle
-  stabilityPerMonth?: number;
-}
+export type Policy = 'tolerance' | 'neutre' | 'proselytisme';
 
-export interface Territory {
-  id: Id;
+/** Données fixes d'une province (générées par scripts/build-provinces.mjs). */
+export interface ProvinceInfo {
+  id: Pid;
   name: string;
-  owner: Id;
-  /** Nation qui considère ce territoire comme sien (revendication historique). */
-  core: Id;
-  gdp: number; // milliards $
+  country: string; // pays d'origine
+  owner: Id; // propriétaire au 1er janvier 2026
   pop: number; // millions
+  dev: number; // développement (richesse produite)
+  religion: Religion; // religion initiale
+  good: Good;
+  node: string; // nœud commercial
+  coastal: boolean;
+  capital?: boolean;
+  holy?: { name: string; religions: Religion[] }[];
+  strait?: string;
+  lon: number;
+  lat: number;
+  adj: Pid[]; // voisins terrestres
+  sea: Pid[]; // liaisons maritimes (< 500 km)
+}
+
+/** État variable d'une province (sauvegardé). */
+export interface Province {
+  owner: Id;
+  core: Id; // nation qui la revendique historiquement
+  religion: Religion;
   occupiedBy: Id | null;
-  /** 0-100 : 100 = pleinement intégré à son propriétaire actuel. */
-  integration: number;
+  integration: number; // 0-100
+  unrest: number; // agitation 0-100
+  revolt: number; // mois d'insurrection (0 = calme)
+  supportedBy: Id | null; // puissance étrangère qui soutient les insurgés
+  supportMonths: number;
+  good?: Good; // production modifiée par un événement
+}
+
+export interface Merchant {
+  node: string;
+  mode: 'collect' | 'steer';
+  /** Pour « orienter » : nœud aval visé. */
+  target?: string;
 }
 
 export interface Nation {
@@ -32,24 +53,33 @@ export interface Nation {
   name: string;
   color: string;
   alive: boolean;
-  treasury: number; // milliards $
-  stability: number; // 0-100
+  religion: Religion;
+  policy: Policy;
+  policyCooldown: number;
+  treasury: number; // Md$
+  influence: number;
+  fervor: number;
+  stability: number;
   baseStability: number;
-  milPct: number; // budget militaire en % du PIB
-  baseMilPct: number;
-  strength: number; // puissance militaire brute
-  tech: number; // niveau technologique militaire 0-15
-  points: Points;
-  growthBonus: number; // bonus permanent de croissance (réformes)
-  modifiers: Modifier[];
-  aggression: number; // « expansion agressive » perçue
-  exhaustion: number; // lassitude de guerre 0-100
+  army: number; // divisions
+  navy: number; // flottes
+  upkeepRate: number; // coût mensuel d'une division (main-d'œuvre locale)
+  milShare: number; // part du revenu que l'IA consacre à ses forces
+  aggression: number;
+  exhaustion: number;
   nuclear: boolean;
-  nukeProgram: number | null; // mois restants
+  nukeProgram: number | null;
   hawk: number; // tempérament IA 0-1
   bloc: Id | null;
   claims: Id[]; // casus belli détenus
+  holyClaims: Id[]; // casus belli de guerre sainte
   cbProgress: { target: Id; months: number } | null;
+  merchants: Merchant[];
+  missionary: Pid | null;
+  missionProgress: number;
+  closedStraits: string[];
+  /** Dernier bilan mensuel (affichage). */
+  income: { production: number; trade: number; tolls: number; upkeep: number; byNode: Record<string, number> };
 }
 
 export interface Bloc {
@@ -66,17 +96,19 @@ export interface War {
   attackers: Id[]; // [0] = meneur
   defenders: Id[]; // [0] = meneur
   score: number; // -100..100, point de vue des attaquants
+  battle: number; // part du score due aux batailles
   months: number;
   justified: boolean;
+  holy: boolean;
 }
 
-export type LogKind = 'war' | 'diplo' | 'eco' | 'info' | 'event';
+export type LogKind = 'war' | 'diplo' | 'trade' | 'religion' | 'info' | 'event';
 
 export interface LogEntry {
   date: string;
   text: string;
   kind: LogKind;
-  mine: boolean; // concerne directement le joueur
+  mine: boolean;
 }
 
 export interface EventOption {
@@ -90,13 +122,12 @@ export interface PendingEvent {
   title: string;
   text: string;
   options: EventOption[];
-  /** Paramètres sérialisables (ids de nations, de guerre…). */
   params: Record<string, string | number>;
 }
 
 export interface PeaceTerms {
-  annex: Id[]; // territoires cédés
-  satellite: boolean; // le perdant rejoint le bloc du vainqueur
+  annex: Pid[];
+  satellite: boolean;
   reparations: boolean;
 }
 
@@ -104,26 +135,23 @@ export interface GameState {
   version: number;
   rng: number;
   year: number;
-  month: number; // 1..12
+  month: number;
   player: Id;
   nations: Record<Id, Nation>;
-  territories: Record<Id, Territory>;
+  provinces: Province[];
   relations: Record<string, number>;
   blocs: Record<Id, Bloc>;
   wars: War[];
-  trades: string[]; // paires « a|b »
-  sanctions: string[]; // « sanctionneur>cible »
-  tension: number; // tension mondiale 0-100
+  trades: string[]; // accords commerciaux « a|b »
+  embargoes: string[]; // « a>b »
+  prices: Record<string, number>; // multiplicateur de prix par marchandise (1 = normal)
+  tension: number;
   log: LogEntry[];
   events: PendingEvent[];
   nextUid: number;
   gameOver: string | null;
 }
 
-/** Données géographiques statiques (hors sauvegarde). */
 export interface World {
-  /** Territoires ayant une frontière terrestre commune. */
-  adjacent: Record<Id, Id[]>;
-  /** Territoires « à portée » (voisins ou à moins de ~1500 km). */
-  near: Record<Id, Id[]>;
+  provinces: ProvinceInfo[];
 }

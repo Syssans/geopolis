@@ -25,9 +25,16 @@ button { font: inherit; color: inherit; }
 
 /* ——— Carte ——— */
 #map { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--sea); touch-action: none; display: block; }
-#map path.terr { stroke: #0d1117; stroke-width: 0.35; vector-effect: non-scaling-stroke; cursor: pointer; transition: fill .25s; }
-#map path.terr.player { stroke: var(--gold); stroke-width: 1.6; }
-#map path.terr.selected { stroke: #fff; stroke-width: 2; }
+#map path.prov { stroke: #0d111755; stroke-width: 0.3; vector-effect: non-scaling-stroke; cursor: pointer; }
+#map path.prov.sel-nation { filter: brightness(1.18); }
+#map path.prov.selected { stroke: #fff; stroke-width: 2; filter: brightness(1.3); }
+#map path.borders { fill: none; stroke: #0d1117; stroke-width: 1.1; vector-effect: non-scaling-stroke; pointer-events: none; }
+#map g.trade { pointer-events: none; }
+#map line.flow { stroke: #ffffff99; stroke-width: 1.4; vector-effect: non-scaling-stroke; stroke-dasharray: 4 3; }
+#map circle.node { fill: var(--gold); stroke: #0d1117; stroke-width: 1; vector-effect: non-scaling-stroke; }
+#map text.node-label { fill: #fff; font-size: 7px; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: #0d1117; stroke-width: 2px; }
+#map text.strait { font-size: 9px; text-anchor: middle; dominant-baseline: middle; }
+#map text.strait.closed { filter: drop-shadow(0 0 2px #f85149); }
 #map path.occ { fill: url(#hatch); pointer-events: none; }
 #map path.graticule { fill: none; stroke: #ffffff10; stroke-width: .5; vector-effect: non-scaling-stroke; }
 #map text.label { fill: #0d1117cc; font-weight: 700; text-anchor: middle; dominant-baseline: middle; pointer-events: none;
@@ -180,6 +187,15 @@ h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .toast.good { border-color: var(--good); }
 @keyframes fade { 0% { opacity: 0; transform: translateY(6px); } 8% { opacity: 1; transform: none; } 85% { opacity: 1; } 100% { opacity: 0; } }
 
+.seg { display: inline-flex; background: #0d1117; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg.wide { display: flex; }
+.seg button { flex: 1; background: none; border: 0; padding: 7px 10px; cursor: pointer; font-size: 13px; }
+.seg button.on { background: var(--gold); color: #000; font-weight: 700; }
+.seg button:disabled { opacity: .4; }
+.merchants { display: flex; flex-direction: column; gap: 6px; }
+.merchant { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; background: #0d1117; border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; }
+.merchant select, .sheet select { background: #21262d; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px; font: inherit; font-size: 13px; max-width: 100%; }
+.goods { display: flex; flex-wrap: wrap; gap: 4px; }
 .legend { position: absolute; left: 8px; bottom: calc(60px + var(--safe-bottom)); z-index: 4; background: var(--panel); border: 1px solid var(--line);
   border-radius: 8px; padding: 4px 8px; font-size: 11px; color: var(--muted); }
 @media (max-width: 420px) {

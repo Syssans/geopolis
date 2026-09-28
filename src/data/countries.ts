@@ -197,6 +197,10 @@ export const COUNTRIES: CountrySeed[] = [
   { atlas: 'Fiji', name: 'Fidji', gdp: 6, pop: 0.9, mil: 0.08, stab: 60 },
   { atlas: 'Solomon Is.', name: 'Îles Salomon', gdp: 1.7, pop: 0.8, mil: 0.01, stab: 50 },
   { atlas: 'Vanuatu', name: 'Vanuatu', gdp: 1.1, pop: 0.33, mil: 0.01, stab: 55 },
+  // Petits États commerciaux (absents de la carte 1:110m mais présents en provinces)
+  { atlas: 'Singapore', name: 'Singapour', gdp: 550, pop: 6, mil: 13, stab: 85 },
+  { atlas: 'Bahrain', name: 'Bahreïn', gdp: 47, pop: 1.6, mil: 1.4, stab: 55 },
+  { atlas: 'Malta', name: 'Malte', gdp: 25, pop: 0.55, mil: 0.1, stab: 75 },
 ];
 
 /** Territoires sans État propre : rattachés à une nation au départ. */
