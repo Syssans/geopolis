@@ -61,3 +61,39 @@ export function partitive(name: string): string {
   if (/(s|x)$/.test(n.split(' ')[0])) return `des ${n}`;
   return `du ${n}`;
 }
+
+/** Nombre signé : « +12 », « −3,5 % », « −1,4 Md$ » (le signe doit ouvrir le mot). */
+const SIGNED = /(^|[\s(«:·,/≈])([+−-] ?\d+(?:[  ]\d{3})*(?:[,.]\d+)?(?: ?(?:%|Md\$|M\$|T\$))?)/g;
+/** Zones où l'on ne touche pas aux couleurs (déjà colorées, fonds dorés, graphiques…). */
+const SKIP = '.pos,.neg,.nosign,.c-gold,.c-blue,.c-warn,.btn.primary,.act.primary-act,svg,script,style,textarea,input';
+
+/** Colore en vert les nombres positifs et en rouge les négatifs, dans tout le texte d'un élément. */
+export function colorSigns(root: Element) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const hits: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const t = n as Text;
+    if (!/[+−-] ?\d/.test(t.data)) continue;
+    const p = t.parentElement;
+    if (!p || p.closest(SKIP)) continue;
+    hits.push(t);
+  }
+  for (const t of hits) {
+    const s = t.data;
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    SIGNED.lastIndex = 0;
+    for (let m = SIGNED.exec(s); m; m = SIGNED.exec(s)) {
+      const start = m.index + m[1].length;
+      frag.append(s.slice(last, start));
+      const span = document.createElement('span');
+      span.className = m[2][0] === '+' ? 'pos' : 'neg';
+      span.textContent = m[2];
+      frag.append(span);
+      last = start + m[2].length;
+    }
+    if (!last) continue;
+    frag.append(s.slice(last));
+    t.replaceWith(frag);
+  }
+}

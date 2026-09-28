@@ -246,10 +246,10 @@ h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .escort { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 8px 0; font-size: 13px; }
 .grade { font-size: 64px; font-weight: 800; text-align: center; margin: 0; color: var(--gold); }
 .grade-D, .grade-C { color: var(--muted); }
-.gauge { position: relative; height: 10px; background: #30363d; border-radius: 5px; overflow: hidden; margin: 6px 0 8px; }
+.gauge { position: relative; height: 10px; background: #2c6e3c; border-radius: 5px; overflow: hidden; margin: 6px 0 8px; }
 .gauge i { position: absolute; top: 0; bottom: 0; }
 .gauge i.used { left: 0; background: var(--gold); }
-.gauge i.add { background: repeating-linear-gradient(45deg, #3fb950, #3fb950 4px, #2c7a3a 4px, #2c7a3a 8px); }
+.gauge i.add { background: repeating-linear-gradient(45deg, #58a6ff, #58a6ff 4px, #2f6fb5 4px, #2f6fb5 8px); }
 .gauge.over i.add, .gauge.over { background-color: #5a1d1d; }
 .prov-list { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
 .prov-list .chip, .goods .chip { cursor: pointer; }
@@ -289,8 +289,8 @@ b.gold { color: var(--gold); }
 .cap-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin: -2px 0 8px; }
 .cap-legend .k { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 .cap-legend .k.used { background: var(--gold); }
-.cap-legend .k.add { background: #3fb950; }
-.cap-legend .k.free { background: #30363d; }
+.cap-legend .k.add { background: var(--blue); }
+.cap-legend .k.free { background: #2c6e3c; }
 details.route-pick { background: #161b22; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin: 0 0 8px; font-size: 13px; }
 details.route-pick summary { cursor: pointer; }
 details.route-pick[open] summary { margin-bottom: 6px; }
@@ -353,3 +353,12 @@ button.link.danger { color: var(--bad); }
 .stock-line .seg button { font-size: 12px; padding: 4px 8px; }
 .stock-line .seg button { white-space: nowrap; }
 .stock-line > span:first-child { flex: 1; }
+
+/* Chiffres de la couleur de la barre ou courbe qu'ils décrivent */
+.c-gold { color: var(--gold); }
+.c-blue { color: var(--blue); }
+.c-warn { color: var(--warn); }
+.stats .stat b small.pos { color: var(--good); }
+.stats .stat b small.neg { color: var(--bad); }
+/* Fenêtre ouverte : les notifications passent en haut pour ne pas masquer son contenu */
+.modal-open .toasts { top: calc(6px + var(--safe-top)); bottom: auto; }

@@ -20,6 +20,7 @@ export function sparkline(values: number[], w = 96, h = 28): string {
 export interface RefLine {
   value: number;
   label: string;
+  color?: string; // la ligne et son libellé partagent la même couleur
 }
 
 const W = 340;
@@ -62,8 +63,8 @@ export function priceChart(values: number[], end: number, refs: RefLine[] = []):
   }
   svg += `<line x1="${PAD.l}" x2="${W - PAD.r}" y1="${H - PAD.b}" y2="${H - PAD.b}" class="axis"/>`;
   for (const r of refs)
-    svg += `<line x1="${PAD.l}" x2="${W - PAD.r}" y1="${y(r.value).toFixed(1)}" y2="${y(r.value).toFixed(1)}" class="ref"/>
-      <text x="${PAD.l + 4}" y="${(y(r.value) - 4).toFixed(1)}" class="ref-label">${r.label}</text>`;
+    svg += `<line x1="${PAD.l}" x2="${W - PAD.r}" y1="${y(r.value).toFixed(1)}" y2="${y(r.value).toFixed(1)}" class="ref"${r.color ? ` style="stroke:${r.color}"` : ''}/>
+      <text x="${PAD.l + 4}" y="${(y(r.value) - 4).toFixed(1)}" class="ref-label"${r.color ? ` style="fill:${r.color}"` : ''}>${r.label}</text>`;
   const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   svg += `<polygon points="${PAD.l},${H - PAD.b} ${pts} ${x(n - 1).toFixed(1)},${H - PAD.b}" class="area"/>
     <polyline points="${pts}" class="line"/>
@@ -99,7 +100,7 @@ export function chartPointer(e: PointerEvent) {
   const tip = box.querySelector<HTMLElement>('.tip')!;
   const t = start + i;
   tip.style.display = '';
-  tip.innerHTML = `<small>${MONTHS[t % 12]} ${Math.floor(t / 12)}</small><b>${money(values[i])}</b>`;
+  tip.innerHTML = `<small>${MONTHS[t % 12]} ${Math.floor(t / 12)}</small><b class="c-blue">${money(values[i])}</b>`;
   const left = (cx / W) * r.width;
   tip.style.left = `${Math.max(4, Math.min(r.width - tip.offsetWidth - 4, left - tip.offsetWidth / 2))}px`;
 }
