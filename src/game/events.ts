@@ -1,6 +1,8 @@
 import { RELIGIONS, religiousDistance } from '../data/religions';
 import { GOODS } from '../data/trade';
 import { addToBloc } from './actions';
+import { generateOffers } from './contracts';
+import { resolveCrisis } from './crises';
 import { holySitesOf } from './religion';
 import { pick, rand } from './rng';
 import { addRel, alive, clamp, inReach, log, nm, owned, rel } from './state';
@@ -18,7 +20,7 @@ interface RandomEvent {
   options: { label: string; hint: string; apply: (s: GameState, w: World, n: Nation, p: Params) => void }[];
 }
 
-const monthlyIncome = (n: Nation) => Math.max(0.5, n.income.production + n.income.trade + n.income.tolls);
+const monthlyIncome = (n: Nation) => Math.max(0.5, n.income.production + n.income.trade + n.income.tolls + (n.income.contracts ?? 0));
 const stab = (n: Nation, d: number) => (n.stability = clamp(n.stability + d, 0, 100));
 
 function minorityProvince(s: GameState, n: Nation): number | undefined {
@@ -260,6 +262,11 @@ export function resolveEvent(s: GameState, w: World, uid: number, option: number
       return 'Demande rejetée.';
     }
     default: {
+      const crisis = resolveCrisis(s, w, e, option, () => generateOffers(s, w, true));
+      if (crisis !== null) {
+        log(s, `${e.title} : ${crisis}`, 'event', [s.player]);
+        return crisis;
+      }
       const def = RANDOM_EVENTS.find((r) => r.kind === e.kind);
       def?.options[option]?.apply(s, w, me, p);
       log(s, `${e.title} : ${e.options[option]?.label}.`, 'event', [s.player]);

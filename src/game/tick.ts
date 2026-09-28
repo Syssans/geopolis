@@ -1,5 +1,8 @@
 import { processPeace, runAI } from './ai';
 import { maybeRandomEvent } from './events';
+import { generateOffers, processContracts } from './contracts';
+import { contractCrises, marketCrisis, runRival } from './crises';
+import { processMissions } from './missions';
 import { monthlyReligion } from './religion';
 import { rand } from './rng';
 import { alive, atWar, clamp, invalidate, log, nm, owned } from './state';
@@ -14,6 +17,7 @@ export function advanceMonth(s: GameState, w: World) {
   // Commerce et revenus
   updatePrices(s, w, () => rand(s));
   const report = computeTrade(s, w);
+  const contracts = processContracts(s, w);
   const ranked = alive(s)
     .map((n) => ({ id: n.id, v: (report.income[n.id]?.trade ?? 0) + (report.income[n.id]?.tolls ?? 0) }))
     .sort((a, b) => b.v - a.v);
@@ -22,8 +26,9 @@ export function advanceMonth(s: GameState, w: World) {
   for (const n of alive(s)) {
     const inc = report.income[n.id] ?? { production: 0, trade: 0, tolls: 0, byNode: {} };
     const upkeep = n.army * n.upkeepRate + n.navy * n.upkeepRate * 2;
-    n.income = { ...inc, upkeep };
-    n.treasury += inc.production + inc.trade + inc.tolls - upkeep;
+    const fromContracts = n.id === s.player ? contracts.revenue : 0;
+    n.income = { ...inc, contracts: fromContracts, upkeep };
+    n.treasury += inc.production + inc.trade + inc.tolls + fromContracts - upkeep;
     if (n.treasury < 0) {
       // Faillite : désertions et mécontentement
       n.stability = clamp(n.stability - 0.5, 0, 100);
@@ -87,11 +92,21 @@ export function advanceMonth(s: GameState, w: World) {
   }
 
   runAI(s, w);
+  // Le joueur : offres commerciales, rival, crises, missions
+  generateOffers(s, w);
+  contractCrises(s, w, contracts.news);
+  runRival(s, w);
+  marketCrisis(s, w);
+  processMissions(s, w);
   maybeRandomEvent(s, w);
 
   s.month++;
   if (s.month > 12) {
     s.month = 1;
     s.year++;
+  }
+  if (!s.campaignOver && s.year >= s.endYear) {
+    s.campaignOver = true;
+    log(s, 'Fin de la campagne : l’heure du bilan a sonné.', 'info', [s.player]);
   }
 }

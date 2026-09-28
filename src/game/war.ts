@@ -321,6 +321,7 @@ export function applyPeace(s: GameState, w: World, war: War, winner: Id, t: Peac
   L.stability = clamp(L.stability - 10, 0, 100);
   W.stability = clamp(W.stability + 5, 0, 100);
   if (war.holy) W.fervor += 50;
+  if (winner === s.player && (parts.length || t.satellite)) s.stats.warsWon++;
   addRel(s, winner, loser, -20);
   checkElimination(s, loser, winner);
   log(s, `Paix : ${war.name} se termine (${parts.length ? parts.join(', ') : 'paix blanche'}).`, 'war', participants);

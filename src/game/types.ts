@@ -1,5 +1,6 @@
 import type { Religion } from '../data/religions';
 import type { Good } from '../data/trade';
+import type { MissionDef } from '../data/campaign';
 
 export type Id = string; // identifiant de nation (nom world-atlas)
 export type Pid = number; // identifiant de province
@@ -79,7 +80,7 @@ export interface Nation {
   missionProgress: number;
   closedStraits: string[];
   /** Dernier bilan mensuel (affichage). */
-  income: { production: number; trade: number; tolls: number; upkeep: number; byNode: Record<string, number> };
+  income: { production: number; trade: number; tolls: number; contracts: number; upkeep: number; byNode: Record<string, number> };
 }
 
 export interface Bloc {
@@ -131,8 +132,58 @@ export interface PeaceTerms {
   reparations: boolean;
 }
 
+/** Itinéraire maritime/terrestre entre deux nœuds commerciaux. */
+export interface Route {
+  nodes: string[];
+  straits: string[];
+  piracy: string[]; // zones à risque traversées
+}
+
+export interface ContractOffer {
+  id: number;
+  buyer: Id;
+  good: Good;
+  volume: number; // valeur livrée par mois (Md$)
+  bonus: number; // prime sur le prix (0.25 = +25 %)
+  months: number; // durée du contrat
+  expires: number; // mois restants pour répondre
+  routes: Route[];
+  negotiated: boolean;
+}
+
+export interface Contract {
+  id: number;
+  buyer: Id;
+  good: Good;
+  volume: number;
+  bonus: number;
+  monthsLeft: number;
+  route: Route;
+  alternatives: Route[];
+  escort: number; // flottes d'escorte
+  blocked: number; // mois consécutifs sans livraison
+  lastRevenue: number;
+  lastStatus: 'ok' | 'blocked' | 'piracy';
+  piracyAlert?: number; // mois avant une nouvelle alerte piraterie
+}
+
+export interface MissionState extends MissionDef {
+  done: boolean;
+  doneAt?: string;
+}
+
 export interface GameState {
   version: number;
+  endYear: number;
+  rival: Id | null;
+  rivalHostility: number; // 0-100 : intensité des actions du rival
+  offers: ContractOffer[];
+  contracts: Contract[];
+  missions: MissionState[];
+  score: number; // points de missions et d'événements
+  passes: Record<string, number>; // droits de passage achetés : détroit → mois restants
+  stats: { converted: number; contractsDone: number; warsWon: number; startIncome: number; startDev: number };
+  campaignOver: boolean;
   rng: number;
   year: number;
   month: number;

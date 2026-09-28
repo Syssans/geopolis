@@ -5,9 +5,10 @@ import { GOODS } from '../data/trade';
 import { runMerchantAI } from './ai';
 import { alive, clamp, dateLabel, invalidate, pairKey, setRel } from './state';
 import { computeTrade } from './trade';
+import { initCampaign } from './missions';
 import type { GameState, Id, Nation, Policy, World } from './types';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const ARMY_UPKEEP = 0.25;
 export const NAVY_UPKEEP = 0.5;
 
@@ -23,6 +24,16 @@ const TOLERANT = new Set([
 export function createGame(world: World, player: Id, seed = Date.now()): GameState {
   const s: GameState = {
     version: SAVE_VERSION,
+    endYear: 2046,
+    rival: null,
+    rivalHostility: 20,
+    offers: [],
+    contracts: [],
+    missions: [],
+    score: 0,
+    passes: {},
+    stats: { converted: 0, contractsDone: 0, warsWon: 0, startIncome: 0, startDev: 0 },
+    campaignOver: false,
     rng: seed | 0,
     year: 2026,
     month: 1,
@@ -88,7 +99,7 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
       missionary: null,
       missionProgress: 0,
       closedStraits: [],
-      income: { production: 0, trade: 0, tolls: 0, upkeep: 0, byNode: {} },
+      income: { production: 0, trade: 0, tolls: 0, contracts: 0, upkeep: 0, byNode: {} },
     };
     s.nations[n.id] = n;
   }
@@ -116,7 +127,9 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
     n.army = Math.max(1, Math.round(((budget * (coastal ? 0.75 : 1)) / n.upkeepRate) * 10) / 10);
     n.navy = coastal ? Math.round(((budget * 0.25) / (n.upkeepRate * 2)) * 10) / 10 : 0;
     n.treasury = Math.round(monthly * 12 * 10) / 10;
+    n.income = { production: inc.production, trade: inc.trade, tolls: inc.tolls, contracts: 0, upkeep: n.army * n.upkeepRate + n.navy * n.upkeepRate * 2, byNode: {} };
   }
+  initCampaign(s, world);
 
   colorNations(s, world);
   s.log.unshift({ date: dateLabel(s), text: 'Bienvenue au 1er janvier 2026. Le monde vous attend.', kind: 'info', mine: true });

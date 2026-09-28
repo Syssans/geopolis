@@ -100,6 +100,7 @@ export function monthlyReligion(s: GameState, w: World) {
           p.unrest = Math.max(0, p.unrest - 20);
           n.missionary = null;
           n.missionProgress = 0;
+          if (n.id === s.player) s.stats.converted++;
           log(s, `${name} se convertit à la foi ${RELIGIONS[n.religion].adj}.`, 'religion', [n.id]);
         }
       }

@@ -1,4 +1,5 @@
 import { GOODS, STRAITS, TRADE_NODES, type Good } from '../data/trade';
+import { divertedShare } from './contracts';
 import { embargoes, owned, tradeCount } from './state';
 import type { GameState, Id, Pid, World } from './types';
 
@@ -132,8 +133,10 @@ export function computeTrade(s: GameState, w: World): TradeReport {
 
   const local: Record<string, number> = {};
   for (const n of TRADE_NODES) local[n.id] = 0;
+  const divert = s.contracts?.length ? divertedShare(s, w) : {};
   s.provinces.forEach((p, i) => {
-    const v = production(s, w, i);
+    let v = production(s, w, i);
+    if (p.owner === s.player) v *= 1 - (divert[p.good ?? w.provinces[i].good] ?? 0);
     inc(p.owner).production += v * PRODUCTION_SHARE;
     local[w.provinces[i].node] += v * (1 - PRODUCTION_SHARE);
   });

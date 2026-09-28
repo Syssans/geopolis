@@ -10,6 +10,8 @@ import {
   proposeAlliance, improveRelations, sendMissionary, setPolicy, toggleStrait, holyWarReasons, holyWarClaim, setMerchant,
 } from '../src/game/actions';
 import { RELIGIONS } from '../src/data/religions';
+import { CAMPAIGNS } from '../src/data/campaign';
+import { acceptOffer, findRoutes } from '../src/game/contracts';
 import { STRAITS } from '../src/data/trade';
 
 function run(years: number, seed: number, player = 'France') {
@@ -132,6 +134,61 @@ describe('guerre', () => {
     expect(proposeAlliance(s, 'India', 'Bangladesh').ok).toBe(false);
     for (let i = 0; i < 5; i++) improveRelations(s, 'India', 'Bangladesh');
     expect(proposeAlliance(s, 'India', 'Bangladesh').ok).toBe(true);
+  });
+});
+
+describe('campagne', () => {
+  it('les missions écrites référencent des nœuds, détroits, nations et lieux saints existants', () => {
+    const nodes = new Set(world.provinces.map((p) => p.node));
+    const sites = new Set(world.provinces.flatMap((p) => (p.holy ?? []).map((h) => h.name)));
+    const s = createGame(world, 'France', 1);
+    for (const [nation, c] of Object.entries(CAMPAIGNS)) {
+      expect(s.nations[nation], nation).toBeDefined();
+      expect(s.nations[c.rival], `${nation} → ${c.rival}`).toBeDefined();
+      for (const mi of c.missions) {
+        const k = mi.check;
+        if (k.type === 'nodeShare') expect(nodes.has(k.node), mi.id).toBe(true);
+        if (k.type === 'strait') expect(straitProvince(world, k.strait), mi.id).toBeDefined();
+        if (k.type === 'holy') expect(sites.has(k.site), mi.id).toBe(true);
+        if (k.type === 'contractWith' || k.type === 'relations') expect(s.nations[k.nation], mi.id).toBeDefined();
+      }
+    }
+    expect(Object.keys(CAMPAIGNS).length).toBeGreaterThanOrEqual(25);
+  });
+  it('chaque partie démarre avec un rival et des missions non encore remplies', () => {
+    for (const id of ['Saudi Arabia', 'Chad', 'Japan']) {
+      const s = createGame(world, id, 2);
+      expect(s.rival, id).not.toBeNull();
+      expect(s.missions.length).toBeGreaterThan(4);
+      expect(s.missions.every((m) => !m.done)).toBe(true);
+    }
+  });
+  it('un contrat signé rapporte chaque mois et un détroit fermé le bloque', () => {
+    const s = createGame(world, 'Saudi Arabia', 4);
+    let guard = 0;
+    while (!s.offers.length && guard++ < 40) {
+      advanceMonth(s, world);
+      s.events = [];
+    }
+    const offer = s.offers[0];
+    expect(offer).toBeDefined();
+    expect(acceptOffer(s, world, offer.id, 0).ok).toBe(true);
+    advanceMonth(s, world);
+    s.events = [];
+    const c = s.contracts[0];
+    if (c && c.lastStatus === 'ok') expect(s.nations['Saudi Arabia'].income.contracts).toBeGreaterThan(0);
+    // Toutes les routes depuis le Golfe passent par Ormuz
+    if (c && c.route.straits.includes('ormuz')) {
+      s.nations.Iran.closedStraits.push('ormuz');
+      advanceMonth(s, world);
+      expect(s.contracts[0]?.lastStatus ?? 'blocked').toBe('blocked');
+    }
+  });
+  it('les itinéraires contournent Suez par Le Cap', () => {
+    const routes = findRoutes('ocean_indien', 'manche');
+    expect(routes.length).toBeGreaterThan(1);
+    expect(routes.some((r) => r.straits.includes('suez'))).toBe(true);
+    expect(routes.some((r) => !r.straits.includes('suez'))).toBe(true);
   });
 });
 

@@ -202,6 +202,16 @@ export class MapView {
         if (Math.abs(x1 - x0) > W / 2) continue; // liaison transpacifique : ne pas traverser la carte
         el('line', { x1: String(x0), y1: String(y0), x2: String(x1), y2: String(y1), class: 'flow', 'marker-end': 'url(#arrow)' }, g);
       }
+    // Routes des contrats du joueur
+    for (const c of s.contracts) {
+      const pts = c.route.nodes.map((id) => pos.get(id)!).filter(Boolean);
+      for (let i = 1; i < pts.length; i++) {
+        const [x0, y0] = pts[i - 1];
+        const [x1, y1] = pts[i];
+        if (Math.abs(x1 - x0) > W / 2) continue;
+        el('line', { x1: String(x0), y1: String(y0), x2: String(x1), y2: String(y1), class: `route ${c.lastStatus}` }, g);
+      }
+    }
     for (const n of TRADE_NODES) {
       const [x, y] = pos.get(n.id)!;
       const c = el('circle', { cx: String(x), cy: String(y), r: n.id === selectedNode ? '6' : '4', class: 'node' }, g);

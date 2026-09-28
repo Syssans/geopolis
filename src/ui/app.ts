@@ -8,6 +8,9 @@ import {
   warBetween, warsOf, desecratedHolySites,
 } from '../game/state';
 import { advanceMonth } from '../game/tick';
+import * as C from '../game/contracts';
+import { progress, scoreBreakdown, monthlyIncome } from '../game/missions';
+import { CAMPAIGNS } from '../data/campaign';
 import { computeTrade, homeNode, NODES, production, straitClosed, straitOwner, TOLL, type TradeReport } from '../game/trade';
 import type { GameState, Id, PeaceTerms, Pid, Policy, War, World } from '../game/types';
 import {
@@ -47,6 +50,8 @@ export class App {
   private touching = false;
   private dirty = false;
   private report: TradeReport | null = null;
+  private offerRoute: Record<number, number> = {};
+  private contractsTab = 'offers';
 
   constructor(private root: HTMLElement, private world: World, topo: Topology) {
     this.map = new MapView(root, topo, world);
@@ -254,7 +259,7 @@ export class App {
     h.play = (id) => {
       this.closeModal();
       this.start(createGame(this.world, id));
-      this.toast(`Vous dirigez ${this.state.nations[id].name}. Appuyez sur ▶ pour lancer le temps.`, 'good');
+      this.showIntro();
     };
     h.closeModal = () => this.closeModal();
     h.speed = (v) => this.setSpeed(Number(v));
@@ -285,6 +290,35 @@ export class App {
       this.showTitle();
     };
     h.log = () => this.showLog();
+    h.contracts = (t) => this.showContracts(t || this.contractsTab);
+    h.objectives = () => this.showObjectives();
+    h.offerRoute = (v) => {
+      const [id, idx] = v.split(':').map(Number);
+      this.offerRoute[id] = idx;
+      this.showContracts('offers');
+    };
+    const refresh = (r: { ok: boolean; msg: string }) => {
+      this.report = null;
+      this.toast(r.msg, r.ok ? 'good' : 'bad');
+      this.showContracts(this.contractsTab);
+      this.renderHud();
+    };
+    h.sign = (id) => refresh(C.acceptOffer(this.state, this.world, Number(id), this.offerRoute[Number(id)] ?? 0));
+    h.negotiate = (id) => refresh(C.negotiate(this.state, Number(id)));
+    h.decline = (id) => refresh(C.declineOffer(this.state, Number(id)));
+    h.reroute = (v) => {
+      const [id, idx] = v.split(':').map(Number);
+      refresh(C.setRoute(this.state, id, idx));
+    };
+    h.escort = (v) => {
+      const [id, d] = v.split(':').map(Number);
+      refresh(C.setEscort(this.state, id, d));
+    };
+    h.cancelContract = (id) => refresh(C.cancelContract(this.state, Number(id)));
+    h.sandbox = () => {
+      this.state.endYear = 9999;
+      this.closeModal();
+    };
     h.ledger = (t) => this.showLedger(t || 'trade');
     h.goto = (pid) => {
       this.closeModal();
@@ -407,7 +441,7 @@ export class App {
     if (!s || this.picking) return;
     const me = s.nations[s.player];
     const inc = me.income;
-    const net = inc.production + inc.trade + inc.tolls - inc.upkeep;
+    const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep;
     if (!this.el.hud.firstChild)
       this.el.hud.innerHTML = `<button class="me chip" data-a="me"></button><div class="res"></div>
         <div class="time"><span class="date"></span><div class="speed"></div></div>`;
@@ -434,7 +468,13 @@ export class App {
           const sc = scoreFor(w, s.player);
           return `<button class="warchip" data-a="war" data-p="${w.id}">${w.holy ? '☪✝' : '⚔️'} ${esc(nm(s, enemyLeader(w, s.player)))} · <b class="${cls(sc)}">${signed(sc)}</b></button>`;
         })
-        .join(''),
+        .join('') +
+        (s.rival && s.nations[s.rival].alive
+          ? `<button class="rivalchip" data-a="gotoNation" data-p="${esc(s.rival)}">🗡️ Rival : ${esc(nm(s, s.rival))}<i style="width:${s.rivalHostility}%"></i></button>`
+          : '') +
+        (s.contracts.some((c) => c.lastStatus !== 'ok')
+          ? `<button class="warchip" data-a="contracts" data-p="active">📦 ${s.contracts.filter((c) => c.lastStatus !== 'ok').length} contrat(s) en difficulté</button>`
+          : ''),
     );
     const t = s.tension;
     patch(this.el.tension, `Tension mondiale ${num(t)}%<div class="bar"><i style="width:${t}%"></i></div>`);
@@ -443,7 +483,8 @@ export class App {
       this.el.bottom,
       `<div class="modes">${MODES.map((m) => `<button class="${this.mode === m.id ? 'on' : ''}" data-a="mode" data-p="${m.id}" title="${m.name}">${m.icon}</button>`).join('')}</div>
       <span class="spacer"></span>
-      <button class="fab" data-a="ledger" title="Classements">📊</button>
+      <button class="fab" data-a="contracts" title="Contrats">📦${s.offers.length ? `<span class="badge">${s.offers.length}</span>` : ''}</button>
+      <button class="fab" data-a="objectives" title="Objectifs">🎯</button>
       <button class="fab" data-a="log" title="Journal">📰${unread > 0 ? `<span class="badge">${Math.min(unread, 99)}</span>` : ''}</button>
       <button class="fab" data-a="menu" title="Menu">☰</button>`,
     );
@@ -561,7 +602,7 @@ export class App {
     const s = this.state;
     const me = this.me;
     const inc = me.income;
-    const net = inc.production + inc.trade + inc.tolls - inc.upkeep;
+    const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep;
     const report = this.trade();
     const home = homeNode(s, this.world, me.id);
     const slots = A.merchantSlots(s, me.id);
@@ -588,9 +629,10 @@ export class App {
       return `<div class="row"><span>${esc(n.name)}${n.id === home ? ' 🏠' : ''}${r.collectors.includes(me.id) ? ' <small class="pos">collecte</small>' : ' <small class="muted">oriente</small>'}</span><span>${money(r.value)} · ${num(share * 100)} %</span></div>`;
     });
     return `<div class="stats">
-        ${stat('Production', money(inc.production))}${stat('Commerce', money(inc.trade))}${stat('Péages', money(inc.tolls))}
+        ${stat('Contrats', `<span class="pos">${money(inc.contracts ?? 0)}</span>`)}${stat('Production', money(inc.production))}${stat('Commerce', money(inc.trade))}${stat('Péages', money(inc.tolls))}
         ${stat('Entretien forces', `<span class="neg">−${money(inc.upkeep)}</span>`)}${stat('Solde / mois', `<span class="${cls(net)}">${money(net)}</span>`)}${stat('Nœud domicile', esc(home ? nodeName(home) : '—'))}
       </div>
+      <div class="actions"><button class="act wide" data-a="contracts" data-p="${s.offers.length ? 'offers' : 'active'}"><span class="t">📦 Contrats : ${s.contracts.length} en cours · ${s.offers.length} offre(s)</span><span class="c">Signer, choisir les itinéraires, escorter les convois</span></button></div>
       <h3>Marchands (${me.merchants.length}/${slots})</h3>
       <p class="muted" style="font-size:12px">Collecter : prendre sa part de la richesse d’un nœud. Orienter : pousser la richesse vers l’aval, jusqu’à votre nœud domicile où vous collectez automatiquement.</p>
       <div class="merchants">${merchants}</div>
@@ -760,6 +802,11 @@ export class App {
       localStorage.removeItem(SAVE_KEY);
       return;
     }
+    if (s.campaignOver && s.endYear !== 9999 && this.el.overlay.style.display === 'none') {
+      this.setSpeed(0);
+      this.showEnd();
+      return;
+    }
     const e = s.events[0];
     if (!e || this.el.overlay.style.display !== 'none') return;
     this.modal(
@@ -784,11 +831,131 @@ export class App {
     if (this.s && !this.picking) this.renderEvents();
   }
 
+  private showIntro() {
+    const s = this.state;
+    const c = CAMPAIGNS[s.player];
+    this.modal(
+      `${esc(this.me.name)} · 2026-${s.endYear}`,
+      `<p>${esc(c?.intro ?? 'Vingt ans pour faire de votre nation une puissance commerciale et spirituelle.')}</p>
+      ${s.rival ? `<p>🗡️ <b>Votre rival : ${esc(nm(s, s.rival))}</b>. Il cherchera à vous nuire : insurgés, embargos, sabotage de vos contrats, ultimatums.</p>` : ''}
+      <p>🎯 <b>${s.missions.length} missions</b> vous rapportent des points. Le bilan final tombe en janvier ${s.endYear}.</p>
+      <p>📦 Des acheteurs vous proposeront des <b>contrats</b> : c'est votre principale source de richesse. Choisissez bien vos itinéraires : détroits, pirates et blocus guettent vos convois.</p>`,
+      [
+        { label: 'Voir mes objectifs', a: 'objectives', primary: true },
+        { label: 'Commencer', a: 'closeModal' },
+      ],
+    );
+  }
+
+  private showObjectives() {
+    const s = this.state;
+    const sc = scoreBreakdown(s, this.world);
+    const left = s.endYear - s.year;
+    const rows = s.missions
+      .map((mi) => {
+        const pr = progress(s, this.world, mi);
+        const rw = [`+${mi.reward.score} pts`, mi.reward.influence ? `🤝${mi.reward.influence}` : '', mi.reward.fervor ? `🔥${mi.reward.fervor}` : '', mi.reward.money ? `💰${mi.reward.money}` : ''].filter(Boolean).join(' ');
+        return `<div class="mission ${mi.done ? 'done' : ''}"><div class="mh"><b>${mi.done ? '✅' : '🎯'} ${esc(mi.title)}</b><small>${rw}</small></div>
+          <small class="muted">${esc(mi.desc)}</small>
+          ${mi.done ? `<small class="pos">Accomplie (${mi.doneAt})</small>` : `<div class="pbar"><i style="width:${Math.round(pr.ratio * 100)}%"></i></div><small>${esc(pr.label)}</small>`}</div>`;
+      })
+      .join('');
+    this.modal(
+      'Objectifs',
+      `<div class="stats">${stat('Score actuel', `${sc.total} <small>(${sc.grade})</small>`)}${stat('Fin de campagne', s.endYear === 9999 ? 'Bac à sable' : `${left} an(s)`)}${stat('Missions', `${s.missions.filter((m) => m.done).length}/${s.missions.length}`)}</div>
+      ${s.rival ? `<p>🗡️ Rival : <b>${esc(nm(s, s.rival))}</b> — hostilité ${Math.round(s.rivalHostility)} %</p>` : ''}
+      <div class="missions">${rows}</div>
+      <h3>Détail du score</h3><div class="rows">${sc.lines.map((l) => `<div class="row"><span>${esc(l.label)}</span><span class="${cls(l.value)}">${signed(l.value)}</span></div>`).join('')}</div>`,
+      [{ label: 'Fermer', a: 'closeModal', primary: true }],
+    );
+  }
+
+  private showEnd() {
+    const s = this.state;
+    const sc = scoreBreakdown(s, this.world);
+    this.modal(
+      `Bilan ${s.endYear} · note ${sc.grade}`,
+      `<p class="grade grade-${sc.grade}">${sc.grade}</p><p style="text-align:center"><b>${sc.total} points</b> · ${s.missions.filter((m) => m.done).length}/${s.missions.length} missions</p>
+      <div class="rows">${sc.lines.map((l) => `<div class="row"><span>${esc(l.label)}</span><span class="${cls(l.value)}">${signed(l.value)}</span></div>`).join('')}</div>
+      <p class="muted" style="font-size:12px">S ≥ 320 · A ≥ 240 · B ≥ 170 · C ≥ 100</p>`,
+      [
+        { label: 'Continuer en bac à sable', a: 'sandbox', primary: true },
+        { label: 'Nouvelle partie', a: 'quit' },
+      ],
+    );
+    localStorage.removeItem(SAVE_KEY);
+  }
+
+  private routeLabel(r: import('../game/types').Route): string {
+    const straits = r.straits.map((x) => `⚓${esc(C.straitName(x))}`).join(' ');
+    const pir = r.piracy.length ? ` · 🏴‍☠️${r.piracy.length}` : '';
+    const blocked = C.blockedStraits(this.state, this.world, r);
+    return `${r.nodes.length - 1} étape(s)${straits ? ' · ' + straits : ''}${pir}${blocked.length ? ' · <b class="neg">bloqué</b>' : ''}`;
+  }
+
+  private showContracts(tab: string) {
+    this.contractsTab = tab;
+    const s = this.state;
+    const cap = C.capacity(s, this.world, s.player);
+    const com = C.committed(s);
+    const tabs = `<div class="tabs"><button class="${tab === 'offers' ? 'on' : ''}" data-a="contracts" data-p="offers">Offres (${s.offers.length})</button><button class="${tab === 'active' ? 'on' : ''}" data-a="contracts" data-p="active">En cours (${s.contracts.length})</button><button class="${tab === 'capacity' ? 'on' : ''}" data-a="contracts" data-p="capacity">Production</button></div>`;
+    let html = tabs;
+    if (tab === 'offers') {
+      html += s.offers.length
+        ? s.offers.map((o) => {
+            const g = GOODS[o.good];
+            const sel = this.offerRoute[o.id] ?? 0;
+            const route = o.routes[sel] ?? o.routes[0];
+            const est = route ? C.estimate(o.volume, o.bonus, route) : null;
+            const risk = route ? C.piracyRisk(route, 0, s) : 0;
+            const free = (cap[o.good] ?? 0) - (com[o.good] ?? 0);
+            return `<div class="card"><div class="mh"><b>${g.icon} ${esc(nm(s, o.buyer))}</b><small>expire dans ${o.expires} mois</small></div>
+              <div class="stats">${stat('Volume / mois', money(o.volume))}${stat('Prime', `<span class="pos">+${Math.round(o.bonus * 100)} %</span>`)}${stat('Durée', `${o.months} mois`)}</div>
+              <small class="muted">Capacité libre en ${g.name.toLowerCase()} : ${money(free)} / mois</small>
+              <h3>Itinéraire</h3>${o.routes.map((r, i) => `<label class="check"><input type="radio" name="r${o.id}" data-a="offerRoute" data-p="${o.id}:${i}" ${i === sel ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}
+              ${est ? `<p>Revenu net estimé : <b class="pos">${money(est.net)} / mois</b> <small class="muted">(péages ${money(est.tolls)}, transport ${money(est.transport)}, risque pirate ${Math.round(risk * 100)} %/mois)</small></p>` : ''}
+              <div class="actions">
+                <button class="act" data-a="sign" data-p="${o.id}" ${o.volume > free * 1.05 ? 'disabled' : ''}><span class="t">✍️ Signer</span><span class="c">${o.volume > free * 1.05 ? 'Production insuffisante' : `Relations +8 avec ${esc(nm(s, o.buyer))}`}</span></button>
+                <button class="act" data-a="negotiate" data-p="${o.id}" ${o.negotiated ? 'disabled' : ''}><span class="t">🤝 Négocier +10 %</span><span class="c">${o.negotiated ? 'Déjà tenté' : 'Influence −10, risque de rupture'}</span></button>
+                <button class="act wide" data-a="decline" data-p="${o.id}"><span class="t">Décliner</span><span class="c">Sans conséquence</span></button>
+              </div></div>`;
+          }).join('')
+        : '<p class="muted">Aucune offre pour le moment. De nouveaux acheteurs se manifestent régulièrement ; avoir de bonnes relations et une production libre aide.</p>';
+    } else if (tab === 'active') {
+      const navy = Math.floor(this.me.navy);
+      const used = C.escortsUsed(s);
+      html += `<p class="muted" style="font-size:12px">Flottes d’escorte : ${used}/${navy} utilisées. Chaque flotte divise par 2,5 le risque de piraterie.</p>`;
+      html += s.contracts.length
+        ? s.contracts.map((c) => {
+            const g = GOODS[c.good];
+            const status = c.lastStatus === 'ok' ? (c.lastRevenue > 0 ? `<span class="pos">✅ ${money(c.lastRevenue)} ce mois</span>` : '<span class="muted">⏳ Premier convoi en route</span>') : c.lastStatus === 'blocked' ? `<span class="neg">⛔ Bloqué depuis ${c.blocked} mois</span>` : '<span class="neg">🏴‍☠️ Convoi pillé</span>';
+            return `<div class="card"><div class="mh"><b>${g.icon} ${esc(nm(s, c.buyer))}</b><small>${c.monthsLeft} mois restants</small></div>
+              <p>${money(c.volume)}/mois · prime +${Math.round(c.bonus * 100)} % · ${status}</p>
+              <h3>Itinéraire</h3>${c.alternatives.map((r, i) => `<label class="check"><input type="radio" name="c${c.id}" data-a="reroute" data-p="${c.id}:${i}" ${r.nodes.join() === c.route.nodes.join() ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}
+              <div class="escort"><span>Escorte : <b>${c.escort}</b> flotte(s) · risque ${Math.round(C.piracyRisk(c.route, c.escort, s) * 100)} %/mois</span>
+                <span class="seg"><button data-a="escort" data-p="${c.id}:-1" ${c.escort ? '' : 'disabled'}>−</button><button data-a="escort" data-p="${c.id}:1" ${used < navy ? '' : 'disabled'}>+</button></span></div>
+              <div class="actions"><button class="act danger wide" data-a="cancelContract" data-p="${c.id}"><span class="t">Rompre le contrat</span><span class="c">Relations −20 avec ${esc(nm(s, c.buyer))}</span></button></div></div>`;
+          }).join('')
+        : '<p class="muted">Aucun contrat en cours.</p>';
+    } else {
+      html += `<p class="muted" style="font-size:12px">Ce que vos provinces produisent chaque mois (aux prix du marché) et la part déjà vendue sous contrat. Le reste part dans les nœuds commerciaux.</p><div class="rows">${(Object.keys(cap) as (keyof typeof GOODS)[])
+        .sort((a, b) => (cap[b] ?? 0) - (cap[a] ?? 0))
+        .map((g) => `<div class="row"><span>${GOODS[g].icon} ${GOODS[g].name} <small class="${cls((s.prices[g] ?? 1) - 1)}">${signed(((s.prices[g] ?? 1) - 1) * 100)} %</small></span><span>${money(com[g] ?? 0)} / ${money(cap[g] ?? 0)}</span></div>`)
+        .join('')}</div>`;
+    }
+    const scroll = this.el.overlay.querySelector('.content')?.scrollTop ?? 0;
+    this.modal('Contrats commerciaux', html, [{ label: 'Fermer', a: 'closeModal', primary: true }]);
+    const content = this.el.overlay.querySelector('.content');
+    if (content) content.scrollTop = scroll;
+  }
+
   private showHelp() {
     this.modal(
       'Comment jouer',
       `<p>Vous dirigez une nation à partir de janvier 2026. Le temps s'écoule mois par mois : <b>▶</b> lance ou met en pause, <b>›››</b> règle la vitesse. Touchez une province pour agir.</p>
-      <p><b>Trois ressources</b> : 💰 le trésor (production + commerce − entretien des forces), 🤝 l'influence (diplomatie) et 🔥 la ferveur (religion).</p>
+      <p><b>But</b> 🎯 : une campagne de 20 ans (2026-2046). Remplissez vos missions, battez votre rival et soignez votre rang : un bilan noté de S à D tombe à la fin.</p>
+      <p><b>Contrats</b> 📦 : des acheteurs vous proposent d'acheter votre production à prix fixe avec une prime. Choisissez l'itinéraire de vos convois (détroits à péage, zones de piraterie), escortez-les avec votre flotte, contournez les blocus. C'est votre principale source de richesse.</p>
+      <p><b>Trois ressources</b> : 💰 le trésor (contrats + production + commerce − entretien des forces), 🤝 l'influence (diplomatie) et 🔥 la ferveur (religion).</p>
       <p><b>Commerce</b> : chaque province produit une marchandise dont la valeur entre dans un <b>nœud commercial</b>. La richesse coule d'amont en aval vers trois grands pôles : Manche, New York et Shanghai. Vous collectez automatiquement dans votre nœud domicile ; envoyez vos <b>marchands</b> orienter les flux vers lui ou collecter ailleurs. Votre flotte renforce votre poids dans les nœuds côtiers.</p>
       <p><b>Détroits</b> ⚓ : Ormuz, Suez, Malacca, Panama, Bosphore… leur propriétaire touche un péage et peut les fermer — le commerce en aval s'effondre et les prix s'envolent.</p>
       <p><b>Religion</b> : chaque province a sa confession. Les minorités s'agitent, surtout sous une politique de prosélytisme, et peuvent se soulever — d'autant plus si une puissance voisine arme les insurgés. Envoyez des missionnaires pour les convertir, ou choisissez la tolérance.</p>
@@ -802,6 +969,7 @@ export class App {
     this.setSpeed(0);
     this.modal('Menu', '<p class="muted">La partie est sauvegardée automatiquement chaque année.</p>', [
       { label: 'Reprendre', a: 'closeModal', primary: true },
+      { label: 'Classements', a: 'ledger' },
       { label: 'Sauvegarder', a: 'save' },
       { label: 'Comment jouer', a: 'help' },
       { label: 'Quitter vers le menu', a: 'quit' },

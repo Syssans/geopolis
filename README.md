@@ -18,8 +18,13 @@ npm run build      # build de production dans dist/ (PWA installable)
 
 | Système | Principe |
 |---|---|
+| **Campagne** | 20 ans (2026 → 2046), bilan final noté de S à D : missions, rang commercial, croissance, territoire, lieux saints, détroits, stabilité, duel avec le rival. |
+| **Missions** 🎯 | ~25 nations ont leurs missions écrites (Arabie saoudite : « Le Golfe est arabe », Taïwan : « Bouclier de silicium »…), toutes ont des missions génériques adaptées à leur taille. Récompenses en points, trésor, influence ou ferveur. |
+| **Contrats** 📦 | Des acheteurs proposent d'acheter votre production à prix fixe avec une prime. Vous signez, négociez ou déclinez, puis choisissez l'itinéraire des convois (jusqu'à 3 : détroits à péage, zones de piraterie), assignez des escortes, réacheminez en cas de blocus. 4 mois sans livraison = rupture. |
+| **Rival** 🗡️ | Désigné au départ (Iran pour l'Arabie saoudite, Chine pour Taïwan…), il arme vos minorités, vous impose des embargos, sabote vos contrats, ferme ses détroits sur vos routes, monte vos voisins contre vous et pose des ultimatums. |
+| **Crises** | Blocus, pirates, ingérence étrangère, concurrence déloyale, ultimatums, krachs : chaque crise propose 2 à 3 réponses avec leurs coûts. |
 | **Temps** | Tick mensuel, pause + 4 vitesses. Le jeu se met en pause sur les événements. |
-| **Ressources** | 💰 Trésor (production + commerce + péages − entretien des forces), 🤝 Influence (diplomatie), 🔥 Ferveur (religion). |
+| **Ressources** | 💰 Trésor (contrats + production + commerce + péages − entretien des forces), 🤝 Influence (diplomatie), 🔥 Ferveur (religion). |
 | **Provinces** | ~900 provinces (régions françaises, États américains, provinces chinoises…), chacune avec développement, population, marchandise, religion et nœud commercial. |
 | **Commerce** | 26 nœuds commerciaux (Golfe Persique, Malacca, Suez, Manche, Shanghai, New York…) reliés d'amont en aval. La production des provinces y entre ; les nations collectent leur part selon leur pouvoir commercial (provinces, côtes, flotte, marchands, accords). |
 | **Marchands** | 2 à 5 marchands à placer : **collecter** dans un nœud, ou **orienter** la richesse vers l'aval jusqu'à votre nœud domicile. |
@@ -37,9 +42,11 @@ npm run build      # build de production dans dist/ (PWA installable)
 
 ```
 scripts/build-provinces.mjs   génère src/data/provinces.json depuis Natural Earth (admin-1 + villes)
-src/data/                     pays, blocs, religions, marchandises, nœuds commerciaux, détroits
+src/data/                     pays, blocs, religions, marchandises, nœuds, détroits, campagnes
 src/game/                     moteur pur TypeScript, sans DOM, sérialisable
   trade.ts                      production, nœuds, collecte/orientation, péages, prix
+  contracts.ts                  offres, contrats, itinéraires, piraterie, blocus
+  missions.ts, crises.ts        campagne, missions, score, rival et crises
   religion.ts                   agitation, insurrections, missionnaires, ferveur
   war.ts                        guerres, sièges, traités
   ai.ts, events.ts, tick.ts     IA, événements, boucle mensuelle
