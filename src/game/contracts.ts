@@ -78,10 +78,12 @@ export function capacity(s: GameState, w: World, id: Id): Partial<Record<Good, n
   return cap;
 }
 
-/** Ce que le joueur peut s'engager à livrer chaque mois : sa production + ses achats sous contrat. */
+/** Ce que le joueur peut s'engager à livrer chaque mois : production, achats sous contrat et stocks (sur un an). */
 export function supply(s: GameState, w: World): Partial<Record<Good, number>> {
   const cap = capacity(s, w, s.player);
   for (const p of s.purchases ?? []) cap[p.good] = (cap[p.good] ?? 0) + p.volume;
+  // Les stocks peuvent aussi être revendus sous contrat, étalés sur un an
+  for (const [g, q] of Object.entries(s.stock ?? {}) as [Good, number][]) if (q > 1e-3) cap[g] = (cap[g] ?? 0) + q / 12;
   return cap;
 }
 

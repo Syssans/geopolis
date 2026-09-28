@@ -1122,11 +1122,12 @@ export class App {
     };
     if (tab === 'resources') {
       const bought = P.purchased(s);
-      const goods = [...new Set([...Object.keys(cap), ...Object.keys(bought), ...Object.keys(s.stock).filter((g) => (s.stock[g as keyof typeof GOODS] ?? 0) > 1e-3)])] as (keyof typeof GOODS)[];
+      // Seules les marchandises produites ici : les achats et stocks sans production figurent dans « Besoins et stocks »
+      const goods = (Object.keys(cap) as (keyof typeof GOODS)[]).filter((g) => (cap[g] ?? 0) > 1e-6);
       const worth = (g: keyof typeof GOODS) => ((cap[g] ?? 0) + (bought[g] ?? 0) + (s.stock[g] ?? 0)) * unitPriceOf(s, g);
       goods.sort((a, b) => worth(b) - worth(a));
       html += this.needsHtml();
-      html += `<h3>🏭 Production</h3><p class="hint">Ce que vos provinces produisent chaque mois. La part <b class="gold">sous contrat</b> est vendue à prix garanti ; le <b>disponible</b> part sur le marché et peut être proposé aux acheteurs. Touchez une province pour la moderniser.</p>`;
+      html += `<h3>🏭 Production</h3><p class="hint">Ce que vos provinces produisent chaque mois. La part <b class="gold">sous contrat</b> est vendue à prix garanti ; le <b>disponible</b> part sur le marché et peut être proposé aux acheteurs. Touchez une province pour la moderniser. Ce que vous achetez sans le produire apparaît plus haut dans « Besoins et stocks » ; les acheteurs étrangers peuvent quand même vous le demander.</p>`;
       html += goods.map((g) => {
         const d = GOODS[g];
         const own = cap[g] ?? 0;
