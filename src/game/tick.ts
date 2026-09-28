@@ -3,6 +3,7 @@ import { maybeRandomEvent } from './events';
 import { generateOffers, processContracts } from './contracts';
 import { contractCrises, marketCrisis, runRival } from './crises';
 import { processMissions } from './missions';
+import { monthlyWorks } from './economy';
 import { monthlyReligion } from './religion';
 import { rand } from './rng';
 import { alive, atWar, clamp, invalidate, log, nm, owned } from './state';
@@ -15,7 +16,9 @@ export function advanceMonth(s: GameState, w: World) {
   if (s.gameOver) return;
 
   // Commerce et revenus
+  s.prevPrices = { ...s.prices };
   updatePrices(s, w, () => rand(s));
+  monthlyWorks(s, w);
   const report = computeTrade(s, w);
   const contracts = processContracts(s, w);
   const ranked = alive(s)

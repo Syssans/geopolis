@@ -20,7 +20,9 @@ npm run build      # build de production dans dist/ (PWA installable)
 |---|---|
 | **Campagne** | 20 ans (2026 → 2046), bilan final noté de S à D : missions, rang commercial, croissance, territoire, lieux saints, détroits, stabilité, duel avec le rival. |
 | **Missions** 🎯 | ~25 nations ont leurs missions écrites (Arabie saoudite : « Le Golfe est arabe », Taïwan : « Bouclier de silicium »…), toutes ont des missions génériques adaptées à leur taille. Récompenses en points, trésor, influence ou ferveur. |
-| **Contrats** 📦 | Des acheteurs proposent d'acheter votre production à prix fixe avec une prime. Vous signez, négociez ou déclinez, puis choisissez l'itinéraire des convois (jusqu'à 3 : détroits à péage, zones de piraterie), assignez des escortes, réacheminez en cas de blocus. 4 mois sans livraison = rupture. |
+| **Ressources** 📦 | Chaque marchandise se compte en unités physiques (Mbl de pétrole, Mt de céréales…) distinctes de son cours. L'écran Économie montre production, part sous contrat, disponible, cours et tendance, et les provinces productrices. |
+| **Investir** 🏗️ | Par province : **moderniser** (+35 % de production par niveau, 3 niveaux, 12 mois), **reconvertir** (industrie, textile, puces, finance selon le développement, 18 mois), **prospecter** (1 chance sur 3 de trouver pétrole, gaz, métaux ou terres rares). |
+| **Contrats** 📦 | Des acheteurs proposent d'acheter une quantité de votre production à prix verrouillé avec une prime ; une jauge montre la capacité restante et empêche de vendre ce que vous ne produisez pas. On peut retirer une marchandise de la vente. Vous signez, négociez ou déclinez, puis choisissez l'itinéraire des convois (jusqu'à 3 : détroits à péage, zones de piraterie), assignez des escortes, réacheminez en cas de blocus. 4 mois sans livraison = rupture. |
 | **Rival** 🗡️ | Désigné au départ (Iran pour l'Arabie saoudite, Chine pour Taïwan…), il arme vos minorités, vous impose des embargos, sabote vos contrats, ferme ses détroits sur vos routes, monte vos voisins contre vous et pose des ultimatums. |
 | **Crises** | Blocus, pirates, ingérence étrangère, concurrence déloyale, ultimatums, krachs : chaque crise propose 2 à 3 réponses avec leurs coûts. |
 | **Temps** | Tick mensuel, pause + 4 vitesses. Le jeu se met en pause sur les événements. |
@@ -46,6 +48,7 @@ src/data/                     pays, blocs, religions, marchandises, nœuds, dét
 src/game/                     moteur pur TypeScript, sans DOM, sérialisable
   trade.ts                      production, nœuds, collecte/orientation, péages, prix
   contracts.ts                  offres, contrats, itinéraires, piraterie, blocus
+  economy.ts                    modernisation, reconversion, prospection, chantiers
   missions.ts, crises.ts        campagne, missions, score, rival et crises
   religion.ts                   agitation, insurrections, missionnaires, ferveur
   war.ts                        guerres, sièges, traités

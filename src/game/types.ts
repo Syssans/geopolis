@@ -39,7 +39,9 @@ export interface Province {
   revolt: number; // mois d'insurrection (0 = calme)
   supportedBy: Id | null; // puissance étrangère qui soutient les insurgés
   supportMonths: number;
-  good?: Good; // production modifiée par un événement
+  good?: Good; // production modifiée (événement, reconversion, prospection)
+  level?: number; // niveau d'équipement 0-3 (+35 % de production par niveau)
+  works?: { kind: 'upgrade' | 'convert' | 'prospect'; months: number; good?: Good };
 }
 
 export interface Merchant {
@@ -143,8 +145,9 @@ export interface ContractOffer {
   id: number;
   buyer: Id;
   good: Good;
-  volume: number; // valeur livrée par mois (Md$)
+  volume: number; // unités livrées par mois
   bonus: number; // prime sur le prix (0.25 = +25 %)
+  unitPrice: number; // prix unitaire du marché à la signature (Md$)
   months: number; // durée du contrat
   expires: number; // mois restants pour répondre
   routes: Route[];
@@ -155,8 +158,9 @@ export interface Contract {
   id: number;
   buyer: Id;
   good: Good;
-  volume: number;
+  volume: number; // unités livrées par mois
   bonus: number;
+  unitPrice: number; // prix verrouillé à la signature
   monthsLeft: number;
   route: Route;
   alternatives: Route[];
@@ -182,6 +186,8 @@ export interface GameState {
   missions: MissionState[];
   score: number; // points de missions et d'événements
   passes: Record<string, number>; // droits de passage achetés : détroit → mois restants
+  notForSale: Good[]; // marchandises retirées de la vente (pas d'offres)
+  prevPrices: Record<string, number>; // cours du mois précédent (tendance)
   stats: { converted: number; contractsDone: number; warsWon: number; startIncome: number; startDev: number };
   campaignOver: boolean;
   rng: number;

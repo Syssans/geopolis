@@ -11,7 +11,9 @@ import {
 } from '../src/game/actions';
 import { RELIGIONS } from '../src/data/religions';
 import { CAMPAIGNS } from '../src/data/campaign';
-import { acceptOffer, findRoutes } from '../src/game/contracts';
+import { acceptOffer, capacity, committed, findRoutes } from '../src/game/contracts';
+import { toggleForSale, upgrade } from '../src/game/economy';
+import { output } from '../src/game/trade';
 import { STRAITS } from '../src/data/trade';
 
 function run(years: number, seed: number, player = 'France') {
@@ -189,6 +191,42 @@ describe('campagne', () => {
     expect(routes.length).toBeGreaterThan(1);
     expect(routes.some((r) => r.straits.includes('suez'))).toBe(true);
     expect(routes.some((r) => !r.straits.includes('suez'))).toBe(true);
+  });
+});
+
+describe('production', () => {
+  it('moderniser une province augmente sa production de 35 % après 12 mois', () => {
+    const s = createGame(world, 'Saudi Arabia', 3);
+    const pid = owned(s, 'Saudi Arabia').sort((a, b) => world.provinces[b].dev - world.provinces[a].dev)[0];
+    s.nations['Saudi Arabia'].treasury = 10000;
+    const before = output(s, world, pid);
+    expect(upgrade(s, world, 'Saudi Arabia', pid).ok).toBe(true);
+    expect(upgrade(s, world, 'Saudi Arabia', pid).ok).toBe(false); // chantier en cours
+    for (let i = 0; i < 12; i++) {
+      advanceMonth(s, world);
+      s.events = [];
+    }
+    expect(s.provinces[pid].level).toBe(1);
+    expect(output(s, world, pid)).toBeCloseTo(before * 1.35, 1);
+  });
+  it('les offres ne dépassent jamais la production disponible et respectent le retrait de la vente', () => {
+    const s = createGame(world, 'Brazil', 8);
+    for (let i = 0; i < 60; i++) {
+      advanceMonth(s, world);
+      s.events = [];
+      for (const o of s.offers) {
+        const free = (capacity(s, world, 'Brazil')[o.good] ?? 0) - (committed(s)[o.good] ?? 0);
+        expect(o.volume).toBeLessThanOrEqual(free + 1e-6 + (capacity(s, world, 'Brazil')[o.good] ?? 0) * 0.2);
+        acceptOffer(s, world, o.id, 0);
+      }
+      for (const [g, v] of Object.entries(committed(s))) expect(v).toBeLessThanOrEqual((capacity(s, world, 'Brazil')[g as never] ?? 0) * 1.05 + 1e-6);
+    }
+    toggleForSale(s, 'cereales');
+    for (let i = 0; i < 24; i++) {
+      advanceMonth(s, world);
+      s.events = [];
+      expect(s.offers.some((o) => o.good === 'cereales')).toBe(false);
+    }
   });
 });
 

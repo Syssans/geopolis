@@ -55,15 +55,28 @@ export function straitClosed(s: GameState, w: World, strait: string): boolean {
 }
 
 /** Valeur produite par une province (Md$/mois). */
-export function production(s: GameState, w: World, pid: Pid): number {
+/** Prix unitaire actuel d'une marchandise (Md$). */
+export function unitPrice(s: GameState, good: Good): number {
+  return GOODS[good].price * (s.prices[good] ?? 1);
+}
+
+export const goodOf = (s: GameState, w: World, pid: Pid): Good => s.provinces[pid].good ?? w.provinces[pid].good;
+
+/** Unités produites par mois par une province (indépendant des prix). */
+export function output(s: GameState, w: World, pid: Pid): number {
   const info = w.provinces[pid];
   const p = s.provinces[pid];
-  const good = p.good ?? info.good;
-  let v = info.dev * GOODS[good].price * (s.prices[good] ?? 1) * 0.05;
-  if (p.occupiedBy) v *= 0.3;
-  if (p.revolt) v = 0;
-  else if (p.unrest > 60) v *= 0.7;
-  return v;
+  let u = info.dev * 0.05 * (1 + 0.35 * (p.level ?? 0));
+  if (p.works && p.works.kind !== 'upgrade') u *= 0.5; // chantier de reconversion ou de forage
+  if (p.occupiedBy) u *= 0.3;
+  if (p.revolt) u = 0;
+  else if (p.unrest > 60) u *= 0.7;
+  return u;
+}
+
+/** Valeur produite par une province (Md$/mois). */
+export function production(s: GameState, w: World, pid: Pid): number {
+  return output(s, w, pid) * unitPrice(s, goodOf(s, w, pid));
 }
 
 export interface NodeReport {

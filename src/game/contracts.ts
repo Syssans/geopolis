@@ -1,7 +1,7 @@
 import { GOODS, STRAITS, TRADE_NODES, type Good } from '../data/trade';
 import { pick, rand } from './rng';
 import { addRel, alive, devOf, embargoes, log, nm, owned, rel, warBetween } from './state';
-import { homeNode, NODES, production, straitClosed, straitOwner, TOLL } from './trade';
+import { goodOf, homeNode, NODES, output, straitClosed, straitOwner, TOLL, unitPrice } from './trade';
 import type { Contract, ContractOffer, GameState, Id, Route, World } from './types';
 
 /** Zones de piraterie : probabilité mensuelle d'attaque d'un convoi non escorté. */
@@ -75,13 +75,12 @@ export function findRoutes(from: string, to: string): Route[] {
   return res;
 }
 
-/** Valeur mensuelle produite par le joueur, par marchandise. */
+/** Unités produites chaque mois par une nation, par marchandise. */
 export function capacity(s: GameState, w: World, id: Id): Partial<Record<Good, number>> {
   const cap: Partial<Record<Good, number>> = {};
   for (const pid of owned(s, id)) {
-    if (s.provinces[pid].occupiedBy) continue;
-    const g = s.provinces[pid].good ?? w.provinces[pid].good;
-    cap[g] = (cap[g] ?? 0) + production(s, w, pid);
+    const g = goodOf(s, w, pid);
+    cap[g] = (cap[g] ?? 0) + output(s, w, pid);
   }
   return cap;
 }
@@ -112,8 +111,8 @@ export function blockedStraits(s: GameState, w: World, route: Route): string[] {
 }
 
 /** Estimation des revenus mensuels nets d'un contrat sur un itinéraire. */
-export function estimate(volume: number, bonus: number, route: Route) {
-  const gross = volume * (1 + bonus);
+export function estimate(volume: number, bonus: number, route: Route, price: number) {
+  const gross = volume * price * (1 + bonus);
   const tolls = gross * TOLL * route.straits.length;
   const transport = gross * 0.015 * Math.max(0, route.nodes.length - 1);
   return { gross, tolls, transport, net: gross - tolls - transport };
@@ -133,11 +132,13 @@ export function escortsUsed(s: GameState): number {
 
 export function generateOffers(s: GameState, w: World, force = false) {
   if (!force) s.offers = s.offers.filter((o) => --o.expires > 0 && s.nations[o.buyer].alive);
-  if (!force && (s.offers.length >= 3 || rand(s) > 0.35)) return;
+  if (!force && (s.offers.length >= 3 || rand(s) > 0.25)) return;
   const me = s.player;
   const cap = capacity(s, w, me);
   const com = committed(s);
-  const goods = (Object.keys(cap) as Good[]).filter((g) => (cap[g] ?? 0) - (com[g] ?? 0) > 0.15);
+  const goods = (Object.keys(cap) as Good[]).filter(
+    (g) => !s.notForSale.includes(g) && (cap[g] ?? 0) - (com[g] ?? 0) > Math.max(0.05, (cap[g] ?? 0) * 0.15),
+  );
   const good = pick(s, goods);
   if (!good) return;
   const free = (cap[good] ?? 0) - (com[good] ?? 0);
@@ -157,15 +158,17 @@ export function generateOffers(s: GameState, w: World, force = false) {
   const from = sourceNode(s, w, me, good);
   const to = buyer && homeNode(s, w, buyer.id);
   if (!buyer || !from || !to) return;
-  const price = s.prices[good] ?? 1;
-  const bonus = Math.round(Math.max(0.05, 0.12 + rand(s) * 0.25 + rel(s, me, buyer.id) / 500 + (1 - price) * 0.2) * 100) / 100;
+  const market = s.prices[good] ?? 1;
+  const bonus = Math.round(Math.max(0.05, 0.12 + rand(s) * 0.25 + rel(s, me, buyer.id) / 500 + (1 - market) * 0.2) * 100) / 100;
   const volume = Math.round(free * (0.3 + rand(s) * 0.4) * 100) / 100;
+  const price = Math.round(unitPrice(s, good) * 1000) / 1000;
   s.offers.push({
     id: s.nextUid++,
     buyer: buyer.id,
     good,
     volume,
     bonus,
+    unitPrice: price,
     months: pick(s, [12, 18, 24, 36])!,
     expires: 3,
     routes: findRoutes(from, to),
@@ -192,7 +195,7 @@ export function acceptOffer(s: GameState, w: World, offerId: number, routeIdx: n
   if (!o) return { ok: false, msg: 'Offre expirée' };
   const cap = capacity(s, w, s.player)[o.good] ?? 0;
   const com = committed(s)[o.good] ?? 0;
-  if (com + o.volume > cap * 1.05) return { ok: false, msg: 'Production insuffisante pour honorer ce contrat' };
+  if (com + o.volume > cap * 1.02) return { ok: false, msg: 'Production insuffisante pour honorer ce contrat' };
   const route = o.routes[routeIdx] ?? o.routes[0];
   s.offers = s.offers.filter((x) => x !== o);
   s.contracts.push({
@@ -201,6 +204,7 @@ export function acceptOffer(s: GameState, w: World, offerId: number, routeIdx: n
     good: o.good,
     volume: o.volume,
     bonus: o.bonus,
+    unitPrice: o.unitPrice,
     monthsLeft: o.months,
     route,
     alternatives: o.routes,
@@ -314,7 +318,7 @@ export function processContracts(s: GameState, w: World): { revenue: number; new
         c.lastStatus = 'piracy';
         news.pirated.push(c);
       } else {
-        const e = estimate(c.volume, c.bonus, c.route);
+        const e = estimate(c.volume, c.bonus, c.route, c.unitPrice);
         // Production insuffisante (provinces perdues) : livraisons réduites
         const ratio = Math.min(1, (cap[c.good] ?? 0) / Math.max(com[c.good] ?? 0, 1e-6));
         c.lastRevenue = e.net * ratio;

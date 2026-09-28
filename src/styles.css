@@ -214,6 +214,14 @@ h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .escort { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 8px 0; font-size: 13px; }
 .grade { font-size: 64px; font-weight: 800; text-align: center; margin: 0; color: var(--gold); }
 .grade-D, .grade-C { color: var(--muted); }
+.gauge { position: relative; height: 10px; background: #30363d; border-radius: 5px; overflow: hidden; margin: 6px 0 8px; }
+.gauge i { position: absolute; top: 0; bottom: 0; }
+.gauge i.used { left: 0; background: var(--gold); }
+.gauge i.add { background: repeating-linear-gradient(45deg, #3fb950, #3fb950 4px, #2c7a3a 4px, #2c7a3a 8px); }
+.gauge.over i.add, .gauge.over { background-color: #5a1d1d; }
+.prov-list { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.prov-list .chip, .goods .chip { cursor: pointer; }
+.goods .chip:disabled { opacity: .45; cursor: not-allowed; }
 .legend { position: absolute; left: 8px; bottom: calc(60px + var(--safe-bottom)); z-index: 4; background: var(--panel); border: 1px solid var(--line);
   border-radius: 8px; padding: 4px 8px; font-size: 11px; color: var(--muted); }
 @media (max-width: 420px) {

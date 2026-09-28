@@ -12,18 +12,18 @@ export type Good =
   | 'finance'
   | 'peche';
 
-export const GOODS: Record<Good, { name: string; icon: string; price: number; volatility: number }> = {
-  petrole: { name: 'Pétrole', icon: '🛢️', price: 1.6, volatility: 0.12 },
-  gaz: { name: 'Gaz naturel', icon: '🔥', price: 1.3, volatility: 0.12 },
-  cereales: { name: 'Céréales', icon: '🌾', price: 0.8, volatility: 0.06 },
-  tropicaux: { name: 'Café et cacao', icon: '☕', price: 0.9, volatility: 0.08 },
-  metaux: { name: 'Métaux', icon: '⛏️', price: 1.1, volatility: 0.07 },
-  terres_rares: { name: 'Terres rares', icon: '🧲', price: 1.5, volatility: 0.1 },
-  puces: { name: 'Semi-conducteurs', icon: '💾', price: 1.8, volatility: 0.08 },
-  industrie: { name: 'Biens industriels', icon: '🏭', price: 1.2, volatility: 0.04 },
-  textile: { name: 'Textile', icon: '🧵', price: 0.8, volatility: 0.04 },
-  finance: { name: 'Services financiers', icon: '🏦', price: 1.4, volatility: 0.05 },
-  peche: { name: 'Pêche', icon: '🐟', price: 0.7, volatility: 0.05 },
+export const GOODS: Record<Good, { name: string; icon: string; price: number; volatility: number; unit: string }> = {
+  petrole: { name: 'Pétrole', icon: '🛢️', price: 1.6, volatility: 0.12, unit: 'Mbl' },
+  gaz: { name: 'Gaz naturel', icon: '🔥', price: 1.3, volatility: 0.12, unit: 'Gm³' },
+  cereales: { name: 'Céréales', icon: '🌾', price: 0.8, volatility: 0.06, unit: 'Mt' },
+  tropicaux: { name: 'Café et cacao', icon: '☕', price: 0.9, volatility: 0.08, unit: 'kt' },
+  metaux: { name: 'Métaux', icon: '⛏️', price: 1.1, volatility: 0.07, unit: 'Mt' },
+  terres_rares: { name: 'Terres rares', icon: '🧲', price: 1.5, volatility: 0.1, unit: 'kt' },
+  puces: { name: 'Semi-conducteurs', icon: '💾', price: 1.8, volatility: 0.08, unit: 'M puces' },
+  industrie: { name: 'Biens industriels', icon: '🏭', price: 1.2, volatility: 0.04, unit: 'k machines' },
+  textile: { name: 'Textile', icon: '🧵', price: 0.8, volatility: 0.04, unit: 'Mt' },
+  finance: { name: 'Services financiers', icon: '🏦', price: 1.4, volatility: 0.05, unit: 'Md$ gérés' },
+  peche: { name: 'Pêche', icon: '🐟', price: 0.7, volatility: 0.05, unit: 'kt' },
 };
 
 /**

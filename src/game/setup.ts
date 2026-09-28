@@ -8,7 +8,7 @@ import { computeTrade } from './trade';
 import { initCampaign } from './missions';
 import type { GameState, Id, Nation, Policy, World } from './types';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const ARMY_UPKEEP = 0.25;
 export const NAVY_UPKEEP = 0.5;
 
@@ -32,6 +32,8 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
     missions: [],
     score: 0,
     passes: {},
+    notForSale: [],
+    prevPrices: {},
     stats: { converted: 0, contractsDone: 0, warsWon: 0, startIncome: 0, startDev: 0 },
     campaignOver: false,
     rng: seed | 0,

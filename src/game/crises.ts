@@ -26,7 +26,7 @@ export function contractCrises(s: GameState, w: World, news: ContractNews) {
     const owner = straitOwner(s, w, st)!;
     const affected = s.contracts.filter((c) => c.route.straits.includes(st));
     const reroutable = affected.filter((c) => c.alternatives.some((r) => !blockedStraits(s, w, r).length)).length;
-    const cost = Math.max(1, Math.round(affected.reduce((a, c) => a + estimate(c.volume, c.bonus, c.route).gross, 0) * 3 * 10) / 10);
+    const cost = Math.max(1, Math.round(affected.reduce((a, c) => a + estimate(c.volume, c.bonus, c.route, c.unitPrice).gross, 0) * 3 * 10) / 10);
     pushEvent(s, {
       kind: 'blockade',
       title: `Blocus : ${def.name}`,
@@ -47,7 +47,7 @@ export function contractCrises(s: GameState, w: World, news: ContractNews) {
     }
     s.passes['alert:piracy'] = 12;
     const zone = c.route.piracy.map((z) => PIRACY[z].name).join(', ');
-    const lost = Math.round(estimate(c.volume, c.bonus, c.route).gross * 10) / 10;
+    const lost = Math.round(estimate(c.volume, c.bonus, c.route, c.unitPrice).gross * 10) / 10;
     pushEvent(s, {
       kind: 'piracy',
       title: 'Convoi arraisonné',
