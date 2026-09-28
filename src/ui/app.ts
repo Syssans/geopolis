@@ -355,6 +355,23 @@ export class App {
       const s = this.state;
       this.toast(`${flagOf(id)} ${nm(s, id)}${id === s.player ? ' (vous)' : ` · 🌍 ${signed(Math.round(rel(s, s.player, id)))}`}`);
     };
+    h.gotoNode = (n) => {
+      this.closeModal();
+      if (this.mode !== 'trade') this.mode = 'trade';
+      this.select(null);
+      this.map.focusNode(n);
+    };
+    h.gotoStrait = (x) => {
+      this.closeModal();
+      if (this.mode !== 'trade') this.mode = 'trade';
+      this.select(null);
+      this.map.focusStrait(x);
+    };
+    h.market = (g) => {
+      this.marketGood = g;
+      this.showContracts('markets');
+      this.el.overlay.querySelector('.content')?.scrollTo({ top: 0 });
+    };
     h.suppliers = (g) => this.showSuppliers(g as keyof typeof GOODS);
     h.buyFrom = (id) => this.showSellerGoods(id);
     h.pForm = (v) => {
@@ -658,7 +675,7 @@ export class App {
       <div class="stats">
         ${stat('Développement', String(info.dev))}
         ${stat('Population', pop(info.pop))}
-        ${stat('Production', `${good.icon} ${good.name} ${'★'.repeat(p.level ?? 0)}`)}
+        ${stat('Production', `${this.gi((p.good ?? info.good) as keyof typeof GOODS)} ${good.name} ${'★'.repeat(p.level ?? 0)}`)}
         ${stat('Quantité / mois', `${num(output(s, this.world, pid), 2)} ${esc(good.unit)}`)}
         ${stat('Valeur / mois', `${money(production(s, this.world, pid))} <small class="${cls(price - 1)}">${price >= 1 ? '+' : ''}${num((price - 1) * 100)} %</small>`)}
         ${stat('Religion', `<span style="color:${r.color}">${r.icon} ${r.name}</span>`)}
@@ -763,11 +780,11 @@ export class App {
       <h3>Marchands (${me.merchants.length}/${slots})</h3>
       <p class="muted" style="font-size:12px">Collecter : prendre sa part de la richesse d’un nœud. Orienter : pousser la richesse vers l’aval, jusqu’à votre nœud domicile où vous collectez automatiquement.</p>
       <div class="merchants">${merchants}</div>
-      <h3>Revenus commerciaux par nœud</h3><div class="rows">${nodes.map(([id, v]) => `<div class="row"><span>${esc(nodeName(id))}</span><span class="pos">+${money(v)}</span></div>`).join('') || '<p class="muted">Aucun.</p>'}</div>
+      <h3>Revenus commerciaux par nœud</h3><div class="rows">${nodes.map(([id, v]) => `<div class="row"><span><button class="step" data-a="gotoNode" data-p="${id}">${esc(nodeName(id))}</button></span><span class="pos">+${money(v)}</span></div>`).join('') || '<p class="muted">Aucun.</p>'}</div>
       <h3>Présence commerciale (valeur · votre part)</h3><div class="rows">${presence.join('')}</div>
       <h3>Cours mondiaux</h3><div class="goods">${Object.entries(GOODS).map(([g, d]) => {
         const p = s.prices[g] ?? 1;
-        return `<span class="chip">${d.icon} ${d.name} <b class="${cls(p - 1)}">${p >= 1 ? '+' : ''}${num((p - 1) * 100)} %</b></span>`;
+        return `<span class="chip">${this.gi(g as keyof typeof GOODS)} ${d.name} <b class="${cls(p - 1)}">${p >= 1 ? '+' : ''}${num((p - 1) * 100)} %</b></span>`;
       }).join('')}</div>`;
   }
 
@@ -1095,6 +1112,18 @@ export class App {
     return `${r.nodes.length - 1} étape(s)${straits ? ' · ' + straits : ''}${pir}${blocked.length ? ' · <b class="neg">bloqué</b>' : ''}`;
   }
 
+  /** Emoji d'une marchandise : le toucher ouvre son cours mondial. */
+  private gi(g: keyof typeof GOODS, big = false): string {
+    return `<span class="gicon ${big ? 'big' : ''}" role="button" data-a="market" data-p="${g}" title="Cours : ${esc(GOODS[g].name)}">${GOODS[g].icon}</span>`;
+  }
+
+  /** Étapes d'un itinéraire : chaque nœud et chaque détroit se touche pour y centrer la carte. */
+  private routeSteps(r: import('../game/types').Route): string {
+    const nodes = r.nodes.map((n) => `<button class="step" data-a="gotoNode" data-p="${n}">${esc(C.nodeName(n))}</button>`).join('<span class="sep">›</span>');
+    const straits = r.straits.map((x) => `<button class="step strait" data-a="gotoStrait" data-p="${x}">⚓ ${esc(C.straitName(x))}</button>`).join('');
+    return `<div class="steps">${nodes}</div>${straits ? `<div class="steps">${straits}</div>` : ''}`;
+  }
+
   /** Jauge de capacité : engagé (plein), ajout proposé (hachuré), libre. */
   private gauge(cap: number, used: number, extra = 0): string {
     const pct = (v: number) => Math.max(0, Math.min(100, (v / Math.max(cap, 1e-6)) * 100));
@@ -1138,7 +1167,7 @@ export class App {
         const tr = trendOf(g, 1);
         const prov = E.producers(s, this.world, s.player, g);
         const selling = !s.notForSale.includes(g);
-        return `<div class="card"><div class="mh"><b>${d.icon} ${d.name}</b><small class="${cls(tr)}">${tr > 0.5 ? '▲' : tr < -0.5 ? '▼' : '▬'} ${money(unitPriceOf(s, g))}/${esc(d.unit)}</small></div>
+        return `<div class="card"><div class="mh"><b>${this.gi(g)} ${d.name}</b><small class="${cls(tr)}">${tr > 0.5 ? '▲' : tr < -0.5 ? '▼' : '▬'} ${money(unitPriceOf(s, g))}/${esc(d.unit)}</small></div>
           ${c > 0 ? `<div class="stats four">${stat('Production', `${qty(own)}<small>/mois</small>`)}${stat('Achats', `${qty(buy)}<small>/mois</small>`)}${stat('Vendu', `<span class="c-gold">${qty(used)}</span><small>/mois</small>`)}${stat('Libre', `<span class="${c - used < 0 ? 'neg' : 'pos'}">${qty(c - used)}</span><small>/mois</small>`)}</div>
           ${this.gauge(c, used)}` : ''}
           <div class="stock-line"><span>🏬 Stock : <b>${qty(st)}</b> ${esc(d.unit)}${st > 1e-3 ? ` <small class="muted">≈ ${money(st * unitPriceOf(s, g))}</small>` : ''}</span>
@@ -1197,7 +1226,7 @@ export class App {
               : blocked
                 ? `<div class="verdict warn">⛔ Cet itinéraire passe par un détroit fermé : choisissez-en un autre.</div>`
                 : `<div class="verdict ok">✅ <b>+${money(est!.net)}/mois</b> pendant ${o.months} mois <small>(≈ ${money(est!.net * o.months)} au total · ${pct(vsMarket, 0)} vs cours actuel)</small></div>`;
-            return `<div class="card offer"><div class="offer-head"><span class="big">${g.icon}</span><div>${this.flag(o.buyer, true)} achète ${esc(partitive(g.name))}<br><small class="muted">Répondre sous ${o.expires} mois</small></div></div>
+            return `<div class="card offer"><div class="offer-head">${this.gi(o.good, true)}<div>${this.flag(o.buyer, true)} achète ${esc(partitive(g.name))}<br><small class="muted">Répondre sous ${o.expires} mois</small></div></div>
               ${verdict}
               <div class="stats three">${stat('Chaque mois', `${qty(o.volume)} <small>${esc(g.unit)}</small>`)}${stat('Prix garanti', `${money(o.unitPrice * (1 + o.bonus))} <small class="pos">+${Math.round(o.bonus * 100)} %</small>`)}${stat('Durée', `${o.months} mois`)}</div>
               <div class="cap-line"><span>Production${(P.purchased(s)[o.good] ?? 0) > 0 ? ' + achats' : ''}</span><span>${qty(c)} ${esc(g.unit)}/mois</span></div>
@@ -1205,6 +1234,7 @@ export class App {
               <div class="cap-legend"><span><i class="k used"></i>déjà vendu <b class="c-gold">${qty(used)}</b></span><span><i class="k add"></i>ce contrat <b class="c-blue">${qty(o.volume)}</b></span><span><i class="k free"></i>reste <b class="${left < 0 ? 'neg' : 'pos'}">${qty(Math.max(0, left))}</b></span></div>
               <details class="route-pick" data-k="o${o.id}"><summary>🚢 Itinéraire : ${route ? this.routeLabel(route) : '—'}${risk > 0 ? ` · <span class="neg">pirates ${Math.round(risk * 100)} %/mois</span>` : ''}</summary>
                 ${o.routes.map((r, i) => `<label class="check"><input type="radio" name="r${o.id}" data-a="offerRoute" data-p="${o.id}:${i}" ${i === sel ? 'checked' : ''}><span>${this.routeLabel(r)} · net ${money(C.estimate(o.volume, o.bonus, r, o.unitPrice).net)}</span></label>`).join('')}
+                ${route ? this.routeSteps(route) : ''}
                 ${est ? `<small class="muted">Péages ${money(est.tolls)} · transport ${money(est.transport)} par mois. Une escorte (onglet Contrats) réduit le risque pirate.</small>` : ''}</details>
               <div class="actions three">
                 <button class="act primary-act" data-a="sign" data-p="${o.id}" ${tooMuch || blocked ? 'disabled' : ''}><span class="t">✍️ Signer</span><span class="c">🌍 +8</span></button>
@@ -1225,12 +1255,12 @@ export class App {
             const status = c.lastStatus === 'ok' ? (c.lastRevenue > 0 ? `<div class="verdict ok">✅ Livré : <b>+${money(c.lastRevenue)}</b> ce mois</div>` : '<div class="verdict">⏳ Premier convoi en route</div>') : c.lastStatus === 'blocked' ? `<div class="verdict bad">⛔ Bloqué depuis ${c.blocked} mois : changez d’itinéraire (rupture à 4 mois)</div>` : '<div class="verdict bad">🏴‍☠️ Convoi pillé ce mois : ajoutez une escorte</div>';
             const short = (com[c.good] ?? 0) > (cap[c.good] ?? 0) * 1.02;
             const risk = C.piracyRisk(c.route, c.escort, s);
-            return `<div class="card"><div class="offer-head"><span class="big">${g.icon}</span><div>${this.flag(c.buyer, true)} · ${esc(g.name.toLowerCase())}<br><small class="muted">${qty(c.volume)} ${esc(g.unit)}/mois à ${money(c.unitPrice * (1 + c.bonus))} · encore ${c.monthsLeft} mois</small></div></div>
+            return `<div class="card"><div class="offer-head">${this.gi(c.good, true)}<div>${this.flag(c.buyer, true)} · ${esc(g.name.toLowerCase())}<br><small class="muted">${qty(c.volume)} ${esc(g.unit)}/mois à ${money(c.unitPrice * (1 + c.bonus))} · encore ${c.monthsLeft} mois</small></div></div>
               ${status}${short ? `<div class="verdict warn">⚠️ Production insuffisante : livraisons partielles.</div>` : ''}
               <div class="escort"><span>🛡️ Escorte <b>${c.escort}</b> · pirates <b class="${risk > 0.05 ? 'neg' : ''}">${Math.round(risk * 100)} %</b>/mois</span>
                 <span class="seg"><button data-a="escort" data-p="${c.id}:-1" ${c.escort ? '' : 'disabled'}>−</button><button data-a="escort" data-p="${c.id}:1" ${used < navy ? '' : 'disabled'}>+</button></span></div>
               <details class="route-pick" data-k="c${c.id}"><summary>🚢 Itinéraire : ${this.routeLabel(c.route)}</summary>
-                ${c.alternatives.map((r, i) => `<label class="check"><input type="radio" name="c${c.id}" data-a="reroute" data-p="${c.id}:${i}" ${r.nodes.join() === c.route.nodes.join() ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}</details>
+                ${c.alternatives.map((r, i) => `<label class="check"><input type="radio" name="c${c.id}" data-a="reroute" data-p="${c.id}:${i}" ${r.nodes.join() === c.route.nodes.join() ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}${this.routeSteps(c.route)}</details>
               <button class="link danger" data-a="cancelContract" data-p="${c.id}">Rompre le contrat (🌍 −20 avec ${flagOf(c.buyer)})</button></div>`;
           }).join('')
         : '<p class="muted">Aucun contrat de vente. Signez des offres dans l’onglet ✉️ Offres.</p>';
@@ -1241,12 +1271,12 @@ export class App {
             const vs = (p.unitPrice / unitPriceOf(s, p.good) - 1) * 100;
             const status = p.lastStatus === 'ok' ? (p.lastCost > 0 ? `<div class="verdict ok">✅ Reçu ce mois : ${qty(p.volume)} ${esc(g.unit)} pour ${money(p.lastCost)}</div>` : '<div class="verdict">⏳ Première livraison le mois prochain</div>') : p.lastStatus === 'blocked' ? `<div class="verdict bad">⛔ Bloqué depuis ${p.blocked} mois : changez d’itinéraire</div>` : '<div class="verdict bad">🏴‍☠️ Cargaison pillée (payée mais perdue) : ajoutez une escorte</div>';
             const risk = C.piracyRisk(p.route, p.escort, s);
-            return `<div class="card"><div class="offer-head"><span class="big">${g.icon}</span><div>de ${this.flag(p.seller, true)} · ${esc(g.name.toLowerCase())}<br><small class="muted">${qty(p.volume)} ${esc(g.unit)}/mois à ${money(p.unitPrice)} (<span class="${cls(-vs)}">${pct(vs, 0)} vs cours</span>) · encore ${p.monthsLeft} mois</small></div></div>
+            return `<div class="card"><div class="offer-head">${this.gi(p.good, true)}<div>de ${this.flag(p.seller, true)} · ${esc(g.name.toLowerCase())}<br><small class="muted">${qty(p.volume)} ${esc(g.unit)}/mois à ${money(p.unitPrice)} (<span class="${cls(-vs)}">${pct(vs, 0)} vs cours</span>) · encore ${p.monthsLeft} mois</small></div></div>
               ${status}
               <div class="escort"><span>🛡️ Escorte <b>${p.escort}</b> · pirates <b class="${risk > 0.05 ? 'neg' : ''}">${Math.round(risk * 100)} %</b>/mois</span>
                 <span class="seg"><button data-a="pEscort" data-p="${p.id}:-1" ${p.escort ? '' : 'disabled'}>−</button><button data-a="pEscort" data-p="${p.id}:1" ${used < navy ? '' : 'disabled'}>+</button></span></div>
               <details class="route-pick" data-k="p${p.id}"><summary>🚢 Itinéraire : ${this.routeLabel(p.route)}</summary>
-                ${p.alternatives.map((r, i) => `<label class="check"><input type="radio" name="p${p.id}" data-a="pReroute" data-p="${p.id}:${i}" ${r.nodes.join() === p.route.nodes.join() ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}</details>
+                ${p.alternatives.map((r, i) => `<label class="check"><input type="radio" name="p${p.id}" data-a="pReroute" data-p="${p.id}:${i}" ${r.nodes.join() === p.route.nodes.join() ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}${this.routeSteps(p.route)}</details>
               <button class="link danger" data-a="cancelPurchase" data-p="${p.id}">Rompre (🌍 −10 avec ${flagOf(p.seller)})</button></div>`;
           }).join('')
         : '<p class="muted">Aucun contrat d’achat. Achetez à l’étranger depuis l’onglet 📈 Cours, la fiche d’un pays, ou vos besoins (📦 Ressources).</p>';
@@ -1272,30 +1302,38 @@ export class App {
     const s = this.state;
     const qty = (v: number) => num(v, v < 10 ? 2 : 1);
     const rep = s.needs;
-    let html = `<h3>🍞 Besoins de la population</h3><p class="hint">Chaque mois, votre population consomme ces biens. Ce que vous ne produisez pas est pris dans vos stocks (alimentés par vos achats), puis acheté <b>en urgence au cours du jour <span class="neg">+${Math.round(P.EMERGENCY * 100)} %</span></b>. Un contrat d’achat coûte moins cher et fixe le prix.</p>`;
-    if (!rep) return html + '<p class="muted">Premier bilan à la fin du mois.</p>';
-    html += (Object.entries(rep.lines) as [keyof typeof GOODS, NeedLine][]).map(([g, l]) => {
+    const needs = P.needsOf(s, s.player);
+    let html = `<h3>🍞 Besoins et stocks</h3><p class="hint">Une barre par ressource : ce que votre production couvre (vert), vos stocks en entrepôt, contrats d’achat et achats au comptant confondus (bleu), et ce qu’il a fallu acheter en urgence le mois dernier au cours <span class="neg">+${Math.round(P.EMERGENCY * 100)} %</span> (rouge). Le trait blanc marque le besoin mensuel quand vos réserves le dépassent. Stockage : ${num(P.STORAGE * 100, 1)} % de la valeur par mois.</p>`;
+    const goods = [...new Set([...(Object.keys(needs) as (keyof typeof GOODS)[]), ...(Object.keys(s.stock) as (keyof typeof GOODS)[]).filter((g) => (s.stock[g] ?? 0) > 1e-3)])];
+    html += goods.map((g) => {
       const d = GOODS[g];
-      const w = (v: number) => `${Math.max(0, Math.min(100, (v / Math.max(l.need, 1e-6)) * 100)).toFixed(1)}%`;
-      const ok = l.market < 1e-3;
-      return `<div class="need ${ok ? 'ok' : ''}"><div class="mh"><b>${d.icon} ${d.name}</b><small>${esc(P.NEED_LABEL[g] ?? '')}</small></div>
-        <div class="needbar"><i class="own" style="width:${w(l.own)}"></i><i class="stock" style="width:${w(l.stock)}"></i><i class="market" style="width:${w(l.market)}"></i></div>
-        <div class="needtxt"><span>${qty(l.need)} ${esc(d.unit)}/mois :</span><span>${l.own > 1e-3 ? `<b class="pos">🏭 ${qty(l.own)}</b> ` : ''}${l.stock > 1e-3 ? `<b class="c-blue">🏬 ${qty(l.stock)}</b> ` : ''}${ok ? '<b class="pos">✅</b>' : `<b class="neg">🚨 ${qty(l.market)} · −${money(l.cost)}</b>`}</span></div>
-        ${ok ? '' : `<button class="chip" data-a="suppliers" data-p="${g}">📥 Trouver un fournisseur</button>`}</div>`;
+      const l: NeedLine | undefined = rep?.lines[g];
+      const need = l?.need ?? needs[g] ?? 0;
+      const own = l?.own ?? 0;
+      const market = l?.market ?? 0;
+      const st = s.stock[g] ?? 0;
+      const total = Math.max(need, own + st + market, 1e-6);
+      const w = (v: number) => `${Math.max(0, Math.min(100, (v / total) * 100)).toFixed(1)}%`;
+      const short = market > 1e-3;
+      const gap = need - own; // ce que la production ne couvre pas chaque mois
+      const reserve = gap > 1e-3 && st > 1e-3 ? st / gap : 0;
+      const marker = need > 0 && own + st + market > need * 1.001 ? `<i class="limit" style="left:${w(need)}"><b>besoin</b></i>` : '';
+      const status = need <= 0
+        ? '<span class="muted">hors besoins de la population</span>'
+        : short
+          ? `<b class="neg">🚨 ${qty(market)} en urgence · −${money(l!.cost)}</b>`
+          : gap <= 1e-3
+            ? '<b class="pos">✅ couvert par la production</b>'
+            : `<b class="c-blue">✅ ${reserve >= 1 ? `≈ ${num(reserve, reserve < 10 ? 1 : 0)} mois de réserve` : 'couvert ce mois'}</b>`;
+      return `<div class="need ${short ? '' : 'ok'}"><div class="mh"><b>${this.gi(g)} ${d.name}</b><small>${esc(P.NEED_LABEL[g] ?? '')}</small></div>
+        <div class="needbar"><i class="own" style="width:${w(own)}"></i><i class="stock" style="width:${w(st)}"></i><i class="market" style="width:${w(market)}"></i>${marker}</div>
+        <div class="needtxt"><span>${need > 0 ? `besoin ${qty(need)} ${esc(d.unit)}/mois` : esc(d.unit)}</span><span>${own > 1e-3 ? `<b class="pos">🏭 ${qty(own)}</b> ` : ''}<b class="c-blue">🏬 ${qty(st)}</b>${short ? ` <b class="neg">🚨 ${qty(market)}</b>` : ''}</span></div>
+        <div class="needfoot">${status}</div>
+        <div class="needact">${short ? `<button class="chip" data-a="suppliers" data-p="${g}">📥 Trouver un fournisseur</button>` : ''}${st > 1e-3 ? `<span class="seg"><button data-a="spotSell" data-p="${g}:0.5">Vendre ½</button><button data-a="spotSell" data-p="${g}:1">Tout (+${money(st * unitPriceOf(s, g) * (1 - P.SPOT_SELL))})</button></span>` : ''}</div></div>`;
     }).join('');
-    html += `<div class="cap-legend"><span><i class="k own"></i>production</span><span><i class="k stock"></i>stocks et achats</span><span><i class="k market"></i>achat d’urgence</span></div>`;
-    if (rep.expensive) html += '<div class="verdict bad">🔥 Vie chère : les pénuries se paient au prix fort, la stabilité baisse (⚖️ −0,4/mois).</div>';
-    const stocked = (Object.entries(s.stock) as [keyof typeof GOODS, number][]).filter(([, q]) => q > 1e-3);
-    html += `<h3>🏬 Stocks</h3>`; // contrats d’achat et achats au comptant confondus
-    html += stocked.length
-      ? `<p class="hint">Tout ce que vous avez en entrepôt, qu’il vienne de vos contrats d’achat ou de vos achats au comptant. Les réserves servent d’abord vos contrats de vente, puis votre population. Stockage : ${num(P.STORAGE * 100, 1)} % de la valeur par mois. Revendez quand le cours monte.</p>` +
-        stocked.map(([g, q]) => {
-          const d = GOODS[g];
-          const v = q * unitPriceOf(s, g) * (1 - P.SPOT_SELL);
-          return `<div class="stock-row"><span>${d.icon} <b>${qty(q)}</b> ${esc(d.unit)} <small class="muted">≈ ${money(q * unitPriceOf(s, g))}</small></span>
-            <span class="seg"><button data-a="spotSell" data-p="${g}:0.5">Vendre ½</button><button data-a="spotSell" data-p="${g}:1">Tout (+${money(v)})</button></span></div>`;
-        }).join('')
-      : '<p class="muted">Aucun stock. Vos contrats d’achat et vos achats au comptant (📈 Cours) remplissent vos entrepôts.</p>';
+    html += `<div class="cap-legend"><span><i class="k own"></i>production</span><span><i class="k stock"></i>stocks</span><span><i class="k market"></i>urgence</span><span><i class="k limit"></i>besoin mensuel</span></div>`;
+    if (!rep) html += '<p class="muted">Premier bilan de consommation à la fin du mois.</p>';
+    if (rep?.expensive) html += '<div class="verdict bad">🔥 Vie chère : les pénuries se paient au prix fort, la stabilité baisse (⚖️ −0,4/mois).</div>';
     return html;
   }
 
@@ -1321,7 +1359,7 @@ export class App {
     const n = s.nations[id];
     const vs = q.markup * 100;
     return `<div class="supplier ${q.ok ? '' : 'off'}"><div>${this.flag(id, true)} <small class="muted">🌍 ${signed(Math.round(rel(s, s.player, id)))}</small><br>
-      <small>${GOODS[g].icon} ${money(q.unitPrice)}/${esc(GOODS[g].unit)} <span class="neg">+${Math.round(vs)} %</span> · jusqu’à ${num(q.max, 2)}/mois</small></div>
+      <small>${this.gi(g)} ${money(q.unitPrice)}/${esc(GOODS[g].unit)} <span class="neg">+${Math.round(vs)} %</span> · jusqu’à ${num(q.max, 2)}/mois</small></div>
       <button class="chip" data-a="pForm" data-p="${esc(id)}|${g}" ${q.ok ? '' : 'disabled'}>${q.ok ? 'Choisir' : esc(q.reason ?? '')}</button></div>`;
   }
 
@@ -1331,7 +1369,7 @@ export class App {
     const d = GOODS[g];
     const html = `<p class="hint">Les pays qui produisent ${esc(partitive(d.name))}, du moins cher au plus cher. Leur marge sur le cours (${money(unitPriceOf(s, g))}/${esc(d.unit)}) baisse quand vos relations sont bonnes ; votre rival exige davantage.</p>
       ${list.length ? list.map((x) => this.supplierRow(x.id, g, x.q)).join('') : '<p class="muted">Personne n’en produit assez pour exporter.</p>'}`;
-    this.modal(`📥 Acheter : ${d.icon} ${esc(d.name)}`, html, [
+    this.modal(`📥 Acheter : ${this.gi(g)} ${esc(d.name)}`, html, [
       { label: 'Retour', a: 'contracts', p: 'markets' },
       { label: 'Fermer', a: 'closeModal' },
     ]);
@@ -1364,11 +1402,12 @@ export class App {
     const monthly = value + tolls;
     const urgent = f.volume * unitPriceOf(s, g) * (1 + P.EMERGENCY);
     const risk = route ? C.piracyRisk(route, 0, s) : 0;
-    const html = `<div class="offer-head"><span class="big">${d.icon}</span><div>${this.flag(f.seller, true)} vous vend ${esc(partitive(d.name))}<br><small class="muted">Prix verrouillé : ${money(q.unitPrice)}/${esc(d.unit)} (cours ${money(unitPriceOf(s, g))}, marge +${Math.round(q.markup * 100)} %)</small></div></div>
+    const html = `<div class="offer-head">${this.gi(g, true)}<div>${this.flag(f.seller, true)} vous vend ${esc(partitive(d.name))}<br><small class="muted">Prix verrouillé : ${money(q.unitPrice)}/${esc(d.unit)} (cours ${money(unitPriceOf(s, g))}, marge <span class="neg">+${Math.round(q.markup * 100)} %</span>)</small></div></div>
       <div class="verdict ${q.ok ? 'ok' : 'bad'}">${q.ok ? `💸 <b>−${money(monthly)}/mois</b> pendant ${f.months} mois <small>(≈ ${money(monthly * f.months)} au total${P.NEEDS[g] ? ` · achat d’urgence équivalent : ${money(urgent)}/mois` : ''})</small>` : `❌ ${esc(q.reason ?? '')}`}</div>
       <h3>Quantité par mois</h3><div class="pick-row">${opts.map(([l, v]) => `<button class="chip ${Math.abs(v - f.volume) < 1e-6 ? 'on' : ''}" data-a="pSet" data-p="v:${v}">${l}</button>`).join('')}</div>
       <h3>Durée</h3><div class="pick-row">${[12, 24, 36].map((m) => `<button class="chip ${m === f.months ? 'on' : ''}" data-a="pSet" data-p="m:${m}">${m} mois</button>`).join('')}</div>
       <h3>Itinéraire</h3>${q.routes.map((r, i) => `<label class="check"><input type="radio" name="pf" data-a="pSet" data-p="r:${i}" ${i === f.route ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}
+      ${route ? this.routeSteps(route) : ''}
       <p class="hint">Vous payez à l’expédition : une cargaison pillée (🏴‍☠️ ${Math.round(risk * 100)} %/mois sans escorte) est perdue. Les marchandises reçues vont dans vos stocks : elles nourrissent votre population, servent vos contrats de vente ou se revendent au comptant.</p>`;
     this.modal('📥 Contrat d’achat', html, [
       { label: '✍️ Signer', hint: '🌍 +5', a: 'pSign', primary: true, disabled: !q.ok },
@@ -1424,11 +1463,11 @@ export class App {
       <div class="arrow">→</div>
       <div class="leg">${this.flag(to.id, true)}${relTag(to.id)}<br><span class="muted">vers ${esc(C.nodeName(c.nodes[c.nodes.length - 1]))}</span></div></div>
       <div class="rows">
-      <div class="row"><span>Cargaison</span><span>${g.icon} <b>${num(c.qty, 2)} ${g.unit}</b> · <b>${money(c.value)}</b></span></div>
+      <div class="row"><span>Cargaison</span><span>${this.gi(c.good)} <b>${num(c.qty, 2)} ${g.unit}</b> · <b>${money(c.value)}</b></span></div>
       <div class="row"><span>Position</span><span>${esc(C.nodeName(here))} · arrivée dans ~${weeks} sem.</span></div>
       <div class="row"><span>Escorte</span><span>${c.escort ? `${c.escort} flotte${c.escort > 1 ? 's' : ''}` : 'aucune'}</span></div></div>`;
     const details = `<details class="route-details"><summary>Itinéraire (${c.nodes.length - 1} étapes${c.straits.length ? `, ${c.straits.length} détroit${c.straits.length > 1 ? 's' : ''}` : ''})</summary>
-      <p class="muted">${c.nodes.map((n) => esc(C.nodeName(n))).join(' › ')}${c.straits.length ? `<br>⚓ ${c.straits.map((x) => esc(C.straitName(x))).join(', ')}` : ''}</p></details>`;
+      ${this.routeSteps({ nodes: c.nodes, straits: c.straits, piracy: [] })}</details>`;
     const buttons: Parameters<App['modal']>[2] = [];
     if (c.from === s.player) {
       html += `<p class="muted">L’un de vos convois (contrat avec ${this.flag(to.id)}). Escortez-le depuis 📦 Économie pour le protéger des pirates et des marines ennemies.</p>`;
@@ -1445,7 +1484,7 @@ export class App {
     }
     html += details;
     buttons.push({ label: 'Fermer', a: 'closeModal', primary: c.from === s.player });
-    this.modal(`${g.icon} Convoi de ${g.name.toLowerCase()}`, html, buttons);
+    this.modal(`${this.gi(c.good)} Convoi de ${g.name.toLowerCase()}`, html, buttons);
   }
 
   private showLog() {

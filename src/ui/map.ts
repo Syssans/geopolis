@@ -1,4 +1,4 @@
-import { geoArea, geoDistance, geoGraticule10, geoInterpolate, geoNaturalEarth1, geoPath } from 'd3-geo';
+import { geoArea, geoCentroid, geoDistance, geoGraticule10, geoInterpolate, geoNaturalEarth1, geoPath } from 'd3-geo';
 import { select } from 'd3-selection';
 import 'd3-transition';
 import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom';
@@ -62,6 +62,8 @@ function el<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, 
   parent?.appendChild(e);
   return e;
 }
+
+const geoCentroidOf = (f: Feature<Geometry>) => geoCentroid(f) as LonLat;
 
 export class MapView {
   readonly svg: SVGSVGElement;
@@ -178,6 +180,27 @@ export class MapView {
     const dy = raise && rect.width < 820 ? rect.height * 0.28 * unit : 0;
     const t = zoomIdentity.translate(W / 2, H / 2 - dy).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
     select(this.svg).transition().duration(600).call(this.zoomer.transform, t);
+  }
+
+  /** Centre la vue sur un point géographique [lon, lat] et le signale par un halo. */
+  focusPoint(ll: LonLat, k = 6) {
+    const p = this.projection(ll as [number, number]);
+    if (!p) return;
+    const t = zoomIdentity.translate(W / 2, H / 2).scale(k).translate(-p[0], -p[1]);
+    select(this.svg).transition().duration(700).call(this.zoomer.transform, t);
+    const ping = el('circle', { cx: String(p[0]), cy: String(p[1]), r: '1', class: 'ping' }, this.root);
+    setTimeout(() => ping.remove(), 2600);
+  }
+
+  /** Centre sur un nœud commercial (son port). */
+  focusNode(node: string) {
+    if (PORTS[node]) this.focusPoint(PORTS[node]);
+  }
+
+  /** Centre sur un détroit (sa province). */
+  focusStrait(id: string) {
+    const info = this.world.provinces.find((p) => p.strait === id);
+    if (info) this.focusPoint(geoCentroidOf(this.feats[info.id]), 7);
   }
 
   // ————— Étiquettes des nations —————
