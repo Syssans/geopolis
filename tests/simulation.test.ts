@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { iconize } from '../src/ui/format';
 import { WORLD as world } from '../src/game/world';
 import { createGame } from '../src/game/setup';
 import { advanceMonth } from '../src/game/tick';
@@ -305,5 +306,26 @@ describe('convois', () => {
     // Une seule interception par mois
     const other = s.convoys.find((x) => x.from !== s.player)!;
     expect(canIntercept(s, world, other, t).ok).toBe(false);
+  });
+});
+
+describe('marchés et interface', () => {
+  it('l’historique des cours s’allonge chaque mois', () => {
+    const s = createGame(world, 'France', 2);
+    const n0 = s.priceHistory.petrole.length;
+    expect(n0).toBeGreaterThanOrEqual(24);
+    for (let i = 0; i < 6; i++) advanceMonth(s, world);
+    expect(s.priceHistory.petrole.length).toBe(n0 + 6);
+    expect(s.priceHistory.petrole.at(-1)).toBe(s.prices.petrole);
+  });
+
+  it('les coûts des choix sont affichés en emojis', () => {
+    expect(iconize('Influence −30, stabilité +2')).toBe('🤝 −30, ⚖️ +2');
+    expect(iconize('Trésor −3 mois de revenus, relations −15 avec eux')).toBe('💰 −3 mois de revenus, 🌍 −15 avec eux');
+    expect(iconize('Aucun effet')).toBe('Aucun effet');
+  });
+
+  it('la campagne dure 10 ans', () => {
+    expect(createGame(world, 'France', 1).endYear).toBe(2036);
   });
 });

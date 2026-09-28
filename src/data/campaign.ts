@@ -301,7 +301,7 @@ export function genericMissions(income0: number, faithful0: number): MissionDef[
     m('gen-c2', 'Premiers contrats', 'Faire tourner 2 contrats en même temps.', { type: 'contracts', count: 2 }, 10, { influence: 30 }),
     m('gen-done3', 'Partenaire fiable', 'Honorer 3 contrats jusqu’au bout.', { type: 'contractsDone', count: 3 }, 15),
     m('gen-inc', 'Prospérité', `Atteindre ${r(income0 * 1.5)} Md$ de revenus mensuels.`, { type: 'income', amount: r(income0 * 1.5 * 10) / 10 }, 20),
-    m('gen-inc2', 'Âge d’or', `Atteindre ${r(income0 * 2.2)} Md$ de revenus mensuels.`, { type: 'income', amount: r(income0 * 2.2 * 10) / 10 }, 25),
+    m('gen-inc2', 'Âge d’or', `Atteindre ${r(income0 * 1.9)} Md$ de revenus mensuels.`, { type: 'income', amount: r(income0 * 1.9 * 10) / 10 }, 25),
     m('gen-faith', 'Unité de la foi', `${Math.round(Math.min(1, faithful0 + 0.1) * 100)} % de provinces de la religion d’État.`, { type: 'faithful', share: Math.min(1, faithful0 + 0.1) }, 15, { fervor: 50 }),
     m('gen-rival', 'Humilier le rival', 'Revenus du rival inférieurs à 70 % des vôtres.', { type: 'rivalIncome', ratio: 0.7 }, 25),
     m('gen-stab', 'Paix civile', 'Stabilité ≥ 75.', { type: 'stability', value: 75 }, 10),

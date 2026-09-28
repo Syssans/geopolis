@@ -11,7 +11,7 @@ import type { Convoy, GameState, Id, Route, World } from './types';
 export type { Convoy };
 
 /** Distance parcourue par un convoi en un mois de jeu (km). */
-const KM_PER_MONTH = 11000;
+const KM_PER_MONTH = 6000;
 /** Nombre visé de convois étrangers en mer. */
 const WORLD_CONVOYS = 90;
 

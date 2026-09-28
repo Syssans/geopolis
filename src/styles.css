@@ -267,3 +267,58 @@ h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 details.route-details { margin-top: 8px; font-size: 13px; }
 details.route-details summary { cursor: pointer; color: var(--muted); }
 details.route-details p { margin: 4px 0 0; }
+
+/* ——— Économie : onglets, offres, contrats ——— */
+.icon-tabs button { display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 16px; padding: 5px 2px; }
+.icon-tabs button span { font-size: 12px; white-space: nowrap; }
+.tabs button .count { font-style: normal; display: inline-block; min-width: 16px; padding: 0 4px; border-radius: 8px; background: var(--bad); color: #fff; font-size: 11px; font-weight: 700; }
+.tabs button .count.dim { background: #30363d; color: var(--text); }
+p.hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.45; }
+b.gold { color: var(--gold); }
+.stats.three { grid-template-columns: repeat(3, 1fr); margin-bottom: 8px; }
+.stats.three .stat b { font-size: 14px; }
+.stats.three .stat b small { font-size: 11px; font-weight: 400; color: var(--muted); }
+.offer-head { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; line-height: 1.35; }
+.offer-head .big { font-size: 28px; }
+.verdict { border-radius: 8px; padding: 8px 10px; margin: 0 0 8px; font-size: 13px; background: #21262d; line-height: 1.4; }
+.verdict.ok { background: #12301d; border: 1px solid #2c7a3a; }
+.verdict.bad { background: #3a1616; border: 1px solid #8e2b2b; }
+.verdict.warn { background: #33280f; border: 1px solid #8a6a1a; }
+.verdict small { color: var(--muted); }
+.cap-line { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.cap-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin: -2px 0 8px; }
+.cap-legend .k { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.cap-legend .k.used { background: var(--gold); }
+.cap-legend .k.add { background: #3fb950; }
+.cap-legend .k.free { background: #30363d; }
+details.route-pick { background: #161b22; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin: 0 0 8px; font-size: 13px; }
+details.route-pick summary { cursor: pointer; }
+details.route-pick[open] summary { margin-bottom: 6px; }
+.actions.three { grid-template-columns: 1.3fr 1fr 1fr; }
+.act.primary-act { background: var(--gold); border-color: var(--gold); color: #000; }
+.act.primary-act .c { color: #000a; }
+button.link { background: none; border: none; padding: 6px 0 0; font-size: 12px; cursor: pointer; color: var(--muted); text-decoration: underline; }
+button.link.danger { color: var(--bad); }
+
+/* ——— Cours mondiaux ——— */
+.pchart { position: relative; margin: 4px 0 6px; touch-action: pan-y; }
+.pchart svg { width: 100%; height: auto; display: block; }
+.pchart .grid { stroke: #30363d; stroke-width: 1; }
+.pchart .axis { stroke: #484f58; stroke-width: 1; }
+.pchart .tick { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.pchart .ref { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
+.pchart .ref-label { fill: var(--muted); font-size: 10px; paint-order: stroke; stroke: #0d1117; stroke-width: 3px; }
+.pchart .line { fill: none; stroke: var(--blue); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pchart .area { fill: #58a6ff1f; }
+.pchart .last { fill: var(--blue); stroke: var(--panel-solid); stroke-width: 2; }
+.pchart .cross line { stroke: var(--text); stroke-width: 1; opacity: .5; }
+.pchart .cross circle { fill: var(--blue); stroke: var(--panel-solid); stroke-width: 2; }
+.pchart .tip { position: absolute; top: 0; background: #0d1117; border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; font-size: 12px; pointer-events: none; white-space: nowrap; }
+.pchart .tip small { color: var(--muted); margin-right: 6px; }
+.market-list { display: flex; flex-direction: column; gap: 4px; }
+.market-row { display: grid; grid-template-columns: 1fr 96px 78px; align-items: center; gap: 8px; background: #0d1117; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; cursor: pointer; text-align: left; color: var(--text); font: inherit; }
+.market-row.on { border-color: var(--blue); }
+.market-row .name { font-size: 13px; }
+.market-row .mine-tag { font-style: normal; font-size: 10px; color: var(--gold); border: 1px solid #d4a01766; border-radius: 4px; padding: 0 3px; margin-left: 2px; }
+.market-row .val { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+.market-row .val small { display: block; font-size: 11px; }

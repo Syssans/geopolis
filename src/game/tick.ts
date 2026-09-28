@@ -8,7 +8,7 @@ import { monthlyWorks } from './economy';
 import { monthlyReligion } from './religion';
 import { rand } from './rng';
 import { alive, atWar, clamp, invalidate, log, nm, owned } from './state';
-import { computeTrade, updatePrices } from './trade';
+import { computeTrade, recordPrices, updatePrices } from './trade';
 import { checkElimination, involvesNuclearClash, resolveWarMonth } from './war';
 import type { GameState, World } from './types';
 
@@ -19,6 +19,7 @@ export function advanceMonth(s: GameState, w: World) {
   // Commerce et revenus
   s.prevPrices = { ...s.prices };
   updatePrices(s, w, () => rand(s));
+  recordPrices(s);
   monthlyWorks(s, w);
   const report = computeTrade(s, w);
   const contracts = processContracts(s, w);

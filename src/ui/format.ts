@@ -33,3 +33,23 @@ export function esc(s: string): string {
 export function cls(v: number): string {
   return v > 0 ? 'pos' : v < 0 ? 'neg' : '';
 }
+
+const ICONS: [RegExp, string][] = [
+  [/influence/i, '🤝'],
+  [/trésor/i, '💰'],
+  [/ferveur/i, '🔥'],
+  [/stabilité/i, '⚖️'],
+  [/agitation/i, '✊'],
+  [/relations/i, '🌍'],
+  [/marine/i, '⚓'],
+  [/tension(?: mondiale)?/i, '☢️'],
+  [/agressivité/i, '⚔️'],
+];
+
+/** « Influence −30, stabilité +2 » → « 🤝 −30, ⚖️ +2 » : les ressources chiffrées deviennent des emojis. */
+export function iconize(text: string): string {
+  let out = text;
+  for (const [re, icon] of ICONS)
+    out = out.replace(new RegExp(`${re.source}\\s*([+−-]\\s?\\d)`, 'gi'), `${icon} $1`);
+  return out;
+}

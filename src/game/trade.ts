@@ -254,3 +254,29 @@ export function updatePrices(s: GameState, w: World, rand: () => number) {
     s.prices[g] = Math.round(Math.max(0.4, Math.min(3, next)) * 1000) / 1000;
   }
 }
+
+/** Mois d'historique conservés pour les courbes de cours. */
+export const HISTORY_MONTHS = 132;
+
+export function recordPrices(s: GameState) {
+  s.priceHistory ??= {};
+  for (const g of Object.keys(GOODS)) {
+    const h = (s.priceHistory[g] ??= []);
+    h.push(s.prices[g] ?? 1);
+    if (h.length > HISTORY_MONTHS) h.splice(0, h.length - HISTORY_MONTHS);
+  }
+}
+
+/** Historique fictif des deux années précédant 2026 (marche aléatoire arrivant au cours initial). */
+export function seedPriceHistory(s: GameState) {
+  let seed = (s.rng >>> 0) || 1;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+  for (const [g, def] of Object.entries(GOODS)) {
+    const back: number[] = [s.prices[g] ?? 1];
+    for (let i = 0; i < 23; i++) {
+      const p = back[back.length - 1];
+      back.push(Math.round(Math.max(0.5, Math.min(2, p + (1 - p) * 0.1 + (rnd() - 0.5) * def.volatility)) * 1000) / 1000);
+    }
+    s.priceHistory[g] = back.reverse();
+  }
+}

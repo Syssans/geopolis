@@ -205,6 +205,7 @@ export interface GameState {
   passes: Record<string, number>; // droits de passage achetés : détroit → mois restants
   notForSale: Good[]; // marchandises retirées de la vente (pas d'offres)
   prevPrices: Record<string, number>; // cours du mois précédent (tendance)
+  priceHistory: Record<string, number[]>; // cours mensuels (multiplicateur), le plus récent en dernier
   stats: { converted: number; contractsDone: number; warsWon: number; startIncome: number; startDev: number };
   campaignOver: boolean;
   rng: number;

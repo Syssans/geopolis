@@ -154,7 +154,7 @@ export function scoreBreakdown(s: GameState, w: World): { lines: ScoreLine[]; to
     lines.push({ label: `Face au rival ${nm(s, s.rival)}`, value: !s.nations[s.rival].alive ? 40 : r < 0.5 ? 30 : r < 1 ? 15 : r < 1.5 ? 0 : -15 });
   }
   const total = lines.reduce((a, l) => a + l.value, 0);
-  const grade = total >= 320 ? 'S' : total >= 240 ? 'A' : total >= 170 ? 'B' : total >= 100 ? 'C' : 'D';
+  const grade = total >= 270 ? 'S' : total >= 200 ? 'A' : total >= 140 ? 'B' : total >= 85 ? 'C' : 'D';
   return { lines, total, grade };
 }
 
