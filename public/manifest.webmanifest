@@ -1,0 +1,11 @@
+{
+  "name": "Geopolis",
+  "short_name": "Geopolis",
+  "description": "Grande stratégie géopolitique contemporaine",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

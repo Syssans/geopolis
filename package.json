@@ -1,0 +1,41 @@
+{
+  "name": "geopolis",
+  "version": "0.1.0",
+  "description": "Jeu mobile de grande stratégie géopolitique contemporaine",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc -p . && vite build",
+    "preview": "vite preview --host",
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Syssans/geopolis.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Syssans/geopolis/issues"
+  },
+  "homepage": "https://github.com/Syssans/geopolis#readme",
+  "dependencies": {
+    "d3-geo": "^3.1.1",
+    "d3-selection": "^3.0.0",
+    "d3-transition": "^3.0.1",
+    "d3-zoom": "^3.0.0",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/d3-geo": "^3.1.1",
+    "@types/d3-selection": "^3.0.12",
+    "@types/d3-transition": "^3.0.9",
+    "@types/d3-zoom": "^3.0.8",
+    "@types/geojson": "^7946.0.16",
+    "@types/topojson-client": "^3.1.5",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  },
+  "private": true,
+  "type": "module"
+}
