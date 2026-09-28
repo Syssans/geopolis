@@ -385,3 +385,38 @@ button.link.danger { color: var(--bad); }
 .needbar i.reserve, .cap-legend .k.reserve { background: #58a6ff99; }
 .needbar i.promised, .cap-legend .k.promised { background: repeating-linear-gradient(45deg, #58a6ff, #58a6ff 3px, transparent 3px, transparent 6px); }
 .needbar i.promised { box-shadow: inset 0 0 0 1px #58a6ff; }
+
+/* ——— Production d'une province ——— */
+.prod-card { background: linear-gradient(180deg, #1f2a1c, #0d1117); border: 1px solid #3fb95066; border-radius: 12px; padding: 10px; margin: 4px 0 12px; }
+.prod-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.prod-head > div:nth-child(2) { flex: 1; line-height: 1.3; }
+.prod-head b { font-size: 17px; }
+.prod-val { text-align: right; line-height: 1.2; }
+.prod-val b { font-size: 17px; display: block; }
+.prod-val small { font-size: 11px; color: var(--muted); }
+.stars { color: var(--gold); letter-spacing: 1px; }
+.conv-list { display: flex; flex-direction: column; gap: 4px; }
+.conv { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 8px; background: #21262d; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.conv:hover:not(:disabled) { border-color: var(--gold); }
+.conv:disabled { opacity: .5; cursor: not-allowed; }
+.conv .ic { font-size: 22px; }
+.conv .nm small { display: block; font-size: 11px; color: var(--muted); }
+.conv .vl { text-align: right; font-size: 13px; line-height: 1.25; }
+.conv .vl small { color: var(--muted); font-size: 11px; }
+.conv .vl b { display: block; font-size: 12px; }
+
+/* ——— Liste des provinces ——— */
+.sheet-tabs button { padding: 4px 1px; font-size: 15px; }
+.sheet-tabs button span { font-size: 10.5px; }
+.sortseg { display: flex; margin-bottom: 8px; }
+.sortseg button { flex: 1; }
+.plist { display: flex; flex-direction: column; }
+.prow { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 8px; padding: 7px 2px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.prow:active { background: #21262d; }
+.prow .pg { font-size: 20px; }
+.prow .pn { font-size: 14px; line-height: 1.3; min-width: 0; }
+.prow .pn small { display: block; font-size: 11px; color: var(--muted); }
+.prow .pv { text-align: right; line-height: 1.25; }
+.prow .pv small { display: block; font-size: 11px; color: var(--muted); }
+.pgroup { margin: 12px 0 2px; font-size: 14px; }
+.pgroup small { color: var(--muted); margin-left: 4px; }

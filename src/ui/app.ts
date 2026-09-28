@@ -61,6 +61,7 @@ export class App {
   private contractsTab = 'resources';
   private selConvoy: number | null = null;
   private marketGood: string | null = null;
+  private provSort = 'value';
   private pf: { seller: Id; good: keyof typeof GOODS; volume: number; months: number; route: number } | null = null;
 
   constructor(private root: HTMLElement, private world: World, topo: Topology) {
@@ -296,7 +297,7 @@ export class App {
     };
     h.me = () => {
       const cap = owned(s(), me()).sort((a, b) => this.world.provinces[b].dev - this.world.provinces[a].dev)[0];
-      this.select(cap ?? null, 'trade');
+      this.select(cap ?? null, 'provs');
     };
     h.close = () => this.select(null);
     h.tab = (t) => {
@@ -367,6 +368,10 @@ export class App {
       this.select(null);
       this.map.focusStrait(x);
     };
+    h.provSort = (k) => {
+      this.provSort = k;
+      this.renderSheet();
+    };
     h.market = (g) => {
       this.marketGood = g;
       this.showContracts('markets');
@@ -426,7 +431,7 @@ export class App {
     h.ledger = (t) => this.showLedger(t || 'trade');
     h.goto = (pid) => {
       this.closeModal();
-      this.select(Number(pid));
+      this.select(Number(pid), 'prov');
       this.map.focus([Number(pid)], 10, true);
     };
     h.gotoNation = (id) => {
@@ -603,11 +608,12 @@ export class App {
     const n = s.nations[owner];
     const mine = owner === s.player;
     const tabs = mine
-      ? [['prov', 'Province'], ['trade', 'Commerce'], ['faith', 'Religion'], ['army', 'Armée'], ['diplo', 'Diplo.']]
-      : [['prov', 'Province'], ['nation', n.name.length > 12 ? 'Nation' : n.name]];
+      ? [['provs', '🏙️<span>Provinces</span>'], ['prov', '📍<span>Province</span>'], ['trade', '💰<span>Commerce</span>'], ['faith', '🕊️<span>Religion</span>'], ['army', '⚔️<span>Armée</span>'], ['diplo', '🤝<span>Diplo.</span>']]
+      : [['prov', esc('Province')], ['nation', esc(n.name.length > 12 ? 'Nation' : n.name)]];
     if (!tabs.some(([k]) => k === this.tab)) this.tab = 'prov';
     const content =
       this.tab === 'prov' ? this.provinceTab(pid)
+      : this.tab === 'provs' ? this.provincesTab()
       : this.tab === 'trade' ? this.tradeTab()
       : this.tab === 'faith' ? this.faithTab()
       : this.tab === 'army' ? this.armyTab()
@@ -619,11 +625,12 @@ export class App {
       sheet.innerHTML = `<div class="grab"></div><div class="head"><i class="dot" style="width:14px;height:14px;border-radius:50%"></i>
         <h2></h2><button class="close" data-a="close" aria-label="Fermer">✕</button></div><div class="body"></div>`;
     sheet.querySelector<HTMLElement>('.head .dot')!.style.background = n.color;
-    patch(sheet.querySelector('h2')!, `${esc(info.name)} <small class="muted">· ${flagOf(n.id)} ${esc(n.name)}</small>`);
+    // Onglets du pays : le titre est celui du pays, pas de la province sélectionnée
+    patch(sheet.querySelector('h2')!, mine && this.tab !== 'prov' ? `${flagOf(n.id)} ${esc(n.name)}` : `${esc(info.name)} <small class="muted">· ${flagOf(n.id)} ${esc(n.name)}</small>`);
     const b = sheet.querySelector<HTMLElement>('.body')!;
     patch(
       b,
-      `<div class="tabs">${tabs.map(([k, l]) => `<button class="${this.tab === k ? 'on' : ''}" data-a="tab" data-p="${k}">${esc(l)}</button>`).join('')}</div>${content}`,
+      `<div class="tabs ${mine ? 'icon-tabs sheet-tabs' : ''}">${tabs.map(([k, l]) => `<button class="${this.tab === k ? 'on' : ''}" data-a="tab" data-p="${k}">${l}</button>`).join('')}</div>${content}`,
     );
     sheet.classList.add('open');
     b.scrollTop = scroll;
@@ -657,13 +664,13 @@ export class App {
     for (const h of info.holy ?? []) badges.push(`<span class="badge-i nuke">⭐ Lieu saint : ${esc(h.name)} (${h.religions.map((x) => RELIGIONS[x].icon).join('')})</span>`);
     if (info.capital && info.owner === p.owner) badges.push('<span class="badge-i ally">Capitale</span>');
     if (owner.missionary === pid) badges.push(`<span class="badge-i ally">Missionnaires ${num(owner.missionProgress)} %</span>`);
-    let html = `<div class="badges">${badges.join('')}</div>
+    let html = `<div class="badges">${badges.join('')}</div>${mine ? this.exploitation(pid) : ''}
       <div class="stats">
         ${stat('Développement', String(info.dev))}
         ${stat('Population', pop(info.pop))}
-        ${stat('Production', `${this.gi((p.good ?? info.good) as keyof typeof GOODS)} ${good.name} ${'★'.repeat(p.level ?? 0)}`)}
+        ${mine ? '' : `${stat('Production', `${this.gi((p.good ?? info.good) as keyof typeof GOODS)} ${good.name} ${'★'.repeat(p.level ?? 0)}`)}
         ${stat('Quantité / mois', `${num(output(s, this.world, pid), 2)} ${esc(good.unit)}`)}
-        ${stat('Valeur / mois', `${money(production(s, this.world, pid))} <small class="${cls(price - 1)}">${price >= 1 ? '+' : ''}${num((price - 1) * 100)} %</small>`)}
+        ${stat('Valeur / mois', `${money(production(s, this.world, pid))} <small class="${cls(price - 1)}">${price >= 1 ? '+' : ''}${num((price - 1) * 100)} %</small>`)}`}
         ${stat('Religion', `<span style="color:${r.color}">${r.icon} ${r.name}</span>`)}
         ${stat('Nœud commercial', esc(NODES.get(info.node)!.name))}
         ${stat('Agitation', `<span class="${p.unrest > 50 ? 'neg' : ''}">${num(p.unrest)} → ${num(u.total)}</span>`)}
@@ -676,7 +683,6 @@ export class App {
       html += `<h3>⚓ ${esc(def.name)}</h3><p class="muted">Détroit stratégique : ${closed ? '<b class="neg">FERMÉ</b> — le commerce en aval s’effondre et les prix montent.' : `ouvert, péage de ${TOLL * 100} % : ${money(tolls)} / mois pour ${esc(owner.name)}.`}</p>`;
       if (mine) html += `<div class="actions">${this.action('strait', closed ? 'Rouvrir le détroit' : 'Fermer le détroit', closed ? 'Tension −5' : A.COSTS.closeStrait(), { danger: !closed, wide: true })}</div>`;
     }
-    if (mine) html += this.exploitation(pid);
     if (mine) {
       html += `<h3>Agitation</h3><div class="rows">${u.parts.map((x) => `<div class="row"><span>${esc(x.label)}</span><span class="${cls(-x.value)}">${signed(x.value)}</span></div>`).join('')}</div>`;
       html += `<div class="actions" style="margin-top:8px">
@@ -696,35 +702,89 @@ export class App {
     return html;
   }
 
-  /** Investissements productifs d'une province du joueur. */
+  /** Carte de production d'une province du joueur : ce qu'elle produit et comment le changer. */
   private exploitation(pid: Pid): string {
     const s = this.state;
     const w = this.world;
     const p = s.provinces[pid];
     const info = w.provinces[pid];
-    const g = GOODS[p.good ?? info.good];
+    const current = (p.good ?? info.good) as keyof typeof GOODS;
+    const g = GOODS[current];
     const lvl = p.level ?? 0;
+    const units = output(s, w, pid);
+    const value = production(s, w, pid);
+    const stars = `${'★'.repeat(lvl)}${'☆'.repeat(E.MAX_LEVEL - lvl)}`;
+    let html = `<div class="prod-card"><div class="prod-head">${this.gi(current, true)}<div><small class="muted">Cette province produit</small><br><b>${g.name}</b> <span class="stars" title="Niveau ${lvl}/${E.MAX_LEVEL}">${stars}</span></div>
+      <div class="prod-val"><b class="pos">+${money(value)}</b><small>/mois · ${num(units, 2)} ${esc(g.unit)}</small></div></div>`;
     if (p.works) {
-      const what = p.works.kind === 'upgrade' ? `Modernisation (niveau ${lvl + 1})` : p.works.kind === 'convert' ? `Reconversion vers ${GOODS[p.works.good!].name.toLowerCase()}` : 'Forage de prospection';
-      return `<h3>🏗️ Chantier en cours</h3><p>${what} : encore <b>${p.works.months} mois</b>.</p>`;
+      const what = p.works.kind === 'upgrade' ? `Modernisation vers le niveau ${lvl + 1}` : p.works.kind === 'convert' ? `Reconversion vers ${GOODS[p.works.good!].icon} ${GOODS[p.works.good!].name}` : 'Forage de prospection ⛏️';
+      return html + `<div class="verdict">🏗️ ${what} : encore <b>${p.works.months} mois</b>.</div></div>`;
     }
     const up = E.upgradeCost(s, w, pid);
     const gain = E.upgradeGain(s, w, pid);
     const conv = E.convertCost(s, w, pid);
-    const current = p.good ?? info.good;
     const targets = E.CONVERSIONS.filter((c) => c.good !== current);
     const deposit = ['petrole', 'gaz', 'metaux', 'terres_rares'].includes(current);
     const cant = p.occupiedBy || p.revolt ? 'Province instable' : undefined;
-    return `<h3>Exploitation · niveau ${lvl}/${E.MAX_LEVEL}</h3>
-      <div class="actions">
-        ${this.action('upgrade', `Moderniser ${g.icon}`, `💰${money(up)} · +35 % (≈ +${money(gain)}/mois) · ${E.UPGRADE_MONTHS} mois`, { disabled: cant ?? (lvl >= E.MAX_LEVEL ? 'Niveau maximal' : this.me.treasury < up ? `Trésor insuffisant (${money(up)})` : undefined) })}
-        ${deposit ? '' : this.action('prospect', 'Prospecter ⛏️', `💰${money(E.prospectCost(s, w, pid))} · ${E.PROSPECT_MONTHS} mois · 1 chance sur 3`, { disabled: cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
+    const base = info.dev * 0.05; // unités au niveau 0 (une reconversion remet le niveau à zéro)
+    html += `<div class="actions">
+        ${this.action('upgrade', `⬆️ Moderniser (niveau ${Math.min(lvl + 1, E.MAX_LEVEL)})`, `+${money(gain)}/mois · 💰${money(up)} · ${E.UPGRADE_MONTHS} mois`, { disabled: cant ?? (lvl >= E.MAX_LEVEL ? 'Niveau maximal' : this.me.treasury < up ? `Trésor insuffisant (${money(up)})` : undefined) })}
+        ${deposit ? '' : this.action('prospect', '⛏️ Prospecter', `1 chance sur 3 : pétrole, gaz, métaux… · 💰${money(E.prospectCost(s, w, pid))} · ${E.PROSPECT_MONTHS} mois`, { disabled: cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
       </div>
-      <p class="muted" style="font-size:12px;margin:8px 0 4px">Reconvertir (💰${money(conv)}, ${E.CONVERT_MONTHS} mois, production réduite de moitié pendant les travaux) :</p>
-      <div class="goods">${targets.map((c) => {
-        const ok = info.dev >= c.minDev && !cant && this.me.treasury >= conv;
-        return `<button class="chip" data-a="convert" data-p="${c.good}" ${ok ? '' : 'disabled'} title="${info.dev < c.minDev ? `Développement ${c.minDev} requis` : ''}">${GOODS[c.good].icon} ${GOODS[c.good].name}${info.dev < c.minDev ? ` 🔒${c.minDev}` : ''}</button>`;
-      }).join('')}</div>`;
+      <h3>🔄 Changer de production</h3>
+      <p class="hint">Reconversion : 💰${money(conv)}, ${E.CONVERT_MONTHS} mois de travaux (production divisée par deux pendant le chantier), puis niveau remis à zéro. Valeur estimée au cours du jour :</p>
+      <div class="conv-list">${targets.map((c) => {
+        const locked = info.dev < c.minDev;
+        const ok = !locked && !cant && this.me.treasury >= conv;
+        const v = base * unitPriceOf(s, c.good);
+        const delta = v - value;
+        return `<button class="conv" data-a="convert" data-p="${c.good}" ${ok ? '' : 'disabled'}><span class="ic">${GOODS[c.good].icon}</span><span class="nm">${GOODS[c.good].name}${locked ? `<small>🔒 dév. ${c.minDev} requis</small>` : ''}</span><span class="vl">${money(v)}<small>/mois</small><b class="${cls(delta)}">${delta >= 0 ? '+' : '−'}${money(Math.abs(delta))}</b></span></button>`;
+      }).join('')}</div></div>`;
+    return html;
+  }
+
+  // ——— Onglet provinces (menu du pays) ———
+  private provincesTab(): string {
+    const s = this.state;
+    const w = this.world;
+    const me = this.me;
+    const rows = owned(s, me.id).map((pid) => {
+      const p = s.provinces[pid];
+      const good = (p.good ?? w.provinces[pid].good) as keyof typeof GOODS;
+      return { pid, p, info: w.provinces[pid], good, units: output(s, w, pid), value: production(s, w, pid) };
+    });
+    const total = rows.reduce((a, r) => a + r.value, 0);
+    const works = rows.filter((r) => r.p.works).length;
+    const sortBy = this.provSort;
+    if (sortBy === 'good') rows.sort((a, b) => a.good.localeCompare(b.good) || b.value - a.value);
+    else if (sortBy === 'name') rows.sort((a, b) => a.info.name.localeCompare(b.info.name, 'fr'));
+    else rows.sort((a, b) => b.value - a.value);
+    const line = (r: (typeof rows)[number]) => {
+      const lvl = r.p.level ?? 0;
+      const tags = [
+        `dév. ${r.info.dev}`,
+        `<span class="stars">${'★'.repeat(lvl)}${'☆'.repeat(E.MAX_LEVEL - lvl)}</span>`,
+        r.p.works ? `🏗️ ${r.p.works.months} m` : '',
+        r.info.capital ? '🏛️' : '',
+        r.p.religion !== me.religion ? RELIGIONS[r.p.religion].icon : '',
+        r.p.revolt ? '<span class="neg">🔥 révolte</span>' : r.p.unrest > 50 ? '<span class="neg">😠</span>' : '',
+        r.p.occupiedBy ? '<span class="neg">occupée</span>' : '',
+      ].filter(Boolean).join(' · ');
+      return `<div class="prow" data-a="goto" data-p="${r.pid}"><span class="pg">${this.gi(r.good)}</span><span class="pn">${esc(r.info.name)}<small>${tags}</small></span><span class="pv"><b class="pos">+${money(r.value)}</b><small>${num(r.units, 2)} ${esc(GOODS[r.good].unit)}</small></span></div>`;
+    };
+    let list = '';
+    if (sortBy === 'good') {
+      const groups = new Map<string, typeof rows>();
+      for (const r of rows) groups.set(r.good, [...(groups.get(r.good) ?? []), r]);
+      list = [...groups.entries()]
+        .sort((a, b) => b[1].reduce((x, r) => x + r.value, 0) - a[1].reduce((x, r) => x + r.value, 0))
+        .map(([g, rs]) => `<div class="pgroup">${this.gi(g as keyof typeof GOODS)} <b>${GOODS[g as keyof typeof GOODS].name}</b> <small>${rs.length} province(s) · <b class="pos">+${money(rs.reduce((x, r) => x + r.value, 0))}</b>/mois</small></div>${rs.map(line).join('')}`)
+        .join('');
+    } else list = rows.map(line).join('');
+    return `<div class="stats three">${stat('Provinces', String(rows.length))}${stat('Production', `<span class="pos">+${money(total)}</span><small>/mois</small>`)}${stat('Chantiers', String(works))}</div>
+      <p class="hint">Touchez une province pour la <b>moderniser</b> ou <b>changer sa production</b>. ★ = niveau de modernisation.</p>
+      <div class="seg sortseg">${[['value', 'Rendement'], ['good', 'Marchandise'], ['name', 'Nom']].map(([k, l]) => `<button class="${sortBy === k ? 'on' : ''}" data-a="provSort" data-p="${k}">${l}</button>`).join('')}</div>
+      <div class="plist">${list}</div>`;
   }
 
   // ——— Onglet commerce ———
