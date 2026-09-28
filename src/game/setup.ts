@@ -1,3 +1,4 @@
+import { seedConvoys } from './convoys';
 import { COUNTRIES } from '../data/countries';
 import { BLOCS, HAWKS, RELATIONS } from '../data/geopolitics';
 import { STATE_RELIGION } from '../data/religions';
@@ -8,7 +9,7 @@ import { computeTrade } from './trade';
 import { initCampaign } from './missions';
 import type { GameState, Id, Nation, Policy, World } from './types';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 export const ARMY_UPKEEP = 0.25;
 export const NAVY_UPKEEP = 0.5;
 
@@ -29,6 +30,7 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
     rivalHostility: 20,
     offers: [],
     contracts: [],
+    convoys: [],
     missions: [],
     score: 0,
     passes: {},
@@ -132,6 +134,7 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
     n.income = { production: inc.production, trade: inc.trade, tolls: inc.tolls, contracts: 0, upkeep: n.army * n.upkeepRate + n.navy * n.upkeepRate * 2, byNode: {} };
   }
   initCampaign(s, world);
+  seedConvoys(s, world);
 
   colorNations(s, world);
   s.log.unshift({ date: dateLabel(s), text: 'Bienvenue au 1er janvier 2026. Le monde vous attend.', kind: 'info', mine: true });

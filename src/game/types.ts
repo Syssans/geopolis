@@ -171,6 +171,22 @@ export interface Contract {
   piracyAlert?: number; // mois avant une nouvelle alerte piraterie
 }
 
+/** Convoi de marchandises en mer ou sur rail, visible sur la carte. */
+export interface Convoy {
+  id: number;
+  from: Id;
+  to: Id;
+  good: Good;
+  qty: number;
+  value: number; // Md$
+  nodes: string[];
+  straits: string[];
+  depart: number; // temps absolu (mois)
+  duration: number; // mois
+  escort: number;
+  contract?: number; // contrat du joueur
+}
+
 export interface MissionState extends MissionDef {
   done: boolean;
   doneAt?: string;
@@ -183,6 +199,7 @@ export interface GameState {
   rivalHostility: number; // 0-100 : intensité des actions du rival
   offers: ContractOffer[];
   contracts: Contract[];
+  convoys: Convoy[];
   missions: MissionState[];
   score: number; // points de missions et d'événements
   passes: Record<string, number>; // droits de passage achetés : détroit → mois restants

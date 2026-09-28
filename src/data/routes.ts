@@ -4,7 +4,20 @@
  * les grandes voies maritimes (Bab-el-Mandeb, mer Rouge, Gibraltar, Malacca, détroit de Floride…).
  * Coordonnées [longitude, latitude].
  */
+import LANES_JSON from './lanes.json';
+
 export type LonLat = [number, number];
+
+/** Tracés maritimes exacts calculés par scripts/build-lanes.mjs (réseau Marnet). */
+const LANES = LANES_JSON as unknown as Record<string, LonLat[]>;
+
+/** Liaisons maritimes utilisées par les convois en plus du réseau de valeur. */
+export const EXTRA_LANES: [string, string][] = [
+  ['new_york', 'manche'],
+  ['caraibes', 'afrique_ouest'],
+  ['golfe_mexique', 'caraibes'],
+  ['australie', 'ocean_indien'],
+];
 
 export const PORTS: Record<string, LonLat> = {
   andes: [-77.2, -12.1], // Callao
@@ -99,6 +112,8 @@ const WAYPOINTS: Record<string, LonLat[]> = Object.fromEntries(
 /** Tracé complet d'une liaison, orienté de a vers b (ports compris). */
 export function lane(a: string, b: string): LonLat[] {
   const key = laneKey(a, b);
+  const exact = LANES[key];
+  if (exact) return key === `${a}|${b}` ? exact : exact.slice().reverse();
   const mid = WAYPOINTS[key] ?? [];
   const forward = key === `${a}|${b}`;
   const pts = [PORTS[a], ...(forward ? mid : mid.slice().reverse()), PORTS[b]];
@@ -116,4 +131,4 @@ export function routePath(nodes: string[]): LonLat[] {
   return pts;
 }
 
-export const hasLane = (a: string, b: string) => laneKey(a, b) in WAYPOINTS;
+export const hasLane = (a: string, b: string) => laneKey(a, b) in WAYPOINTS || laneKey(a, b) in LANES;

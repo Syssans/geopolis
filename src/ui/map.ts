@@ -7,10 +7,11 @@ import type { Feature, Geometry, MultiLineString } from 'geojson';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 import { RELIGIONS } from '../data/religions';
 import { STRAITS, TRADE_NODES } from '../data/trade';
-import { LAND, lane, laneKey, PORTS, routePath, type LonLat } from '../data/routes';
+import { EXTRA_LANES, LAND, lane, laneKey, PORTS, routePath, type LonLat } from '../data/routes';
+import { clock } from '../game/convoys';
 import { rel, sameBloc, warBetween } from '../game/state';
 import { straitClosed } from '../game/trade';
-import type { GameState, Id, Pid, World } from '../game/types';
+import type { Convoy, GameState, Id, Pid, World } from '../game/types';
 
 export type MapMode = 'political' | 'religion' | 'trade' | 'diplomatic' | 'unrest';
 
@@ -47,10 +48,12 @@ interface Track {
   pts: ([number, number] | null)[];
   cum: number[];
   total: number;
-  dots: SVGCircleElement[];
-  phase: number;
-  speed: number;
-  frozen: boolean;
+}
+
+interface Dot {
+  g: SVGGElement;
+  convoy: Convoy;
+  track: Track;
 }
 
 function el<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, parent?: Element) {
@@ -69,9 +72,14 @@ export class MapView {
   private labelLayer: SVGGElement;
   private tradeLayer: SVGGElement;
   private convoyLayer: SVGGElement;
-  private tracks: Track[] = [];
-  private trackSig = '';
-  private timeScale = 0;
+  private trackCache = new Map<string, Track>();
+  private dots = new Map<number, Dot>();
+  private routeLine: SVGPathElement;
+  private monthMs = 0; // durée réelle d'un mois de jeu (0 = pause)
+  private baseClock = 0; // début du mois en cours
+  private frac = 0; // fraction écoulée du mois en cours
+  private showAll = false;
+  private selConvoy: number | null = null;
   private lastFrame = 0;
   private zoomer: ZoomBehavior<SVGSVGElement, unknown>;
   private k = 1;
@@ -83,6 +91,7 @@ export class MapView {
   private boxes: [[number, number], [number, number]][];
   private lastOwners = '';
   onSelect: (pid: Pid | null) => void = () => {};
+  onConvoy: (id: number) => void = () => {};
 
   constructor(parent: HTMLElement, private topo: Topology, private world: World) {
     this.svg = el('svg', { id: 'map', viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'xMidYMid meet' });
@@ -107,6 +116,7 @@ export class MapView {
     this.tradeLayer = el('g', { class: 'trade' }, this.root);
     this.labelLayer = el('g', {}, this.root);
     this.convoyLayer = el('g', { class: 'convoys' }, this.root);
+    this.routeLine = el('path', { class: 'convoy-route' }, this.convoyLayer);
     requestAnimationFrame(this.animate);
     this.areas = [];
     this.centers = [];
@@ -125,6 +135,8 @@ export class MapView {
     });
 
     this.svg.addEventListener('click', (e) => {
+      const convoy = (e.target as SVGElement).closest<SVGElement>('[data-convoy]')?.dataset.convoy;
+      if (convoy) return this.onConvoy(Number(convoy));
       const pid = (e.target as SVGElement).dataset?.pid;
       this.onSelect(pid === undefined ? null : Number(pid));
     });
@@ -138,6 +150,8 @@ export class MapView {
         if (Math.abs(e.transform.k - this.k) > 0.01) {
           this.k = e.transform.k;
           this.updateLabels();
+          this.sizeDots();
+          this.sizeTrade();
         }
       });
     select(this.svg).call(this.zoomer);
@@ -233,87 +247,142 @@ export class MapView {
     return out;
   }
 
-  private makeTrack(line: LonLat[], dots: number, cls: string, speed = 1): Track {
-    const pts = this.project(line);
-    const cum: number[] = [0];
-    for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1];
-      const b = pts[i];
-      cum.push(cum[i - 1] + (a && b ? Math.hypot(b[0] - a[0], b[1] - a[1]) : 0));
-    }
-    const els: SVGCircleElement[] = [];
-    for (let i = 0; i < dots; i++) els.push(el('circle', { class: cls }, this.convoyLayer));
-    return { pts, cum, total: cum[cum.length - 1] || 1, dots: els, phase: Math.random(), speed, frozen: cls.includes('blocked') };
-  }
-
-  /** Construit les convois : ceux du joueur (toujours) et les flux mondiaux (mode commerce). */
-  private buildTracks(s: GameState, mode: MapMode, flows: Record<string, number> | null) {
-    const sig =
-      s.contracts.map((c) => `${c.id}:${c.route.nodes.join('>')}:${c.lastStatus}`).join(',') +
-      '|' + mode + '|' + (flows ? Object.entries(flows).map(([k, v]) => `${k}${Math.round(Math.log2(v + 1))}`).join(',') : '');
-    if (sig === this.trackSig) return;
-    this.trackSig = sig;
-    this.convoyLayer.innerHTML = '';
-    this.tracks = [];
-    if (flows)
-      for (const [key, v] of Object.entries(flows)) {
-        if (v <= 0.05) continue;
-        const [a, b] = key.split('>');
-        const n = Math.max(1, Math.min(4, Math.round(Math.log2(v + 1))));
-        this.tracks.push(this.makeTrack(lane(a, b), n, `convoy ${LAND.has(laneKey(a, b)) ? 'land' : ''}`, 0.8));
+  private track(nodes: string[]): Track {
+    const key = nodes.join('>');
+    let tr = this.trackCache.get(key);
+    if (!tr) {
+      const pts = this.project(routePath(nodes));
+      const cum: number[] = [0];
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1];
+        const b = pts[i];
+        cum.push(cum[i - 1] + (a && b ? Math.hypot(b[0] - a[0], b[1] - a[1]) : 0));
       }
-    for (const c of s.contracts) this.tracks.push(this.makeTrack(routePath(c.route.nodes), 3, `convoy mine ${c.lastStatus}`, 1.2));
-    this.placeDots(0);
-  }
-
-  /** Vitesse du temps de jeu (0 = pause) : les convois avancent en conséquence. */
-  setTimeScale(v: number) {
-    this.timeScale = v;
-  }
-
-  private placeDots(dt: number) {
-    const r = 2.4 / Math.sqrt(this.k);
-    for (const t of this.tracks) {
-      if (!t.frozen) t.phase = (t.phase + (dt * 22 * t.speed * this.timeScale) / t.total) % 1;
-      t.dots.forEach((dot, i) => {
-        const u = t.frozen ? 0.02 : (t.phase + i / t.dots.length) % 1;
-        const d = u * t.total;
-        let lo = 0;
-        let hi = t.cum.length - 1;
-        while (lo < hi - 1) {
-          const mid = (lo + hi) >> 1;
-          if (t.cum[mid] <= d) lo = mid;
-          else hi = mid;
-        }
-        const a = t.pts[lo];
-        const b = t.pts[hi];
-        if (!a || !b) {
-          dot.style.display = 'none';
-          return;
-        }
-        const f = t.cum[hi] > t.cum[lo] ? (d - t.cum[lo]) / (t.cum[hi] - t.cum[lo]) : 0;
-        dot.style.display = '';
-        dot.setAttribute('cx', (a[0] + (b[0] - a[0]) * f).toFixed(2));
-        dot.setAttribute('cy', (a[1] + (b[1] - a[1]) * f).toFixed(2));
-        dot.setAttribute('r', r.toFixed(2));
-      });
+      tr = { pts, cum, total: cum[cum.length - 1] || 1 };
+      this.trackCache.set(key, tr);
     }
+    return tr;
+  }
+
+  /** Point d'un tracé à l'abscisse relative u (0 → 1), ou null au passage de l'antiméridien. */
+  private pointAt(t: Track, u: number): [number, number] | null {
+    const d = u * t.total;
+    let lo = 0;
+    let hi = t.cum.length - 1;
+    while (lo < hi - 1) {
+      const mid = (lo + hi) >> 1;
+      if (t.cum[mid] <= d) lo = mid;
+      else hi = mid;
+    }
+    const a = t.pts[lo];
+    const b = t.pts[hi];
+    if (!a || !b) return null;
+    const f = t.cum[hi] > t.cum[lo] ? (d - t.cum[lo]) / (t.cum[hi] - t.cum[lo]) : 0;
+    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+  }
+
+  /** Synchronise les points avec les convois réels de la simulation. */
+  private syncConvoys(s: GameState, mode: MapMode, selConvoy: number | null) {
+    const t = clock(s);
+    if (t !== this.baseClock) {
+      this.baseClock = t;
+      this.frac = 0;
+    }
+    this.showAll = mode === 'trade';
+    const keep = new Set<number>();
+    for (const c of s.convoys) {
+      const mine = c.from === s.player || c.to === s.player;
+      if (!this.showAll && !mine) continue;
+      keep.add(c.id);
+      let d = this.dots.get(c.id);
+      const cls = `convoy ${c.from === s.player ? 'mine' : c.to === s.player ? 'inbound' : warBetween(s, s.player, c.from) ? 'enemy' : ''} ${c.id === selConvoy ? 'sel' : ''}`;
+      if (!d) {
+        const g = el('g', { class: cls }, this.convoyLayer);
+        g.dataset.convoy = String(c.id);
+        el('circle', { class: 'hit' }, g);
+        el('circle', { class: 'dot' }, g);
+        d = { g, convoy: c, track: this.track(c.nodes) };
+        this.dots.set(c.id, d);
+      } else {
+        d.convoy = c;
+        d.g.setAttribute('class', cls);
+      }
+    }
+    for (const [id, d] of this.dots)
+      if (!keep.has(id)) {
+        d.g.remove();
+        this.dots.delete(id);
+      }
+    this.selConvoy = selConvoy !== null && keep.has(selConvoy) ? selConvoy : null;
+    const sel = this.selConvoy !== null ? this.dots.get(this.selConvoy) : undefined;
+    this.routeLine.setAttribute('d', sel ? (this.path({ type: 'LineString', coordinates: routePath(sel.convoy.nodes) }) ?? '') : '');
+    this.sizeDots();
+    this.placeDots();
+  }
+
+  /** Durée réelle d'un mois de jeu en millisecondes (0 = pause) : les convois avancent en conséquence. */
+  setMonthMs(ms: number) {
+    this.monthMs = ms;
+  }
+
+  private sizeDots() {
+    const k = Math.sqrt(this.k);
+    for (const d of this.dots.values()) {
+      const [hit, dot] = d.g.children;
+      hit.setAttribute('r', (14 / k).toFixed(2));
+      dot.setAttribute('r', ((d.convoy.id === this.selConvoy ? 4 : 2.6) / k).toFixed(2));
+    }
+  }
+
+  private placeDots() {
+    const now = this.baseClock + this.frac;
+    for (const d of this.dots.values()) {
+      const u = (now - d.convoy.depart) / d.convoy.duration;
+      const p = u >= 0 && u < 1 ? this.pointAt(d.track, u) : null;
+      if (!p) {
+        d.g.style.display = 'none';
+        continue;
+      }
+      d.g.style.display = '';
+      d.g.setAttribute('transform', `translate(${p[0].toFixed(2)},${p[1].toFixed(2)})`);
+    }
+  }
+
+  /** Instant de jeu affiché (mois absolus, fraction comprise). */
+  get now() {
+    return this.baseClock + this.frac;
   }
 
   private animate = (now: number) => {
-    const dt = this.lastFrame ? Math.min(0.1, (now - this.lastFrame) / 1000) : 0;
+    const dt = this.lastFrame ? Math.min(100, now - this.lastFrame) : 0;
     this.lastFrame = now;
-    if (this.tracks.length && (this.timeScale > 0 || dt === 0)) this.placeDots(dt);
+    if (this.monthMs > 0 && this.dots.size) {
+      this.frac = Math.min(0.999, this.frac + dt / this.monthMs);
+      this.placeDots();
+    }
     requestAnimationFrame(this.animate);
   };
+
+  /** Nœuds, noms et détroits gardent une taille lisible quel que soit le zoom. */
+  private sizeTrade() {
+    const f = 1 / Math.sqrt(this.k);
+    for (const c of this.tradeLayer.querySelectorAll<SVGCircleElement>('circle.node')) {
+      c.setAttribute('r', ((c.dataset.sel ? 5 : 3.5) * f).toFixed(2));
+      const label = c.nextElementSibling as SVGTextElement;
+      label.setAttribute('y', (Number(c.getAttribute('cy')) - 6 * f).toFixed(2));
+      label.setAttribute('font-size', (7 * f).toFixed(2));
+      label.setAttribute('stroke-width', (2 * f).toFixed(2));
+    }
+    for (const x of this.tradeLayer.querySelectorAll<SVGTextElement>('text.strait')) x.setAttribute('font-size', (9 * f).toFixed(2));
+  }
 
   private drawTrade(s: GameState, selectedNode: string | null) {
     const g = this.tradeLayer;
     g.innerHTML = '';
     // Voies commerciales (tracés réels)
-    for (const n of TRADE_NODES)
-      for (const o of n.out)
-        el('path', { d: this.path({ type: 'LineString', coordinates: lane(n.id, o) }) ?? '', class: `lane ${LAND.has(laneKey(n.id, o)) ? 'land' : ''}` }, g);
+    const links: [string, string][] = [...TRADE_NODES.flatMap((n) => n.out.map((o) => [n.id, o] as [string, string])), ...EXTRA_LANES];
+    for (const [a, b] of links)
+      el('path', { d: this.path({ type: 'LineString', coordinates: lane(a, b) }) ?? '', class: `lane ${LAND.has(laneKey(a, b)) ? 'land' : ''}` }, g);
     // Itinéraires des contrats du joueur
     for (const c of s.contracts)
       el('path', { d: this.path({ type: 'LineString', coordinates: routePath(c.route.nodes) }) ?? '', class: `route ${c.lastStatus}` }, g);
@@ -321,6 +390,7 @@ export class MapView {
       const [x, y] = this.projection(PORTS[n.id])!;
       const c = el('circle', { cx: String(x), cy: String(y), r: n.id === selectedNode ? '5' : '3.5', class: 'node' }, g);
       c.dataset.node = n.id;
+      if (n.id === selectedNode) c.dataset.sel = '1';
       const t = el('text', { x: String(x), y: String(y - 6), class: 'node-label' }, g);
       t.textContent = n.name;
     }
@@ -331,9 +401,10 @@ export class MapView {
       const t = el('text', { x: String(x), y: String(y), class: `strait ${straitClosed(s, this.world, st.id) ? 'closed' : ''}` }, g);
       t.textContent = '⚓';
     }
+    this.sizeTrade();
   }
 
-  render(s: GameState, mode: MapMode, selected: Pid | null, flows: Record<string, number> | null = null) {
+  render(s: GameState, mode: MapMode, selected: Pid | null, selConvoy: number | null = null) {
     const me = s.player;
     const nodeIdx = new Map(TRADE_NODES.map((n, i) => [n.id, i]));
     const selOwner = selected !== null ? s.provinces[selected].owner : null;
@@ -383,6 +454,6 @@ export class MapView {
     this.labelLayer.style.display = mode === 'trade' ? 'none' : '';
     if (mode === 'trade') this.drawTrade(s, selected !== null ? this.world.provinces[selected].node : null);
     else this.tradeLayer.innerHTML = '';
-    this.buildTracks(s, mode, mode === 'trade' ? flows : null);
+    this.syncConvoys(s, mode, selConvoy);
   }
 }

@@ -1,4 +1,5 @@
 import { GOODS, STRAITS, TRADE_NODES, type Good } from '../data/trade';
+import { EXTRA_LANES } from '../data/routes';
 import { pick, rand } from './rng';
 import { addRel, alive, devOf, embargoes, log, nm, owned, rel, warBetween } from './state';
 import { goodOf, homeNode, NODES, output, straitClosed, straitOwner, TOLL, unitPrice } from './trade';
@@ -12,14 +13,6 @@ export const PIRACY: Record<string, { name: string; risk: number }> = {
   caraibes: { name: 'Caraïbes', risk: 0.02 },
 };
 
-/** Liaisons maritimes supplémentaires utilisables par les convois (hors flux de valeur). */
-const EXTRA_LINKS: [string, string][] = [
-  ['new_york', 'manche'],
-  ['caraibes', 'afrique_ouest'],
-  ['golfe_mexique', 'caraibes'],
-  ['australie', 'ocean_indien'],
-];
-
 const GRAPH: Map<string, string[]> = (() => {
   const g = new Map<string, string[]>();
   const link = (a: string, b: string) => {
@@ -29,7 +22,7 @@ const GRAPH: Map<string, string[]> = (() => {
     if (!g.get(b)!.includes(a)) g.get(b)!.push(a);
   };
   for (const n of TRADE_NODES) for (const o of n.out) link(n.id, o);
-  for (const [a, b] of EXTRA_LINKS) link(a, b);
+  for (const [a, b] of EXTRA_LANES) link(a, b);
   return g;
 })();
 

@@ -22,7 +22,9 @@ npm run build      # build de production dans dist/ (PWA installable)
 | **Missions** 🎯 | ~25 nations ont leurs missions écrites (Arabie saoudite : « Le Golfe est arabe », Taïwan : « Bouclier de silicium »…), toutes ont des missions génériques adaptées à leur taille. Récompenses en points, trésor, influence ou ferveur. |
 | **Ressources** 📦 | Chaque marchandise se compte en unités physiques (Mbl de pétrole, Mt de céréales…) distinctes de son cours. L'écran Économie montre production, part sous contrat, disponible, cours et tendance, et les provinces productrices. |
 | **Investir** 🏗️ | Par province : **moderniser** (+35 % de production par niveau, 3 niveaux, 12 mois), **reconvertir** (industrie, textile, puces, finance selon le développement, 18 mois), **prospecter** (1 chance sur 3 de trouver pétrole, gaz, métaux ou terres rares). |
-| **Routes et convois** ⚓ | Les liaisons suivent les vraies voies maritimes (mer Rouge, Suez, Gibraltar, Malacca, cap de Bonne-Espérance…) ; des points animés représentent vos convois (or) et les flux mondiaux (blanc), à la vitesse du jeu. |
+| **Routes maritimes** ⚓ | Les liaisons suivent les tracés réels des voies maritimes, calculés sur le réseau Marnet (Manche, Gibraltar, Suez, Bab-el-Mandeb, Malacca, cap de Bonne-Espérance…). |
+| **Convois** 🚢 | Chaque convoi est une entité de la simulation : expéditeur, destinataire, marchandise, quantité, valeur, itinéraire, escorte. Les exportateurs expédient selon leur production vers les pays qui en manquent ; vos contrats produisent vos propres convois. Ils avancent à la vitesse du jeu, et un appui sur un point ouvre sa fiche. |
+| **Interception** 🏴‍☠️ | Avec une flotte présente dans la zone (côtes sur le nœud, ou 25 flottes), vous pouvez arraisonner un convoi pour environ 70 % de sa valeur. En guerre, c'est un blocus légitime. En paix, c'est de la piraterie d'État : l'expéditeur perd 40 de relations, décrète un embargo et obtient un casus belli (et peut déclarer la guerre) ; le destinataire perd 20, ses alliés 15 et le reste du monde 4 ; agressivité et tension montent. En cas d'échec, vous perdez une flotte. En guerre, l'ennemi peut aussi saisir vos convois. |
 | **Contrats** 📦 | Des acheteurs proposent d'acheter une quantité de votre production à prix verrouillé avec une prime ; une jauge montre la capacité restante et empêche de vendre ce que vous ne produisez pas. On peut retirer une marchandise de la vente. Vous signez, négociez ou déclinez, puis choisissez l'itinéraire des convois (jusqu'à 3 : détroits à péage, zones de piraterie), assignez des escortes, réacheminez en cas de blocus. 4 mois sans livraison = rupture. |
 | **Rival** 🗡️ | Désigné au départ (Iran pour l'Arabie saoudite, Chine pour Taïwan…), il arme vos minorités, vous impose des embargos, sabote vos contrats, ferme ses détroits sur vos routes, monte vos voisins contre vous et pose des ultimatums. |
 | **Crises** | Blocus, pirates, ingérence étrangère, concurrence déloyale, ultimatums, krachs : chaque crise propose 2 à 3 réponses avec leurs coûts. |
@@ -45,10 +47,12 @@ npm run build      # build de production dans dist/ (PWA installable)
 
 ```
 scripts/build-provinces.mjs   génère src/data/provinces.json depuis Natural Earth (admin-1 + villes)
+scripts/build-lanes.mjs       génère src/data/lanes.json : tracés maritimes réels (réseau Marnet, via searoute-js)
 src/data/                     pays, blocs, religions, marchandises, nœuds, détroits, campagnes
 src/game/                     moteur pur TypeScript, sans DOM, sérialisable
   trade.ts                      production, nœuds, collecte/orientation, péages, prix
   contracts.ts                  offres, contrats, itinéraires, piraterie, blocus
+  convoys.ts                    convois en mer, interception et conséquences
   economy.ts                    modernisation, reconversion, prospection, chantiers
 src/data/routes.ts            ports et tracés réels des voies commerciales
   missions.ts, crises.ts        campagne, missions, score, rival et crises

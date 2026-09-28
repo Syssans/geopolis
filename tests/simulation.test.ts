@@ -15,6 +15,7 @@ import { acceptOffer, capacity, committed, findRoutes } from '../src/game/contra
 import { toggleForSale, upgrade } from '../src/game/economy';
 import { output } from '../src/game/trade';
 import { STRAITS } from '../src/data/trade';
+import { canIntercept, clock, intercept, progressAt } from '../src/game/convoys';
 
 function run(years: number, seed: number, player = 'France') {
   const s = createGame(world, player, seed);
@@ -267,5 +268,42 @@ describe('tracés', () => {
       for (const o of n.out) expect(hasLane(n.id, o), `${n.id} → ${o}`).toBe(true);
     }
     for (const [a, b] of [['new_york', 'manche'], ['caraibes', 'afrique_ouest'], ['australie', 'ocean_indien']]) expect(hasLane(a, b)).toBe(true);
+  });
+});
+
+describe('convois', () => {
+  it('des convois circulent en permanence et arrivent à destination', () => {
+    const s = createGame(world, 'France', 5);
+    expect(s.convoys.length).toBeGreaterThan(25);
+    for (let i = 0; i < 24; i++) advanceMonth(s, world);
+    expect(s.convoys.length).toBeGreaterThan(25);
+    const now = clock(s);
+    for (const c of s.convoys) {
+      expect(progressAt(c, now)).toBeLessThan(1);
+      expect(c.value).toBeGreaterThan(0);
+      expect(c.from).not.toBe(c.to);
+      expect(c.nodes.length).toBeGreaterThan(1);
+    }
+  });
+
+  it('intercepter un convoi en temps de paix a des conséquences diplomatiques', () => {
+    const s = createGame(world, 'United Kingdom', 7);
+    s.nations[s.player].navy = 40;
+    const t = clock(s) + 0.5;
+    const c = s.convoys.find((x) => x.from !== s.player && canIntercept(s, world, x, t).ok && !canIntercept(s, world, x, t).legal)!;
+    expect(c).toBeTruthy();
+    const before = rel(s, s.player, c.from);
+    const treasury = s.nations[s.player].treasury;
+    s.rng = 1; // tirage favorable ou non : on vérifie les deux issues
+    const res = intercept(s, world, c.id, t);
+    if (res.ok) {
+      expect(s.nations[s.player].treasury).toBeGreaterThan(treasury);
+      expect(rel(s, s.player, c.from)).toBeLessThanOrEqual(before - 35);
+      expect(s.embargoes).toContain(`${c.from}>${s.player}`);
+      expect(s.convoys.find((x) => x.id === c.id)).toBeUndefined();
+    } else expect(rel(s, s.player, c.from)).toBeLessThan(before);
+    // Une seule interception par mois
+    const other = s.convoys.find((x) => x.from !== s.player)!;
+    expect(canIntercept(s, world, other, t).ok).toBe(false);
   });
 });

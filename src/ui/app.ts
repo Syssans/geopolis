@@ -10,6 +10,7 @@ import {
 } from '../game/state';
 import { advanceMonth } from '../game/tick';
 import * as C from '../game/contracts';
+import * as V from '../game/convoys';
 import * as E from '../game/economy';
 import { progress, scoreBreakdown, monthlyIncome } from '../game/missions';
 import { CAMPAIGNS } from '../data/campaign';
@@ -29,7 +30,7 @@ const SPEEDS = [0, 1600, 800, 350, 150]; // ms par mois
 const MODES: { id: MapMode; icon: string; name: string; legend: string }[] = [
   { id: 'political', icon: '🗺️', name: 'Politique', legend: 'Les nations et leurs frontières. Votre pays est entouré d’or.' },
   { id: 'religion', icon: '🕊️', name: 'Religions', legend: 'La confession de chaque province : repérez vos minorités et celles de vos voisins.' },
-  { id: 'trade', icon: '⚓', name: 'Commerce', legend: 'Les nœuds commerciaux, les voies maritimes réelles et les convois en mouvement. ⚓ = détroit à péage.' },
+  { id: 'trade', icon: '⚓', name: 'Commerce', legend: 'Les nœuds commerciaux, les voies maritimes réelles et chaque convoi en mer. Touchez un convoi pour voir sa cargaison, son origine, sa destination, et l’intercepter. ⚓ = détroit à péage.' },
   { id: 'diplomatic', icon: '🤝', name: 'Diplomatie', legend: 'Vos relations avec chaque pays : du rouge (hostile) au vert (ami).' },
   { id: 'unrest', icon: '🔥', name: 'Agitation', legend: 'Le risque d’insurrection dans chaque province : du vert (calme) au rouge (révolte).' },
 ];
@@ -54,10 +55,12 @@ export class App {
   private report: TradeReport | null = null;
   private offerRoute: Record<number, number> = {};
   private contractsTab = 'resources';
+  private selConvoy: number | null = null;
 
   constructor(private root: HTMLElement, private world: World, topo: Topology) {
     this.map = new MapView(root, topo, world);
     this.map.onSelect = (pid) => this.onMapTap(pid);
+    this.map.onConvoy = (id) => !this.picking && this.showConvoy(id);
     for (const k of ['hud', 'wars', 'tension', 'bottom', 'legend', 'sheet', 'toasts', 'overlay', 'picker', 'title']) {
       const d = document.createElement('div');
       d.className = k;
@@ -110,7 +113,7 @@ export class App {
 
   private setSpeed(v: number) {
     this.speed = v;
-    this.map.setTimeScale([0, 0.5, 1, 2, 4][v]);
+    this.map.setMonthMs(SPEEDS[v]);
     if (v > 0) this.lastSpeed = v;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
@@ -137,13 +140,6 @@ export class App {
     if (s.month === 1) this.save(true);
     if (s.events.length || s.gameOver) this.setSpeed(0);
     this.renderAll();
-  }
-
-  /** Valeur circulant sur chaque liaison commerciale (« a>b »), pour animer les convois. */
-  private flows(): Record<string, number> {
-    const res: Record<string, number> = {};
-    for (const [id, n] of Object.entries(this.trade().nodes)) for (const [o, v] of Object.entries(n.out)) res[`${id}>${o}`] = v;
-    return res;
   }
 
   private trade(): TradeReport {
@@ -179,6 +175,11 @@ export class App {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return null;
       const s = JSON.parse(raw) as GameState;
+      if (s.version === 4) {
+        // Sauvegarde antérieure aux convois : ils reprendront au mois suivant
+        s.convoys = [];
+        s.version = SAVE_VERSION;
+      }
       return s.version === SAVE_VERSION && s.provinces.length === this.world.provinces.length ? s : null;
     } catch {
       return null;
@@ -333,6 +334,14 @@ export class App {
       const [id, d] = v.split(':').map(Number);
       refresh(C.setEscort(this.state, id, d));
     };
+    h.intercept = (id) => {
+      const r = V.intercept(this.state, this.world, Number(id), this.map.now);
+      this.selConvoy = null;
+      this.closeModal();
+      this.report = null;
+      this.toast(r.msg, r.ok ? 'good' : 'bad');
+      this.renderAll();
+    };
     h.cancelContract = (id) => refresh(C.cancelContract(this.state, Number(id)));
     h.sandbox = () => {
       this.state.endYear = 9999;
@@ -448,7 +457,7 @@ export class App {
 
   private renderAll(resetScroll = false) {
     if (!this.s) return;
-    this.map.render(this.s, this.mode, this.selected, this.mode === 'trade' && !this.picking ? this.flows() : null);
+    this.map.render(this.s, this.mode, this.selected, this.selConvoy);
     if (this.touching && !resetScroll) {
       this.dirty = true;
       return;
@@ -887,6 +896,10 @@ export class App {
   private closeModal() {
     this.el.overlay.style.display = 'none';
     this.el.overlay.innerHTML = '';
+    if (this.selConvoy !== null && this.s) {
+      this.selConvoy = null;
+      this.map.render(this.s, this.mode, this.selected, null);
+    }
     if (this.s && !this.picking) this.renderEvents();
   }
 
@@ -899,7 +912,7 @@ export class App {
         return present.map((r) => sw(RELIGIONS[r].color, RELIGIONS[r].name.replace('Religions traditionnelles', 'Traditionnelles'))).join('');
       }
       case 'trade':
-        return `${sw('var(--gold)', 'Vos convois')}${sw('#e6edf3', 'Flux mondiaux')}${sw('#f85149', 'Bloqué')}<span class="sw">⚓ Détroit</span>`;
+        return `${sw('var(--gold)', 'Vos exports')}${sw('#5ad17a', 'Vers vous')}${sw('#e6edf3', 'Étrangers')}${sw('#f85149', 'Ennemis')}<span class="sw">⚓ Détroit</span><span class="sw muted">Touchez un convoi</span>`;
       case 'diplomatic':
         return `${sw('#d4a017', 'Vous')}${sw('#2f6fdb', 'Votre bloc')}${sw('#3c8d4f', 'Ami')}${sw('#6b6f76', 'Neutre')}${sw('#8e2b2b', 'Hostile')}${sw('#c62828', 'En guerre')}`;
       case 'unrest':
@@ -1133,6 +1146,52 @@ export class App {
       { label: 'Comment jouer', a: 'help' },
       { label: 'Quitter vers le menu', a: 'quit' },
     ]);
+  }
+
+  /** Fiche d'un convoi : origine, destination, cargaison, itinéraire ; interception possible. */
+  private showConvoy(id: number) {
+    const s = this.state;
+    const c = s.convoys.find((x) => x.id === id);
+    if (!c) return;
+    this.setSpeed(0);
+    this.selConvoy = id;
+    this.map.render(s, this.mode, this.selected, id);
+    const t = this.map.now;
+    const g = GOODS[c.good];
+    const from = s.nations[c.from];
+    const to = s.nations[c.to];
+    const dot = (n: typeof from) => `<i class="dot" style="background:${n.color}"></i>`;
+    const u = Math.max(0, Math.min(1, V.progressAt(c, t)));
+    const weeks = Math.max(1, Math.round((1 - u) * c.duration * 4.3));
+    const here = V.currentNode(c, t);
+    const relTag = (x: Id) => (x === s.player ? '' : ` <span class="muted">(relations ${signed(Math.round(rel(s, s.player, x)))})</span>`);
+    let html = `<div class="convoy-card">
+      <div class="leg">${dot(from)}<b>${esc(from.name)}</b>${relTag(from.id)}<br><span class="muted">depuis ${esc(C.nodeName(c.nodes[0]))}</span></div>
+      <div class="arrow">→</div>
+      <div class="leg">${dot(to)}<b>${esc(to.name)}</b>${relTag(to.id)}<br><span class="muted">vers ${esc(C.nodeName(c.nodes[c.nodes.length - 1]))}</span></div></div>
+      <div class="rows">
+      <div class="row"><span>Cargaison</span><span>${g.icon} <b>${num(c.qty, 2)} ${g.unit}</b> · <b>${money(c.value)}</b></span></div>
+      <div class="row"><span>Position</span><span>${esc(C.nodeName(here))} · arrivée dans ~${weeks} sem.</span></div>
+      <div class="row"><span>Escorte</span><span>${c.escort ? `${c.escort} flotte${c.escort > 1 ? 's' : ''}` : 'aucune'}</span></div></div>`;
+    const details = `<details class="route-details"><summary>Itinéraire (${c.nodes.length - 1} étapes${c.straits.length ? `, ${c.straits.length} détroit${c.straits.length > 1 ? 's' : ''}` : ''})</summary>
+      <p class="muted">${c.nodes.map((n) => esc(C.nodeName(n))).join(' › ')}${c.straits.length ? `<br>⚓ ${c.straits.map((x) => esc(C.straitName(x))).join(', ')}` : ''}</p></details>`;
+    const buttons: Parameters<App['modal']>[2] = [];
+    if (c.from === s.player) {
+      html += `<p class="muted">L’un de vos convois (contrat avec ${esc(to.name)}). Escortez-le depuis 📦 Économie pour le protéger des pirates et des marines ennemies.</p>`;
+    } else {
+      const chk = V.canIntercept(s, this.world, c, t);
+      if (chk.legal)
+        html += `<h3>⚓ Blocus</h3><p class="muted">Vous êtes en guerre avec ${esc(warBetween(s, s.player, c.from) ? from.name : to.name)} : saisir ce convoi est un acte de guerre légitime, sans conséquence diplomatique.</p>`;
+      else
+        html += `<h3>🏴‍☠️ Intercepter en temps de paix</h3><p class="muted">Vous saisissez environ 70 % de la cargaison, mais c’est un acte de piraterie d’État :</p>
+          <ul class="consequences"><li>${esc(from.name)} : relations −40, <b>embargo</b> contre vous et <b>casus belli</b> (voire guerre immédiate)</li>
+          <li>${esc(to.name)} : relations −20</li><li>Alliés de ${esc(from.name)} : −15 · reste du monde : −4</li><li>Agressivité +12 · tension mondiale +3</li></ul>`;
+      if (chk.ok) html += `<p>Chance de succès : <b>${Math.round(chk.chance * 100)} %</b> (votre flotte ${num(s.nations[s.player].navy, 1)} contre l’escorte). En cas d’échec, vous perdez une flotte.</p>`;
+      buttons.push({ label: '🏴‍☠️ Intercepter', hint: chk.ok ? `≈ +${money(c.value * 0.7)}` : chk.reason, a: 'intercept', p: String(c.id), disabled: !chk.ok });
+    }
+    html += details;
+    buttons.push({ label: 'Fermer', a: 'closeModal', primary: c.from === s.player });
+    this.modal(`${g.icon} Convoi de ${g.name.toLowerCase()}`, html, buttons);
   }
 
   private showLog() {

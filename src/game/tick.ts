@@ -1,6 +1,7 @@
 import { processPeace, runAI } from './ai';
 import { maybeRandomEvent } from './events';
 import { generateOffers, processContracts } from './contracts';
+import { monthlyConvoys } from './convoys';
 import { contractCrises, marketCrisis, runRival } from './crises';
 import { processMissions } from './missions';
 import { monthlyWorks } from './economy';
@@ -108,6 +109,7 @@ export function advanceMonth(s: GameState, w: World) {
     s.month = 1;
     s.year++;
   }
+  monthlyConvoys(s, w);
   if (!s.campaignOver && s.year >= s.endYear) {
     s.campaignOver = true;
     log(s, 'Fin de la campagne : l’heure du bilan a sonné.', 'info', [s.player]);
