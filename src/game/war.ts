@@ -110,8 +110,10 @@ function callToArms(s: GameState, war: War, ally: Id) {
 
 export function joinWar(s: GameState, war: War, id: Id, side: 'att' | 'def') {
   if (war.attackers.includes(id) || war.defenders.includes(id)) return;
-  (side === 'att' ? war.attackers : war.defenders).push(id);
   const foes = side === 'att' ? war.defenders : war.attackers;
+  // On ne prend jamais les armes contre un membre de son propre bloc
+  if (foes.some((e) => sameBloc(s, id, e))) return;
+  (side === 'att' ? war.attackers : war.defenders).push(id);
   for (const e of foes) {
     addRel(s, id, e, -30);
     s.trades = s.trades.filter((k) => !(k.split('|').includes(id) && k.split('|').includes(e)));

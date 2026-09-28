@@ -5,7 +5,7 @@ import { capacity, findRoutes, sourceNode } from './contracts';
 import { pick, rand } from './rng';
 import { addRel, alive, clamp, devOf, embargoes, log, nm, owned, power, sameBloc, warBetween } from './state';
 import { homeNode, NODES, straitClosed, straitOwner, unitPrice } from './trade';
-import { declareWar } from './war';
+import { declareWar, leaveBloc } from './war';
 import type { Convoy, GameState, Id, Route, World } from './types';
 
 export type { Convoy };
@@ -179,12 +179,14 @@ export interface InterceptCheck {
   reason?: string;
   chance: number;
   legal: boolean; // en guerre avec l'expéditeur ou le destinataire : blocus légitime
+  ally: boolean; // l'expéditeur est de votre bloc : trahison, exclusion du bloc
 }
 
 export function canIntercept(s: GameState, w: World, c: Convoy, t: number): InterceptCheck {
   const me = s.nations[s.player];
   const legal = !!warBetween(s, s.player, c.from) || !!warBetween(s, s.player, c.to);
-  const fail = (reason: string): InterceptCheck => ({ ok: false, reason, chance: 0, legal });
+  const ally = !legal && sameBloc(s, s.player, c.from);
+  const fail = (reason: string): InterceptCheck => ({ ok: false, reason, chance: 0, legal, ally });
   if (c.from === s.player) return fail('C’est l’un de vos convois');
   if (c.to === s.player) return fail('Cette cargaison vous est destinée');
   if (me.navy < 1) return fail('Il vous faut au moins une flotte');
@@ -193,7 +195,7 @@ export function canIntercept(s: GameState, w: World, c: Convoy, t: number): Inte
   const presence = owned(s, s.player).some((pid) => w.provinces[pid].coastal && w.provinces[pid].node === node) || me.navy >= 25;
   if (!presence) return fail(`Hors de portée : il faut des côtes dans la zone « ${NODES.get(node)?.name ?? node} » ou une marine de haute mer (25 flottes)`);
   const defense = c.escort * 3 + s.nations[c.from].navy * 0.05;
-  return { ok: true, chance: clamp(me.navy / (me.navy + defense + 1), 0.15, 0.95), legal };
+  return { ok: true, chance: clamp(me.navy / (me.navy + defense + 1), 0.15, 0.95), legal, ally };
 }
 
 /** Intercepter un convoi étranger : butin, mais lourdes conséquences diplomatiques hors temps de guerre. */
@@ -224,7 +226,17 @@ export function intercept(s: GameState, w: World, id: number, t: number): { ok: 
     log(s, `⚓ Blocus : vous saisissez un convoi de ${cargo} de ${from.name} (${loot} Md$).`, 'war', [s.player, c.from]);
     return { ok: true, msg: `Prise de guerre : +${loot} Md$` };
   }
-  // Piraterie d'État en temps de paix
+  // Piraterie d'État en temps de paix ; contre un allié, c'est une trahison : le bloc vous exclut
+  let msg = '';
+  if (chk.ally && me.bloc) {
+    const bloc = s.blocs[me.bloc];
+    const others = bloc.members.filter((m) => m !== s.player);
+    leaveBloc(s, s.player, true);
+    for (const m of others) addRel(s, s.player, m, -25);
+    addRel(s, s.player, c.from, -20);
+    log(s, `🚫 Trahison : ${bloc.name} vous exclut après l’attaque d’un convoi de ${from.name}.`, 'diplo', [s.player, c.from]);
+    msg = `Trahison : ${bloc.name} vous exclut. `;
+  }
   addRel(s, s.player, c.from, -40);
   addRel(s, s.player, c.to, -20);
   for (const n of alive(s)) if (n.id !== c.from && n.id !== c.to && n.id !== s.player) addRel(s, s.player, n.id, sameBloc(s, n.id, c.from) ? -15 : -4);
@@ -233,8 +245,8 @@ export function intercept(s: GameState, w: World, id: number, t: number): { ok: 
   if (!from.claims.includes(s.player)) from.claims.push(s.player);
   if (!s.embargoes.includes(`${c.from}>${s.player}`)) s.embargoes.push(`${c.from}>${s.player}`);
   log(s, `🏴‍☠️ Vous arraisonnez un convoi de ${cargo} de ${from.name} à destination de ${nm(s, c.to)}. Scandale international !`, 'war', [s.player, c.from, c.to]);
-  let msg = `Cargaison saisie : +${loot} Md$. ${from.name} décrète un embargo et obtient un casus belli contre vous.`;
-  if (from.hawk >= 0.3 && power(from) > power(me) * 0.8 && rand(s) < 0.35) {
+  msg += `Cargaison saisie : +${loot} Md$. ${from.name} décrète un embargo et obtient un casus belli contre vous.`;
+  if ((from.hawk >= 0.3 || chk.ally) && power(from) > power(me) * 0.8 && rand(s) < (chk.ally ? 0.5 : 0.35)) {
     if (declareWar(s, w, c.from, s.player)) {
       log(s, `⚔ ${from.name} ne laisse pas l’affront impuni et vous déclare la guerre !`, 'war', [s.player, c.from]);
       msg += ' Il vous déclare la guerre !';

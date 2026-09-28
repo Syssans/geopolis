@@ -7,7 +7,7 @@ import { advanceMonth } from '../src/game/tick';
 import { resolveEvent } from '../src/game/events';
 import { alive, devOf, owned, rel } from '../src/game/state';
 import { computeTrade, straitProvince } from '../src/game/trade';
-import { canDeclareWar, declareWar, applyPeace, annexable } from '../src/game/war';
+import { canDeclareWar, declareWar, applyPeace, annexable, joinWar } from '../src/game/war';
 import {
   proposeAlliance, improveRelations, sendMissionary, setPolicy, toggleStrait, holyWarReasons, holyWarClaim, setMerchant,
 } from '../src/game/actions';
@@ -377,5 +377,35 @@ describe('achats, stocks et besoins', () => {
     const s = createGame(world, 'France', 4);
     s.embargoes.push('Russia>France');
     expect(P.quote(s, world, 'Russia', 'petrole').ok).toBe(false);
+  });
+});
+
+describe('trahison d’un allié', () => {
+  it('intercepter le convoi d’un membre de son bloc fait exclure du bloc', () => {
+    for (let seed = 1; seed < 60; seed++) {
+      const s = createGame(world, 'Germany', seed);
+      s.nations.Germany.navy = 60;
+      const t = clock(s) + 0.5;
+      const c = s.convoys.find((x) => x.from === 'United Kingdom' && canIntercept(s, world, x, t).ok);
+      if (!c) continue;
+      expect(canIntercept(s, world, c, t).ally).toBe(true);
+      const before = rel(s, 'Germany', 'United Kingdom');
+      const r = intercept(s, world, c.id, t);
+      if (!r.ok) continue;
+      expect(s.nations.Germany.bloc).toBeNull();
+      expect(s.blocs.otan?.members ?? []).not.toContain('Germany');
+      expect(rel(s, 'Germany', 'United Kingdom')).toBeLessThan(Math.min(0, before - 60));
+      expect(rel(s, 'Germany', 'France')).toBeLessThan(before);
+      return;
+    }
+    throw new Error('aucune interception réussie');
+  });
+
+  it('personne ne rejoint une guerre contre un membre de son bloc', () => {
+    const s = createGame(world, 'France', 3);
+    const war = { id: 'w', name: 'test', attackers: ['Germany'], defenders: ['Russia'], score: 0, battle: 0, months: 0, justified: true, holy: false };
+    s.wars.push(war);
+    joinWar(s, war, 'United Kingdom', 'def');
+    expect(war.defenders).not.toContain('United Kingdom');
   });
 });
