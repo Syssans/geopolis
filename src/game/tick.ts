@@ -39,7 +39,7 @@ export function advanceMonth(s: GameState, w: World) {
       n.navy *= 0.98;
     }
 
-    n.influence = Math.min(999, n.influence + 3 + (topTraders.has(n.id) ? 1 : 0) + (n.bloc && s.blocs[n.bloc]?.leader === n.id ? 1 : 0));
+    n.influence = Math.min(999, n.influence + influenceGain(s, n.id, topTraders));
     n.stability = clamp(n.stability + (n.baseStability - n.stability) * 0.02, 0, 100);
     n.aggression = Math.max(0, n.aggression * 0.97 - 0.2);
     if (!atWar(s, n.id)) n.exhaustion = Math.max(0, n.exhaustion - 1.5);
@@ -112,4 +112,16 @@ export function advanceMonth(s: GameState, w: World) {
     s.campaignOver = true;
     log(s, 'Fin de la campagne : l’heure du bilan a sonné.', 'info', [s.player]);
   }
+}
+
+/** Influence gagnée chaque mois : 3, +1 parmi les 10 premiers commerçants, +1 meneur de bloc. */
+export function influenceGain(s: GameState, id: string, top?: Set<string>): number {
+  const n = s.nations[id];
+  if (!top) {
+    const ranked = alive(s)
+      .map((x) => ({ id: x.id, v: x.income.trade + x.income.tolls }))
+      .sort((a, b) => b.v - a.v);
+    top = new Set(ranked.slice(0, 10).map((x) => x.id));
+  }
+  return 3 + (top.has(id) ? 1 : 0) + (n.bloc && s.blocs[n.bloc]?.leader === id ? 1 : 0);
 }

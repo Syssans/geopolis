@@ -2,6 +2,7 @@ import * as A from '../game/actions';
 import { aiTerms, describeTerms } from '../game/ai';
 import { resolveEvent } from '../game/events';
 import { fervorGain, holySitesOf, missionSpeed, POLICIES, unrestTarget } from '../game/religion';
+import { influenceGain } from '../game/tick';
 import { createGame, SAVE_VERSION } from '../game/setup';
 import {
   alive, dateLabel, devOf, hasTrade, embargoes, inReach, neighbours, nm, owned, popOf, power, powerRank, rel, sameBloc,
@@ -26,11 +27,11 @@ import { MapView, type MapMode } from './map';
 const SAVE_KEY = 'geopolis-save-v2';
 const SPEEDS = [0, 1600, 800, 350, 150]; // ms par mois
 const MODES: { id: MapMode; icon: string; name: string; legend: string }[] = [
-  { id: 'political', icon: '🗺️', name: 'Politique', legend: 'Nations' },
-  { id: 'religion', icon: '🕊️', name: 'Religions', legend: 'Religion de chaque province' },
-  { id: 'trade', icon: '⚓', name: 'Commerce', legend: 'Nœuds commerciaux, flux et détroits (⚓ rouge = fermé)' },
-  { id: 'diplomatic', icon: '🤝', name: 'Diplomatie', legend: 'Or = vous · bleu = bloc · rouge = guerre' },
-  { id: 'unrest', icon: '🔥', name: 'Agitation', legend: 'Agitation religieuse et insurrections' },
+  { id: 'political', icon: '🗺️', name: 'Politique', legend: 'Les nations et leurs frontières. Votre pays est entouré d’or.' },
+  { id: 'religion', icon: '🕊️', name: 'Religions', legend: 'La confession de chaque province : repérez vos minorités et celles de vos voisins.' },
+  { id: 'trade', icon: '⚓', name: 'Commerce', legend: 'Les nœuds commerciaux, les voies maritimes réelles et les convois en mouvement. ⚓ = détroit à péage.' },
+  { id: 'diplomatic', icon: '🤝', name: 'Diplomatie', legend: 'Vos relations avec chaque pays : du rouge (hostile) au vert (ami).' },
+  { id: 'unrest', icon: '🔥', name: 'Agitation', legend: 'Le risque d’insurrection dans chaque province : du vert (calme) au rouge (révolte).' },
 ];
 
 type Handler = (arg: string) => void;
@@ -109,6 +110,7 @@ export class App {
 
   private setSpeed(v: number) {
     this.speed = v;
+    this.map.setTimeScale([0, 0.5, 1, 2, 4][v]);
     if (v > 0) this.lastSpeed = v;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
@@ -135,6 +137,13 @@ export class App {
     if (s.month === 1) this.save(true);
     if (s.events.length || s.gameOver) this.setSpeed(0);
     this.renderAll();
+  }
+
+  /** Valeur circulant sur chaque liaison commerciale (« a>b »), pour animer les convois. */
+  private flows(): Record<string, number> {
+    const res: Record<string, number> = {};
+    for (const [id, n] of Object.entries(this.trade().nodes)) for (const [o, v] of Object.entries(n.out)) res[`${id}>${o}`] = v;
+    return res;
   }
 
   private trade(): TradeReport {
@@ -265,8 +274,11 @@ export class App {
     h.closeModal = () => this.closeModal();
     h.speed = (v) => this.setSpeed(Number(v));
     h.toggle = () => this.setSpeed(this.speed ? 0 : this.lastSpeed);
+    h.modes = () => this.showModes();
+    h.explain = (k) => this.explain(k);
     h.mode = (m) => {
       this.mode = m as MapMode;
+      this.closeModal();
       this.renderAll();
     };
     h.me = () => {
@@ -436,7 +448,7 @@ export class App {
 
   private renderAll(resetScroll = false) {
     if (!this.s) return;
-    this.map.render(this.s, this.mode, this.selected);
+    this.map.render(this.s, this.mode, this.selected, this.mode === 'trade' && !this.picking ? this.flows() : null);
     if (this.touching && !resetScroll) {
       this.dirty = true;
       return;
@@ -453,16 +465,18 @@ export class App {
     const inc = me.income;
     const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep;
     if (!this.el.hud.firstChild)
-      this.el.hud.innerHTML = `<button class="me chip" data-a="me"></button><div class="res"></div>
-        <div class="time"><span class="date"></span><div class="speed"></div></div>`;
+      this.el.hud.innerHTML = `<button class="me" data-a="me"></button>
+        <div class="time"><span class="date"></span><div class="speed"></div></div><div class="res"></div>`;
     const q = (sel: string) => this.el.hud.querySelector<HTMLElement>(sel)!;
-    patch(q('.me'), `<i class="dot" style="background:${me.color}"></i>${esc(me.name)}`);
+    patch(q('.me'), `<i class="dot" style="background:${me.color}"></i><span>${esc(me.name)}</span>`);
+    const tile = (key: string, icon: string, label: string, value: string, delta: string, warn = false) =>
+      `<button class="tile ${warn ? 'warn' : ''}" data-a="explain" data-p="${key}"><span class="tl">${icon} ${label}</span><b>${value}</b><small>${delta}</small></button>`;
     patch(
       q('.res'),
-      `<span class="chip ${me.treasury < 0 ? 'neg' : ''}" title="Trésor (solde mensuel)">💰 <b>${money(me.treasury)}</b> <small class="${cls(net)}">${net >= 0 ? '+' : ''}${money(net)}</small></span>
-        <span class="chip" title="Influence">🤝 <b>${Math.floor(me.influence)}</b></span>
-        <span class="chip" title="Ferveur">🔥 <b>${Math.floor(me.fervor)}</b></span>
-        <span class="chip ${me.stability < 35 ? 'neg' : ''}" title="Stabilité">⚖️ <b>${num(me.stability)}</b></span>`,
+      tile('treasury', '💰', 'Trésor', money(me.treasury), `${net >= 0 ? '+' : '−'}${num(Math.abs(net), Math.abs(net) < 10 ? 1 : 0)} / mois`, me.treasury < 0 || net < 0) +
+        tile('influence', '🤝', 'Influence', String(Math.floor(me.influence)), `+${influenceGain(s, me.id)} / mois`) +
+        tile('fervor', '🔥', 'Ferveur', String(Math.floor(me.fervor)), `+${num(fervorGain(s, this.world, me.id), 1)} / mois`) +
+        tile('stability', '⚖️', 'Stabilité', `${num(me.stability)}<small>/100</small>`, me.stability < 35 ? 'Danger !' : me.stability < 50 ? 'Fragile' : 'Solide', me.stability < 35),
     );
     patch(q('.date'), dateLabel(s));
     patch(
@@ -487,19 +501,21 @@ export class App {
           : ''),
     );
     const t = s.tension;
-    patch(this.el.tension, `Tension mondiale ${num(t)}%<div class="bar"><i style="width:${t}%"></i></div>`);
+    this.el.tension.style.display = t >= 40 ? '' : 'none';
+    patch(this.el.tension, `<button class="tension-btn" data-a="explain" data-p="tension">☢️ Tension mondiale ${num(t)} %<div class="bar"><i style="width:${t}%"></i></div></button>`);
     const unread = s.log.length - this.seenLog;
     patch(
       this.el.bottom,
-      `<div class="modes">${MODES.map((m) => `<button class="${this.mode === m.id ? 'on' : ''}" data-a="mode" data-p="${m.id}" title="${m.name}">${m.icon}</button>`).join('')}</div>
+      `<button class="mapbtn" data-a="modes"><span>${MODES.find((m) => m.id === this.mode)!.icon}</span><span class="lbl">Carte<br><b>${MODES.find((m) => m.id === this.mode)!.name}</b></span></button>
       <span class="spacer"></span>
-      <button class="fab" data-a="contracts" title="Économie : ressources et contrats">📦${s.offers.length ? `<span class="badge">${s.offers.length}</span>` : ''}</button>
-      <button class="fab" data-a="objectives" title="Objectifs">🎯</button>
-      <button class="fab" data-a="log" title="Journal">📰${unread > 0 ? `<span class="badge">${Math.min(unread, 99)}</span>` : ''}</button>
-      <button class="fab" data-a="menu" title="Menu">☰</button>`,
+      <button class="fab" data-a="contracts"><span>📦</span><small>Économie</small>${s.offers.length ? `<span class="badge">${s.offers.length}</span>` : ''}</button>
+      <button class="fab" data-a="objectives"><span>🎯</span><small>Objectifs</small></button>
+      <button class="fab" data-a="log"><span>📰</span><small>Journal</small>${unread > 0 ? `<span class="badge">${Math.min(unread, 99)}</span>` : ''}</button>
+      <button class="fab" data-a="menu"><span>☰</span><small>Menu</small></button>`,
     );
     this.root.style.setProperty('--hud-h', `${this.el.hud.offsetHeight}px`);
-    patch(this.el.legend, `<b>${MODES.find((m) => m.id === this.mode)!.name}</b> · ${MODES.find((m) => m.id === this.mode)!.legend}`);
+    patch(this.el.legend, this.legendHtml());
+    this.el.legend.style.display = this.mode === 'political' ? 'none' : '';
   }
 
   private renderSheet(resetScroll = false) {
@@ -872,6 +888,72 @@ export class App {
     this.el.overlay.style.display = 'none';
     this.el.overlay.innerHTML = '';
     if (this.s && !this.picking) this.renderEvents();
+  }
+
+  private legendHtml(): string {
+    const s = this.state;
+    const sw = (c: string, l: string) => `<span class="sw"><i style="background:${c}"></i>${l}</span>`;
+    switch (this.mode) {
+      case 'religion': {
+        const present = [...new Set(s.provinces.map((p) => p.religion))];
+        return present.map((r) => sw(RELIGIONS[r].color, RELIGIONS[r].name.replace('Religions traditionnelles', 'Traditionnelles'))).join('');
+      }
+      case 'trade':
+        return `${sw('var(--gold)', 'Vos convois')}${sw('#e6edf3', 'Flux mondiaux')}${sw('#f85149', 'Bloqué')}<span class="sw">⚓ Détroit</span>`;
+      case 'diplomatic':
+        return `${sw('#d4a017', 'Vous')}${sw('#2f6fdb', 'Votre bloc')}${sw('#3c8d4f', 'Ami')}${sw('#6b6f76', 'Neutre')}${sw('#8e2b2b', 'Hostile')}${sw('#c62828', 'En guerre')}`;
+      case 'unrest':
+        return `${sw('#2f4a3a', 'Calme')}${sw('#b8a642', 'Tendu')}${sw('#d9622b', 'Agité')}${sw('#ff3b30', 'Insurrection')}`;
+      default:
+        return '';
+    }
+  }
+
+  private showModes() {
+    this.modal(
+      'Mode de carte',
+      MODES.map((m) => `<button class="btn ${this.mode === m.id ? 'primary' : ''}" data-a="mode" data-p="${m.id}" style="width:100%;margin-bottom:6px">${m.icon} ${m.name}<small>${esc(m.legend)}</small></button>`).join(''),
+      [{ label: 'Fermer', a: 'closeModal' }],
+    );
+  }
+
+  /** Fiches explicatives des ressources du bandeau. */
+  private explain(key: string) {
+    const s = this.state;
+    const me = this.me;
+    const inc = me.income;
+    const row = (l: string, v: number, unit = '') => `<div class="row"><span>${l}</span><span class="${cls(v)}">${v >= 0 ? '+' : '−'}${unit === 'Md$' ? money(Math.abs(v)) : num(Math.abs(v), 1)}</span></div>`;
+    let title = '';
+    let html = '';
+    if (key === 'treasury') {
+      const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep;
+      title = '💰 Trésor';
+      html = `<p>L’argent de l’État : <b>${money(me.treasury)}</b>. S’il devient négatif, c’est la faillite : l’armée déserte et la stabilité chute.</p>
+        <h3>Chaque mois</h3><div class="rows">
+        ${row('Contrats commerciaux', inc.contracts ?? 0, 'Md$')}${row('Production vendue localement', inc.production, 'Md$')}${row('Commerce (nœuds)', inc.trade, 'Md$')}${row('Péages des détroits', inc.tolls, 'Md$')}${row('Entretien armée et flotte', -inc.upkeep, 'Md$')}
+        <div class="row"><span><b>Solde</b></span><span class="${cls(net)}"><b>${net >= 0 ? '+' : ''}${money(net)}</b></span></div></div>
+        <h3>À quoi il sert</h3><p class="muted">Moderniser, reconvertir ou prospecter vos provinces · recruter armée et flotte · acheter des droits de passage · aide aux pays amis.</p>
+        <h3>Comment l’augmenter</h3><p class="muted">Signer des contrats (📦 Économie), moderniser les provinces qui produisent les marchandises chères, placer vos marchands, contrôler un détroit.</p>`;
+    } else if (key === 'influence') {
+      title = '🤝 Influence';
+      html = `<p>Votre capital diplomatique : <b>${Math.floor(me.influence)}</b>, +${influenceGain(s, me.id)} par mois (3 de base, +1 si vous êtes parmi les 10 premiers commerçants, +1 si vous dirigez un bloc).</p>
+        <h3>À quoi elle sert</h3><p class="muted">Améliorer les relations (25) · accords commerciaux (30) · embargos (15) · alliances (40) · casus belli (50) · négocier un contrat (10) · fermer un détroit (30) · intégrer une province conquise (30).</p>`;
+    } else if (key === 'fervor') {
+      title = '🔥 Ferveur';
+      html = `<p>L’élan religieux de votre peuple : <b>${Math.floor(me.fervor)}</b>, +${num(fervorGain(s, this.world, me.id), 1)} par mois.</p>
+        <div class="rows">${row('Base', 1)}${row('Lieux saints de votre foi (×3)', holySitesOf(s, this.world, me.id).filter((h) => h.ours).length * 3)}${row(`Politique : ${POLICIES[me.policy].name}`, POLICIES[me.policy].fervor)}</div>
+        <h3>À quoi elle sert</h3><p class="muted">Missionnaires (30) · appel à l’unité nationale (+10 stabilité, 40) · appel aux coreligionnaires (50) · armer des insurgés à l’étranger (40) · guerre sainte (60).</p>`;
+    } else if (key === 'stability') {
+      title = '⚖️ Stabilité';
+      html = `<p>La cohésion du pays : <b>${num(me.stability)}/100</b>. Elle revient doucement vers ${num(me.baseStability)} (son niveau naturel).</p>
+        <h3>Ce qui la fait baisser</h3><p class="muted">Guerres sans casus belli, lassitude de guerre, insurrections, faillite, crises mal gérées, réformes brutales.</p>
+        <h3>Ce qui la fait monter</h3><p class="muted">Appel à l’unité nationale (🔥40), victoires, concessions aux minorités, politique de tolérance.</p>
+        <h3>Effets</h3><p class="muted">Sous 50, les minorités s’agitent davantage ; sous 35, l’armée perd en efficacité et les insurrections se multiplient.</p>`;
+    } else {
+      title = '☢️ Tension mondiale';
+      html = `<p>Le niveau de danger du monde : <b>${num(s.tension)} %</b>. Elle monte avec les guerres, les détroits fermés et surtout les affrontements entre puissances nucléaires.</p><p class="muted">Au-delà de 95 %, si deux puissances nucléaires sont en guerre, l’escalade peut mettre fin à la partie pour tout le monde.</p>`;
+    }
+    this.modal(title, html, [{ label: 'Compris', a: 'closeModal', primary: true }]);
   }
 
   private showIntro() {

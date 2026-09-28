@@ -257,3 +257,15 @@ describe('simulation longue', () => {
 });
 
 void pidOf;
+
+describe('tracés', () => {
+  it('chaque liaison du réseau commercial a un tracé réel', async () => {
+    const { TRADE_NODES } = await import('../src/data/trade');
+    const { hasLane, PORTS } = await import('../src/data/routes');
+    for (const n of TRADE_NODES) {
+      expect(PORTS[n.id], n.id).toBeDefined();
+      for (const o of n.out) expect(hasLane(n.id, o), `${n.id} → ${o}`).toBe(true);
+    }
+    for (const [a, b] of [['new_york', 'manche'], ['caraibes', 'afrique_ouest'], ['australie', 'ocean_indien']]) expect(hasLane(a, b)).toBe(true);
+  });
+});

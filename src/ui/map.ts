@@ -1,4 +1,4 @@
-import { geoArea, geoGraticule10, geoNaturalEarth1, geoPath } from 'd3-geo';
+import { geoArea, geoDistance, geoGraticule10, geoInterpolate, geoNaturalEarth1, geoPath } from 'd3-geo';
 import { select } from 'd3-selection';
 import 'd3-transition';
 import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom';
@@ -7,6 +7,7 @@ import type { Feature, Geometry, MultiLineString } from 'geojson';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 import { RELIGIONS } from '../data/religions';
 import { STRAITS, TRADE_NODES } from '../data/trade';
+import { LAND, lane, laneKey, PORTS, routePath, type LonLat } from '../data/routes';
 import { rel, sameBloc, warBetween } from '../game/state';
 import { straitClosed } from '../game/trade';
 import type { GameState, Id, Pid, World } from '../game/types';
@@ -42,6 +43,16 @@ function rewind(f: Feature<Geometry>): Feature<Geometry> {
   return f;
 }
 
+interface Track {
+  pts: ([number, number] | null)[];
+  cum: number[];
+  total: number;
+  dots: SVGCircleElement[];
+  phase: number;
+  speed: number;
+  frozen: boolean;
+}
+
 function el<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, parent?: Element) {
   const e = document.createElementNS(NS, tag);
   for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
@@ -57,6 +68,11 @@ export class MapView {
   private borders: SVGPathElement;
   private labelLayer: SVGGElement;
   private tradeLayer: SVGGElement;
+  private convoyLayer: SVGGElement;
+  private tracks: Track[] = [];
+  private trackSig = '';
+  private timeScale = 0;
+  private lastFrame = 0;
   private zoomer: ZoomBehavior<SVGSVGElement, unknown>;
   private k = 1;
   private projection = geoNaturalEarth1();
@@ -90,6 +106,8 @@ export class MapView {
     this.borders = el('path', { class: 'borders' }, this.root);
     this.tradeLayer = el('g', { class: 'trade' }, this.root);
     this.labelLayer = el('g', {}, this.root);
+    this.convoyLayer = el('g', { class: 'convoys' }, this.root);
+    requestAnimationFrame(this.animate);
     this.areas = [];
     this.centers = [];
     this.boxes = [];
@@ -186,37 +204,124 @@ export class MapView {
       const screen = Math.min(20, ((Math.sqrt(l.area) * k) / l.len) * 1.5);
       const visible = screen >= 7;
       l.text.style.display = visible ? '' : 'none';
-      if (visible) l.text.setAttribute('font-size', (screen / k).toFixed(3));
+      if (visible) {
+        l.text.setAttribute('font-size', (screen / k).toFixed(3));
+        l.text.setAttribute('stroke-width', ((screen / k) * 0.28).toFixed(3));
+      }
     }
   }
 
   // ————— Surcouche commerciale —————
+
+  /** Tracé projeté et densifié d'une suite de points ; `null` marque une coupure (antiméridien). */
+  private project(line: LonLat[]): ([number, number] | null)[] {
+    const out: ([number, number] | null)[] = [];
+    let prev: [number, number] | null = null;
+    for (let i = 0; i < line.length; i++) {
+      const a = line[i];
+      const b = line[i + 1];
+      const steps = b ? Math.max(1, Math.ceil((geoDistance(a, b) * 180) / Math.PI / 2)) : 1;
+      const interp = b ? geoInterpolate(a, b) : null;
+      for (let k = 0; k < (b ? steps : 1); k++) {
+        const ll = interp ? interp(k / steps) : a;
+        const p = this.projection(ll as [number, number]) as [number, number];
+        if (prev && Math.abs(p[0] - prev[0]) > W / 2) out.push(null);
+        out.push(p);
+        prev = p;
+      }
+    }
+    return out;
+  }
+
+  private makeTrack(line: LonLat[], dots: number, cls: string, speed = 1): Track {
+    const pts = this.project(line);
+    const cum: number[] = [0];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      cum.push(cum[i - 1] + (a && b ? Math.hypot(b[0] - a[0], b[1] - a[1]) : 0));
+    }
+    const els: SVGCircleElement[] = [];
+    for (let i = 0; i < dots; i++) els.push(el('circle', { class: cls }, this.convoyLayer));
+    return { pts, cum, total: cum[cum.length - 1] || 1, dots: els, phase: Math.random(), speed, frozen: cls.includes('blocked') };
+  }
+
+  /** Construit les convois : ceux du joueur (toujours) et les flux mondiaux (mode commerce). */
+  private buildTracks(s: GameState, mode: MapMode, flows: Record<string, number> | null) {
+    const sig =
+      s.contracts.map((c) => `${c.id}:${c.route.nodes.join('>')}:${c.lastStatus}`).join(',') +
+      '|' + mode + '|' + (flows ? Object.entries(flows).map(([k, v]) => `${k}${Math.round(Math.log2(v + 1))}`).join(',') : '');
+    if (sig === this.trackSig) return;
+    this.trackSig = sig;
+    this.convoyLayer.innerHTML = '';
+    this.tracks = [];
+    if (flows)
+      for (const [key, v] of Object.entries(flows)) {
+        if (v <= 0.05) continue;
+        const [a, b] = key.split('>');
+        const n = Math.max(1, Math.min(4, Math.round(Math.log2(v + 1))));
+        this.tracks.push(this.makeTrack(lane(a, b), n, `convoy ${LAND.has(laneKey(a, b)) ? 'land' : ''}`, 0.8));
+      }
+    for (const c of s.contracts) this.tracks.push(this.makeTrack(routePath(c.route.nodes), 3, `convoy mine ${c.lastStatus}`, 1.2));
+    this.placeDots(0);
+  }
+
+  /** Vitesse du temps de jeu (0 = pause) : les convois avancent en conséquence. */
+  setTimeScale(v: number) {
+    this.timeScale = v;
+  }
+
+  private placeDots(dt: number) {
+    const r = 2.4 / Math.sqrt(this.k);
+    for (const t of this.tracks) {
+      if (!t.frozen) t.phase = (t.phase + (dt * 22 * t.speed * this.timeScale) / t.total) % 1;
+      t.dots.forEach((dot, i) => {
+        const u = t.frozen ? 0.02 : (t.phase + i / t.dots.length) % 1;
+        const d = u * t.total;
+        let lo = 0;
+        let hi = t.cum.length - 1;
+        while (lo < hi - 1) {
+          const mid = (lo + hi) >> 1;
+          if (t.cum[mid] <= d) lo = mid;
+          else hi = mid;
+        }
+        const a = t.pts[lo];
+        const b = t.pts[hi];
+        if (!a || !b) {
+          dot.style.display = 'none';
+          return;
+        }
+        const f = t.cum[hi] > t.cum[lo] ? (d - t.cum[lo]) / (t.cum[hi] - t.cum[lo]) : 0;
+        dot.style.display = '';
+        dot.setAttribute('cx', (a[0] + (b[0] - a[0]) * f).toFixed(2));
+        dot.setAttribute('cy', (a[1] + (b[1] - a[1]) * f).toFixed(2));
+        dot.setAttribute('r', r.toFixed(2));
+      });
+    }
+  }
+
+  private animate = (now: number) => {
+    const dt = this.lastFrame ? Math.min(0.1, (now - this.lastFrame) / 1000) : 0;
+    this.lastFrame = now;
+    if (this.tracks.length && (this.timeScale > 0 || dt === 0)) this.placeDots(dt);
+    requestAnimationFrame(this.animate);
+  };
+
   private drawTrade(s: GameState, selectedNode: string | null) {
     const g = this.tradeLayer;
     g.innerHTML = '';
-    const pos = new Map(TRADE_NODES.map((n) => [n.id, this.projection([n.lon, n.lat])!]));
+    // Voies commerciales (tracés réels)
     for (const n of TRADE_NODES)
-      for (const o of n.out) {
-        const [x0, y0] = pos.get(n.id)!;
-        const [x1, y1] = pos.get(o)!;
-        if (Math.abs(x1 - x0) > W / 2) continue; // liaison transpacifique : ne pas traverser la carte
-        el('line', { x1: String(x0), y1: String(y0), x2: String(x1), y2: String(y1), class: 'flow', 'marker-end': 'url(#arrow)' }, g);
-      }
-    // Routes des contrats du joueur
-    for (const c of s.contracts) {
-      const pts = c.route.nodes.map((id) => pos.get(id)!).filter(Boolean);
-      for (let i = 1; i < pts.length; i++) {
-        const [x0, y0] = pts[i - 1];
-        const [x1, y1] = pts[i];
-        if (Math.abs(x1 - x0) > W / 2) continue;
-        el('line', { x1: String(x0), y1: String(y0), x2: String(x1), y2: String(y1), class: `route ${c.lastStatus}` }, g);
-      }
-    }
+      for (const o of n.out)
+        el('path', { d: this.path({ type: 'LineString', coordinates: lane(n.id, o) }) ?? '', class: `lane ${LAND.has(laneKey(n.id, o)) ? 'land' : ''}` }, g);
+    // Itinéraires des contrats du joueur
+    for (const c of s.contracts)
+      el('path', { d: this.path({ type: 'LineString', coordinates: routePath(c.route.nodes) }) ?? '', class: `route ${c.lastStatus}` }, g);
     for (const n of TRADE_NODES) {
-      const [x, y] = pos.get(n.id)!;
-      const c = el('circle', { cx: String(x), cy: String(y), r: n.id === selectedNode ? '6' : '4', class: 'node' }, g);
+      const [x, y] = this.projection(PORTS[n.id])!;
+      const c = el('circle', { cx: String(x), cy: String(y), r: n.id === selectedNode ? '5' : '3.5', class: 'node' }, g);
       c.dataset.node = n.id;
-      const t = el('text', { x: String(x), y: String(y - 7), class: 'node-label' }, g);
+      const t = el('text', { x: String(x), y: String(y - 6), class: 'node-label' }, g);
       t.textContent = n.name;
     }
     for (const st of STRAITS) {
@@ -228,7 +333,7 @@ export class MapView {
     }
   }
 
-  render(s: GameState, mode: MapMode, selected: Pid | null) {
+  render(s: GameState, mode: MapMode, selected: Pid | null, flows: Record<string, number> | null = null) {
     const me = s.player;
     const nodeIdx = new Map(TRADE_NODES.map((n, i) => [n.id, i]));
     const selOwner = selected !== null ? s.provinces[selected].owner : null;
@@ -278,5 +383,6 @@ export class MapView {
     this.labelLayer.style.display = mode === 'trade' ? 'none' : '';
     if (mode === 'trade') this.drawTrade(s, selected !== null ? this.world.provinces[selected].node : null);
     else this.tradeLayer.innerHTML = '';
+    this.buildTracks(s, mode, mode === 'trade' ? flows : null);
   }
 }

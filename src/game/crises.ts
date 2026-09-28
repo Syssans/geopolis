@@ -33,7 +33,7 @@ export function contractCrises(s: GameState, w: World, news: ContractNews) {
       text: `${nm(s, owner)} bloque le ${def.name}. ${count} de vos contrats sont à l’arrêt. Sans livraison pendant 4 mois, ils seront rompus.`,
       options: [
         { label: 'Contourner', hint: reroutable ? `${reroutable} contrat(s) peuvent emprunter un autre itinéraire (plus long)` : 'Aucun itinéraire de contournement' },
-        { label: 'Acheter un droit de passage', hint: `${cost} Md$ versés à ${nm(s, owner)} : passage libre 12 mois` },
+        { label: 'Acheter un droit de passage', hint: `${cost.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} Md$ versés à ${nm(s, owner)} : passage libre 12 mois` },
         { label: 'Exiger la réouverture', hint: `Influence −30 ; réussit si relations ≥ 10 avec ${nm(s, owner)}, sinon relations −15` },
       ],
       params: { key: st, strait: st, owner, cost },
@@ -51,7 +51,7 @@ export function contractCrises(s: GameState, w: World, news: ContractNews) {
     pushEvent(s, {
       kind: 'piracy',
       title: 'Convoi arraisonné',
-      text: `Des pirates ont saisi un convoi à destination de ${nm(s, c.buyer)} (${zone}). ${lost} Md$ de marchandises perdues ce mois-ci.`,
+      text: `Des pirates ont saisi un convoi à destination de ${nm(s, c.buyer)} (${zone}). ${lost.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} Md$ de marchandises perdues ce mois-ci.`,
       options: [
         { label: 'Renforcer l’escorte', hint: `+1 flotte d’escorte (${Math.floor(s.nations[s.player].navy) - escortsUsed(s)} disponible(s))` },
         { label: 'Opération punitive', hint: 'Influence −20, ferveur −10 : plus de piraterie dans la zone pendant un an' },
