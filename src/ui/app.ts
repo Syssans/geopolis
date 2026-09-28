@@ -463,20 +463,6 @@ export class App {
       this.run(A.warAction(s(), this.world, me(), id));
     };
     h.policy = (p) => this.run(A.setPolicy(s(), this.world, me(), p as Policy));
-    h.merchantNode = (v) => {
-      const [slot, node] = v.split('|');
-      this.run(A.setMerchant(s(), this.world, me(), Number(slot), node === '' ? null : node, 'steer'));
-    };
-    h.merchantMode = (v) => {
-      const [slot, mode] = v.split(':');
-      const m = this.me.merchants[Number(slot)];
-      if (m) this.run(A.setMerchant(s(), this.world, me(), Number(slot), m.node, mode as 'collect' | 'steer', m.target));
-    };
-    h.merchantTarget = (v) => {
-      const [slot, target] = v.split('|');
-      const m = this.me.merchants[Number(slot)];
-      if (m) this.run(A.setMerchant(s(), this.world, me(), Number(slot), m.node, 'steer', target));
-    };
     const acts: Record<string, () => A.ActionResult> = {
       recruit: () => A.recruit(s(), me()),
       disband: () => A.disband(s(), me()),
@@ -553,7 +539,7 @@ export class App {
       this.el.hud.innerHTML = `<button class="me" data-a="me"></button>
         <div class="time"><span class="date"></span><div class="speed"></div></div><div class="res"></div>`;
     const q = (sel: string) => this.el.hud.querySelector<HTMLElement>(sel)!;
-    patch(q('.me'), `<i class="dot" style="background:${me.color}"></i><span>${esc(me.name)}</span>`);
+    patch(q('.me'), `<i class="flag-hud">${flagOf(me.id)}</i><span>${esc(me.name)}</span><i class="chev">›</i>`);
     const tile = (key: string, icon: string, label: string, value: string, delta: string, warn = false) =>
       `<button class="tile ${warn ? 'warn' : ''}" data-a="explain" data-p="${key}"><span class="tl">${icon} ${label}</span><b>${value}</b><small>${delta}</small></button>`;
     patch(
@@ -749,39 +735,23 @@ export class App {
     const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
     const report = this.trade();
     const home = homeNode(s, this.world, me.id);
-    const slots = A.merchantSlots(s, me.id);
-    const reach = A.merchantNodes(s, this.world, me.id);
     const nodeName = (id: string) => NODES.get(id)!.name;
-    const merchants = Array.from({ length: slots }, (_, i) => {
-      const m = me.merchants[i];
-      const opts = `<option value="">— Disponible —</option>${reach.map((n) => `<option value="${n}" ${m?.node === n ? 'selected' : ''}>${esc(nodeName(n))}</option>`).join('')}`;
-      let extra = '';
-      if (m) {
-        const def = NODES.get(m.node)!;
-        extra = `<div class="seg">
-          <button class="${m.mode === 'collect' ? 'on' : ''}" data-a="merchantMode" data-p="${i}:collect">Collecter</button>
-          ${def.out.length ? `<button class="${m.mode === 'steer' ? 'on' : ''}" data-a="merchantMode" data-p="${i}:steer">Orienter</button>` : ''}
-        </div>
-        ${m.mode === 'steer' && def.out.length > 1 ? `<select data-c="merchantTarget" data-p="${i}">${def.out.map((o) => `<option value="${o}" ${m.target === o ? 'selected' : ''}>vers ${esc(nodeName(o))}</option>`).join('')}</select>` : m.mode === 'steer' ? `<small class="muted">vers ${esc(nodeName(def.out[0]))}</small>` : ''}`;
-      }
-      return `<div class="merchant"><span>🧑‍💼 ${i + 1}</span><select data-c="merchantNode" data-p="${i}">${opts}</select>${extra}</div>`;
-    }).join('');
     const nodes = Object.entries(inc.byNode).sort((a, b) => b[1] - a[1]);
-    const presence = TRADE_NODES.filter((n) => (report.nodes[n.id]?.power[me.id] ?? 0) > 0).map((n) => {
+    const presence = TRADE_NODES.filter((n) => (report.nodes[n.id]?.power[me.id] ?? 0) > 0)
+      .sort((a, b) => report.nodes[b.id].value * ((report.nodes[b.id].power[me.id] ?? 0) / (report.nodes[b.id].total || 1)) - report.nodes[a.id].value * ((report.nodes[a.id].power[me.id] ?? 0) / (report.nodes[a.id].total || 1)))
+      .map((n) => {
       const r = report.nodes[n.id];
       const share = (r.power[me.id] ?? 0) / (r.total || 1);
-      return `<div class="row"><span>${esc(n.name)}${n.id === home ? ' 🏠' : ''}${r.collectors.includes(me.id) ? ' <small class="pos">collecte</small>' : ' <small class="muted">oriente</small>'}</span><span>${money(r.value)} · ${num(share * 100)} %</span></div>`;
+      return `<div class="row"><span><button class="step" data-a="gotoNode" data-p="${n.id}">${esc(n.name)}</button>${n.id === home ? ' 🏠' : ''}${me.merchants.some((m) => m.node === n.id) ? ' 🧑‍💼' : ''}</span><span>${money(r.value)} · <b class="c-gold">${num(share * 100)} %</b></span></div>`;
     });
     return `<div class="stats">
-        ${stat('Contrats', `<span class="pos">${money(inc.contracts ?? 0)}</span>`)}${stat('Production', money(inc.production))}${stat('Commerce', money(inc.trade))}${stat('Péages', money(inc.tolls))}
-        ${stat('Entretien forces', `<span class="neg">−${money(inc.upkeep)}</span>`)}${stat('Solde / mois', `<span class="${cls(net)}">${money(net)}</span>`)}${stat('Nœud domicile', esc(home ? nodeName(home) : '—'))}
+        ${stat('Contrats', `<span class="pos">${money(inc.contracts ?? 0)}</span>`)}${stat('Production', money(inc.production))}${stat('Commerce (zones)', money(inc.trade))}${stat('Péages', money(inc.tolls))}
+        ${stat('Entretien forces', `<span class="neg">−${money(inc.upkeep)}</span>`)}${stat('Solde / mois', `<span class="${cls(net)}">${money(net)}</span>`)}${stat('Zone d’attache', `🏠 ${esc(home ? nodeName(home) : '—')}`)}
       </div>
       <div class="actions"><button class="act wide" data-a="contracts" data-p="${s.offers.length ? 'offers' : 'active'}"><span class="t">📦 Économie : ressources, ${s.offers.length} offre(s), ${s.contracts.length} contrat(s)</span><span class="c">Production par marchandise, contrats, itinéraires, escortes</span></button></div>
-      <h3>Marchands (${me.merchants.length}/${slots})</h3>
-      <p class="muted" style="font-size:12px">Collecter : prendre sa part de la richesse d’un nœud. Orienter : pousser la richesse vers l’aval, jusqu’à votre nœud domicile où vous collectez automatiquement.</p>
-      <div class="merchants">${merchants}</div>
-      <h3>Revenus commerciaux par nœud</h3><div class="rows">${nodes.map(([id, v]) => `<div class="row"><span><button class="step" data-a="gotoNode" data-p="${id}">${esc(nodeName(id))}</button></span><span class="pos">+${money(v)}</span></div>`).join('') || '<p class="muted">Aucun.</p>'}</div>
-      <h3>Présence commerciale (valeur · votre part)</h3><div class="rows">${presence.join('')}</div>
+      <h3>Revenus du commerce par zone</h3>
+      <p class="hint">La richesse des marchandises circule de zone en zone (voir la carte ⚓ Commerce). Vous touchez une part de chaque zone où vous avez des ports, une flotte ou vos marchands, surtout dans votre zone d’attache 🏠 ${esc(home ? nodeName(home) : '—')}. Vos ${me.merchants.length} marchands 🧑‍💼 travaillent seuls : ils attirent la richesse des zones voisines vers chez vous. Touchez une zone pour la voir sur la carte.</p><div class="rows">${nodes.map(([id, v]) => `<div class="row"><span><button class="step" data-a="gotoNode" data-p="${id}">${esc(nodeName(id))}</button></span><span class="pos">+${money(v)}</span></div>`).join('') || '<p class="muted">Aucun.</p>'}</div>
+      <h3>Votre poids par zone (richesse de la zone · votre part)</h3><div class="rows">${presence.join('')}</div>
       <h3>Cours mondiaux</h3><div class="goods">${Object.entries(GOODS).map(([g, d]) => {
         const p = s.prices[g] ?? 1;
         return `<span class="chip">${this.gi(g as keyof typeof GOODS)} ${d.name} <b class="${cls(p - 1)}">${p >= 1 ? '+' : ''}${num((p - 1) * 100)} %</b></span>`;
@@ -1422,7 +1392,7 @@ export class App {
       <p><b>But</b> 🎯 : une campagne de 10 ans (2026-2036). Remplissez vos missions, battez votre rival et soignez votre rang : un bilan noté de S à D tombe à la fin.</p>
       <p><b>Contrats</b> 📦 : des acheteurs vous proposent d'acheter votre production à prix fixe avec une prime. Choisissez l'itinéraire de vos convois (détroits à péage, zones de piraterie), escortez-les avec votre flotte, contournez les blocus. C'est votre principale source de richesse.</p>
       <p><b>Trois ressources</b> : 💰 le trésor (contrats + production + commerce − entretien des forces), 🤝 l'influence (diplomatie) et 🔥 la ferveur (religion).</p>
-      <p><b>Commerce</b> : chaque province produit une marchandise dont la valeur entre dans un <b>nœud commercial</b>. La richesse coule d'amont en aval vers trois grands pôles : Manche, New York et Shanghai. Vous collectez automatiquement dans votre nœud domicile ; envoyez vos <b>marchands</b> orienter les flux vers lui ou collecter ailleurs. Votre flotte renforce votre poids dans les nœuds côtiers.</p>
+      <p><b>Commerce</b> : chaque province produit une marchandise dont la valeur entre dans un <b>nœud commercial</b>. La richesse coule d'amont en aval vers trois grands pôles : Manche, New York et Shanghai. Vous touchez une part de chaque zone où vous êtes présent (ports, flotte), surtout dans votre zone d'attache ; vos marchands travaillent seuls pour y attirer la richesse. Votre flotte renforce votre poids dans les nœuds côtiers.</p>
       <p><b>Détroits</b> ⚓ : Ormuz, Suez, Malacca, Panama, Bosphore… leur propriétaire touche un péage et peut les fermer — le commerce en aval s'effondre et les prix s'envolent.</p>
       <p><b>Religion</b> : chaque province a sa confession. Les minorités s'agitent, surtout sous une politique de prosélytisme, et peuvent se soulever — d'autant plus si une puissance voisine arme les insurgés. Envoyez des missionnaires pour les convertir, ou choisissez la tolérance.</p>
       <p><b>Lieux saints</b> ⭐ : Jérusalem, La Mecque, Rome, Qom… les détenir rapporte de la ferveur ; les laisser à une autre religion vous fâche avec tous ses fidèles et ouvre la <b>guerre sainte</b>.</p>

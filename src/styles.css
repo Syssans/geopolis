@@ -65,7 +65,10 @@ ul.consequences li { margin: 2px 0; }
   grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'me time' 'res res';
   align-items: center; background: #0d1117f5; border-bottom: 1px solid var(--line); z-index: 5; }
 .hud .me { grid-area: me; justify-self: start; max-width: 100%; display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px;
-  background: none; border: 0; padding: 4px 2px; cursor: pointer; min-width: 0; }
+  background: #21262d; border: 1px solid var(--gold); border-radius: 999px; padding: 4px 10px 4px 6px; cursor: pointer; min-width: 0; color: var(--text); }
+.hud .me:active { background: #30363d; }
+.hud .me .flag-hud { font-style: normal; font-size: 20px; line-height: 1; flex: none; }
+.hud .me .chev { font-style: normal; color: var(--gold); font-size: 18px; line-height: 1; flex: none; }
 .hud .me span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hud .me .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--gold); flex: none; }
 .hud .time { grid-area: time; }

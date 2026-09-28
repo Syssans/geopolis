@@ -38,7 +38,7 @@ npm run build      # build de production dans dist/ (PWA installable)
 | **Ressources** | 💰 Trésor (contrats + production + commerce + péages − entretien des forces), 🤝 Influence (diplomatie), 🔥 Ferveur (religion). |
 | **Provinces** | ~900 provinces (régions françaises, États américains, provinces chinoises…), chacune avec développement, population, marchandise, religion et nœud commercial. |
 | **Commerce** | 26 nœuds commerciaux (Golfe Persique, Malacca, Suez, Manche, Shanghai, New York…) reliés d'amont en aval. La production des provinces y entre ; les nations collectent leur part selon leur pouvoir commercial (provinces, côtes, flotte, marchands, accords). |
-| **Marchands** | 2 à 5 marchands à placer : **collecter** dans un nœud, ou **orienter** la richesse vers l'aval jusqu'à votre nœud domicile. |
+| **Marchands** | Automatiques : ils attirent la richesse des zones voisines vers votre zone d'attache (même logique que l'IA). L'onglet Commerce du pays montre vos revenus et votre part dans chaque zone. |
 | **Détroits** | Ormuz, Bab-el-Mandeb, Suez, Malacca, Panama, Bosphore, Gibraltar, détroits danois : péage de 5 % pour le propriétaire, qui peut les fermer (commerce aval effondré, prix mondiaux en hausse). |
 | **Marchés** | 11 marchandises (pétrole, gaz, céréales, café-cacao, métaux, terres rares, semi-conducteurs…) dont les prix fluctuent. |
 | **Religion** | 11 confessions (catholique, protestante, évangélique, orthodoxe, sunnite, chiite, juive, hindoue, bouddhiste, traditionnelle, sécularisée), réparties par province avec les minorités réelles (Nigeria, Liban, Irak, Inde, Xinjiang…). |

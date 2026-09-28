@@ -22,7 +22,7 @@ export function runAI(s: GameState, w: World) {
     straits(s, w, n);
     war(s, w, n);
   }
-  if (s.month % 6 === 1) runMerchantAI(s, w, false);
+  if (s.month % 6 === 1) runMerchantAI(s, w, true); // les marchands du joueur sont gérés comme ceux de l'IA
 }
 
 /** Les marchands orientent le commerce amont vers le nœud domicile. */
