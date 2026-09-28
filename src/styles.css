@@ -212,7 +212,7 @@ h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .diff { font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid; }
 @media (min-width: 820px) { .picker { left: auto; right: 10px; bottom: 10px; top: 10px; width: 380px; max-height: none; border-radius: 16px; border: 1px solid var(--line); } }
 
-.toasts { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(120px + var(--safe-bottom)); z-index: 15; display: flex;
+.toasts { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(120px + var(--safe-bottom)); z-index: 60; pointer-events: none; display: flex;
   flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(92%, 420px); }
 .toast { background: #21262df2; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 13px; animation: fade 4s forwards; width: 100%; }
 .toast.bad { border-color: var(--bad); }
@@ -341,3 +341,15 @@ button.link.danger { color: var(--bad); }
 .pick-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip.on { border-color: var(--gold); color: var(--gold); font-weight: 600; }
 .chip:disabled { opacity: .7; cursor: default; }
+
+/* ——— Drapeaux ——— */
+.flag { cursor: pointer; font-size: 18px; line-height: 1; display: inline-block; vertical-align: -2px; padding: 0 1px; }
+.flag.big { font-size: 26px; vertical-align: -5px; }
+.stats.four { grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 6px; }
+.stats.four .stat { padding: 5px 6px; }
+.stats.four .stat b { font-size: 13px; }
+.stats.four .stat b small { font-size: 10px; font-weight: 400; color: var(--muted); }
+.stock-line { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; margin: 2px 0 4px; }
+.stock-line .seg button { font-size: 12px; padding: 4px 8px; }
+.stock-line .seg button { white-space: nowrap; }
+.stock-line > span:first-child { flex: 1; }

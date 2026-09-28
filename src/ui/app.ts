@@ -25,6 +25,7 @@ import { GOODS, STRAITS, TRADE_NODES } from '../data/trade';
 import type { Topology } from 'topojson-specification';
 import { cls, esc, iconize, money, num, partitive, pct, pop, signed } from './format';
 import { MapView, type MapMode } from './map';
+import { flagOf } from '../data/flags';
 import { chartPointer, priceChart, sparkline } from './charts';
 import { clock as clockOf } from '../game/convoys';
 
@@ -233,7 +234,7 @@ export class App {
       .map(({ n, d }) => {
         const [label, c] = diff(d);
         return `<button class="pick" data-a="pick" data-p="${esc(n.id)}"><i class="dot" style="background:${n.color}"></i>
-          <span>${esc(n.name)} ${n.nuclear ? '☢' : ''}<br><small>${RELIGIONS[n.religion].icon} ${RELIGIONS[n.religion].name} · ${owned(preview, n.id).length} prov. · dév. ${d}${n.bloc ? ' · ' + esc(preview.blocs[n.bloc].name) : ''}</small></span>
+          <span>${flagOf(n.id)} ${esc(n.name)} ${n.nuclear ? '☢' : ''}<br><small>${RELIGIONS[n.religion].icon} ${RELIGIONS[n.religion].name} · ${owned(preview, n.id).length} prov. · dév. ${d}${n.bloc ? ' · ' + esc(preview.blocs[n.bloc].name) : ''}</small></span>
           <em class="diff" style="color:${c};border-color:${c}">${label}</em></button>`;
       })
       .join('');
@@ -246,13 +247,13 @@ export class App {
     const inc = computeTrade(s, this.world).income[id];
     const goods = [...new Set(owned(s, id).map((p) => this.world.provinces[p].good))].map((g) => GOODS[g].icon).join(' ');
     this.modal(
-      esc(n.name),
+      `${flagOf(n.id)} ${esc(n.name)}`,
       `<div class="stats">
         ${stat('Religion', `${RELIGIONS[n.religion].icon} ${RELIGIONS[n.religion].name}`)}${stat('Provinces', String(owned(s, id).length))}
         ${stat('Revenus / mois', money(inc.production + inc.trade + inc.tolls))}${stat('Productions', goods)}
         ${stat('Bloc', n.bloc ? esc(s.blocs[n.bloc].name) : 'Non-aligné')}${stat('Puissance', `#${powerRank(s, id)}${n.nuclear ? ' ☢' : ''}`)}
       </div>
-      <p class="muted">Voisins : ${neighbours(s, this.world, id).map((x) => esc(nm(s, x))).join(', ') || 'aucun'}</p>`,
+      <p class="muted">Voisins : ${neighbours(s, this.world, id).map((x) => this.flag(x)).join(' ') || 'aucun'}</p>`,
       [
         { label: `Diriger ${esc(n.name)}`, a: 'play', p: id, primary: true },
         { label: 'Choisir un autre pays', a: 'closeModal' },
@@ -349,6 +350,10 @@ export class App {
     h.escort = (v) => {
       const [id, d] = v.split(':').map(Number);
       refresh(C.setEscort(this.state, id, d));
+    };
+    h.who = (id) => {
+      const s = this.state;
+      this.toast(`${flagOf(id)} ${nm(s, id)}${id === s.player ? ' (vous)' : ` · 🌍 ${signed(Math.round(rel(s, s.player, id)))}`}`);
     };
     h.suppliers = (g) => this.showSuppliers(g as keyof typeof GOODS);
     h.buyFrom = (id) => this.showSellerGoods(id);
@@ -553,7 +558,7 @@ export class App {
       wars
         .map((w) => {
           const sc = scoreFor(w, s.player);
-          return `<button class="warchip" data-a="war" data-p="${w.id}">${w.holy ? '☪✝' : '⚔️'} ${esc(nm(s, enemyLeader(w, s.player)))} · <b class="${cls(sc)}">${signed(sc)}</b></button>`;
+          return `<button class="warchip" data-a="war" data-p="${w.id}">${w.holy ? '☪✝' : '⚔️'} ${flagOf(enemyLeader(w, s.player))} · <b class="${cls(sc)}">${signed(sc)}</b></button>`;
         })
         .join('') +
         (s.rival && s.nations[s.rival].alive
@@ -611,7 +616,7 @@ export class App {
       sheet.innerHTML = `<div class="grab"></div><div class="head"><i class="dot" style="width:14px;height:14px;border-radius:50%"></i>
         <h2></h2><button class="close" data-a="close" aria-label="Fermer">✕</button></div><div class="body"></div>`;
     sheet.querySelector<HTMLElement>('.head .dot')!.style.background = n.color;
-    patch(sheet.querySelector('h2')!, `${esc(info.name)} <small class="muted">· ${esc(n.name)}</small>`);
+    patch(sheet.querySelector('h2')!, `${esc(info.name)} <small class="muted">· ${flagOf(n.id)} ${esc(n.name)}</small>`);
     const b = sheet.querySelector<HTMLElement>('.body')!;
     patch(
       b,
@@ -837,8 +842,8 @@ export class App {
       <h3>Guerres (${wars.length})</h3>
       ${wars.length ? wars.map((w) => this.warLine(w)).join('') : '<p class="muted">Aucun conflit en cours.</p>'}
       ${me.claims.length || me.holyClaims.length || me.cbProgress ? `<h3>Casus belli</h3><div class="rows">
-        ${me.claims.map((c) => `<div class="row"><span>${esc(nm(s, c))}</span><span class="pos">Prêt</span></div>`).join('')}
-        ${me.holyClaims.map((c) => `<div class="row"><span>${esc(nm(s, c))}</span><span class="pos">Guerre sainte</span></div>`).join('')}
+        ${me.claims.map((c) => `<div class="row"><span>${this.flag(c)} ${esc(nm(s, c))}</span><span class="pos">Prêt</span></div>`).join('')}
+        ${me.holyClaims.map((c) => `<div class="row"><span>${this.flag(c)} ${esc(nm(s, c))}</span><span class="pos">Guerre sainte</span></div>`).join('')}
         ${me.cbProgress ? `<div class="row"><span>${esc(nm(s, me.cbProgress.target))}</span><span>${me.cbProgress.months} mois</span></div>` : ''}</div>` : ''}`;
   }
 
@@ -857,7 +862,7 @@ export class App {
     const bloc = me.bloc ? s.blocs[me.bloc] : null;
     const rels = alive(s).filter((o) => o.id !== me.id).map((o) => ({ o, r: rel(s, me.id, o.id) }));
     const line = (x: { o: { id: Id; name: string }; r: number }) =>
-      `<div class="row" data-a="gotoNation" data-p="${esc(x.o.id)}" style="cursor:pointer"><span>${RELIGIONS[s.nations[x.o.id].religion].icon} ${esc(x.o.name)}</span><span class="${cls(x.r)}">${signed(x.r)}</span></div>`;
+      `<div class="row" data-a="gotoNation" data-p="${esc(x.o.id)}" style="cursor:pointer"><span>${flagOf(x.o.id)} ${esc(x.o.name)} ${RELIGIONS[s.nations[x.o.id].religion].icon}</span><span class="${cls(x.r)}">${signed(x.r)}</span></div>`;
     const emb = s.embargoes.filter((k) => k.endsWith(`>${me.id}`)).map((k) => nm(s, k.split('>')[0]));
     return `<h3>Bloc</h3>
       ${bloc ? `<div class="rows"><div class="row"><span>${esc(bloc.name)} · meneur : ${esc(nm(s, bloc.leader))}</span><span>${bloc.members.length} membres</span></div></div>
@@ -1113,20 +1118,28 @@ export class App {
       return ((s.prices[g] ?? 1) / past - 1) * 100;
     };
     if (tab === 'resources') {
-      const goods = (Object.keys(cap) as (keyof typeof GOODS)[]).sort((a, b) => (cap[b] ?? 0) * unitPriceOf(s, b) - (cap[a] ?? 0) * unitPriceOf(s, a));
+      const bought = P.purchased(s);
+      const goods = [...new Set([...Object.keys(cap), ...Object.keys(bought), ...Object.keys(s.stock).filter((g) => (s.stock[g as keyof typeof GOODS] ?? 0) > 1e-3)])] as (keyof typeof GOODS)[];
+      const worth = (g: keyof typeof GOODS) => ((cap[g] ?? 0) + (bought[g] ?? 0) + (s.stock[g] ?? 0)) * unitPriceOf(s, g);
+      goods.sort((a, b) => worth(b) - worth(a));
       html += this.needsHtml();
       html += `<h3>🏭 Production</h3><p class="hint">Ce que vos provinces produisent chaque mois. La part <b class="gold">sous contrat</b> est vendue à prix garanti ; le <b>disponible</b> part sur le marché et peut être proposé aux acheteurs. Touchez une province pour la moderniser.</p>`;
       html += goods.map((g) => {
         const d = GOODS[g];
-        const c = cap[g] ?? 0;
+        const own = cap[g] ?? 0;
+        const buy = bought[g] ?? 0;
+        const st = s.stock[g] ?? 0;
+        const c = own + buy;
         const used = com[g] ?? 0;
         const tr = trendOf(g, 1);
         const prov = E.producers(s, this.world, s.player, g);
         const selling = !s.notForSale.includes(g);
         return `<div class="card"><div class="mh"><b>${d.icon} ${d.name}</b><small class="${cls(tr)}">${tr > 0.5 ? '▲' : tr < -0.5 ? '▼' : '▬'} ${money(unitPriceOf(s, g))}/${esc(d.unit)}</small></div>
-          <div class="stats three">${stat('Production', `${qty(c)} <small>${esc(d.unit)}/mois</small>`)}${stat('Sous contrat', `${qty(used)}`)}${stat('Disponible', `<span class="${c - used < 0 ? 'neg' : 'pos'}">${qty(c - used)}</span>`)}</div>
-          ${this.gauge(c, used)}
-          <small class="muted">Valeur : ${money(c * unitPriceOf(s, g))}/mois</small>
+          ${c > 0 ? `<div class="stats four">${stat('Production', `${qty(own)}<small>/mois</small>`)}${stat('Achats', `${qty(buy)}<small>/mois</small>`)}${stat('Vendu', `${qty(used)}<small>/mois</small>`)}${stat('Libre', `<span class="${c - used < 0 ? 'neg' : 'pos'}">${qty(c - used)}</span><small>/mois</small>`)}</div>
+          ${this.gauge(c, used)}` : ''}
+          <div class="stock-line"><span>🏬 Stock : <b>${qty(st)}</b> ${esc(d.unit)}${st > 1e-3 ? ` <small class="muted">≈ ${money(st * unitPriceOf(s, g))}</small>` : ''}</span>
+            ${st > 1e-3 ? `<span class="seg"><button data-a="spotSell" data-p="${g}:0.5">Vendre ½</button><button data-a="spotSell" data-p="${g}:1">Vendre tout</button></span>` : ''}</div>
+          ${st > 1e-3 && (s.needs?.lines[g]?.need ?? 0) > 0 ? `<small class="muted">Votre population en puise ${qty(Math.max(0, (s.needs!.lines[g]!.need) - Math.max(0, own - used)))} ${esc(d.unit)}/mois si la production ne suffit pas.</small>` : ''}
           <div class="prov-list">${prov.slice(0, 8).map((pid) => {
             const p = s.provinces[pid];
             const works = p.works ? ` 🏗️${p.works.months}m` : '';
@@ -1180,7 +1193,7 @@ export class App {
               : blocked
                 ? `<div class="verdict warn">⛔ Cet itinéraire passe par un détroit fermé : choisissez-en un autre.</div>`
                 : `<div class="verdict ok">✅ <b>+${money(est!.net)}/mois</b> pendant ${o.months} mois <small>(≈ ${money(est!.net * o.months)} au total · ${pct(vsMarket, 0)} vs cours actuel)</small></div>`;
-            return `<div class="card offer"><div class="offer-head"><span class="big">${g.icon}</span><div><b>${esc(nm(s, o.buyer))}</b> achète ${esc(partitive(g.name))}<br><small class="muted">Répondre sous ${o.expires} mois</small></div></div>
+            return `<div class="card offer"><div class="offer-head"><span class="big">${g.icon}</span><div>${this.flag(o.buyer, true)} achète ${esc(partitive(g.name))}<br><small class="muted">Répondre sous ${o.expires} mois</small></div></div>
               ${verdict}
               <div class="stats three">${stat('Chaque mois', `${qty(o.volume)} <small>${esc(g.unit)}</small>`)}${stat('Prix garanti', `${money(o.unitPrice * (1 + o.bonus))} <small class="pos">+${Math.round(o.bonus * 100)} %</small>`)}${stat('Durée', `${o.months} mois`)}</div>
               <div class="cap-line"><span>Production${(P.purchased(s)[o.good] ?? 0) > 0 ? ' + achats' : ''}</span><span>${qty(c)} ${esc(g.unit)}/mois</span></div>
@@ -1208,13 +1221,13 @@ export class App {
             const status = c.lastStatus === 'ok' ? (c.lastRevenue > 0 ? `<div class="verdict ok">✅ Livré : <b>+${money(c.lastRevenue)}</b> ce mois</div>` : '<div class="verdict">⏳ Premier convoi en route</div>') : c.lastStatus === 'blocked' ? `<div class="verdict bad">⛔ Bloqué depuis ${c.blocked} mois : changez d’itinéraire (rupture à 4 mois)</div>` : '<div class="verdict bad">🏴‍☠️ Convoi pillé ce mois : ajoutez une escorte</div>';
             const short = (com[c.good] ?? 0) > (cap[c.good] ?? 0) * 1.02;
             const risk = C.piracyRisk(c.route, c.escort, s);
-            return `<div class="card"><div class="offer-head"><span class="big">${g.icon}</span><div><b>${esc(nm(s, c.buyer))}</b> · ${esc(g.name.toLowerCase())}<br><small class="muted">${qty(c.volume)} ${esc(g.unit)}/mois à ${money(c.unitPrice * (1 + c.bonus))} · encore ${c.monthsLeft} mois</small></div></div>
+            return `<div class="card"><div class="offer-head"><span class="big">${g.icon}</span><div>${this.flag(c.buyer, true)} · ${esc(g.name.toLowerCase())}<br><small class="muted">${qty(c.volume)} ${esc(g.unit)}/mois à ${money(c.unitPrice * (1 + c.bonus))} · encore ${c.monthsLeft} mois</small></div></div>
               ${status}${short ? `<div class="verdict warn">⚠️ Production insuffisante : livraisons partielles.</div>` : ''}
               <div class="escort"><span>🛡️ Escorte <b>${c.escort}</b> · pirates <b class="${risk > 0.05 ? 'neg' : ''}">${Math.round(risk * 100)} %</b>/mois</span>
                 <span class="seg"><button data-a="escort" data-p="${c.id}:-1" ${c.escort ? '' : 'disabled'}>−</button><button data-a="escort" data-p="${c.id}:1" ${used < navy ? '' : 'disabled'}>+</button></span></div>
               <details class="route-pick" data-k="c${c.id}"><summary>🚢 Itinéraire : ${this.routeLabel(c.route)}</summary>
                 ${c.alternatives.map((r, i) => `<label class="check"><input type="radio" name="c${c.id}" data-a="reroute" data-p="${c.id}:${i}" ${r.nodes.join() === c.route.nodes.join() ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}</details>
-              <button class="link danger" data-a="cancelContract" data-p="${c.id}">Rompre le contrat (🌍 −20 avec ${esc(nm(s, c.buyer))})</button></div>`;
+              <button class="link danger" data-a="cancelContract" data-p="${c.id}">Rompre le contrat (🌍 −20 avec ${flagOf(c.buyer)})</button></div>`;
           }).join('')
         : '<p class="muted">Aucun contrat de vente. Signez des offres dans l’onglet ✉️ Offres.</p>';
       html += `<h3>📥 Achats</h3>`;
@@ -1224,13 +1237,13 @@ export class App {
             const vs = (p.unitPrice / unitPriceOf(s, p.good) - 1) * 100;
             const status = p.lastStatus === 'ok' ? (p.lastCost > 0 ? `<div class="verdict ok">✅ Reçu ce mois : ${qty(p.volume)} ${esc(g.unit)} pour ${money(p.lastCost)}</div>` : '<div class="verdict">⏳ Première livraison le mois prochain</div>') : p.lastStatus === 'blocked' ? `<div class="verdict bad">⛔ Bloqué depuis ${p.blocked} mois : changez d’itinéraire</div>` : '<div class="verdict bad">🏴‍☠️ Cargaison pillée (payée mais perdue) : ajoutez une escorte</div>';
             const risk = C.piracyRisk(p.route, p.escort, s);
-            return `<div class="card"><div class="offer-head"><span class="big">${g.icon}</span><div>de <b>${esc(nm(s, p.seller))}</b> · ${esc(g.name.toLowerCase())}<br><small class="muted">${qty(p.volume)} ${esc(g.unit)}/mois à ${money(p.unitPrice)} (<span class="${cls(-vs)}">${pct(vs, 0)} vs cours</span>) · encore ${p.monthsLeft} mois</small></div></div>
+            return `<div class="card"><div class="offer-head"><span class="big">${g.icon}</span><div>de ${this.flag(p.seller, true)} · ${esc(g.name.toLowerCase())}<br><small class="muted">${qty(p.volume)} ${esc(g.unit)}/mois à ${money(p.unitPrice)} (<span class="${cls(-vs)}">${pct(vs, 0)} vs cours</span>) · encore ${p.monthsLeft} mois</small></div></div>
               ${status}
               <div class="escort"><span>🛡️ Escorte <b>${p.escort}</b> · pirates <b class="${risk > 0.05 ? 'neg' : ''}">${Math.round(risk * 100)} %</b>/mois</span>
                 <span class="seg"><button data-a="pEscort" data-p="${p.id}:-1" ${p.escort ? '' : 'disabled'}>−</button><button data-a="pEscort" data-p="${p.id}:1" ${used < navy ? '' : 'disabled'}>+</button></span></div>
               <details class="route-pick" data-k="p${p.id}"><summary>🚢 Itinéraire : ${this.routeLabel(p.route)}</summary>
                 ${p.alternatives.map((r, i) => `<label class="check"><input type="radio" name="p${p.id}" data-a="pReroute" data-p="${p.id}:${i}" ${r.nodes.join() === p.route.nodes.join() ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}</details>
-              <button class="link danger" data-a="cancelPurchase" data-p="${p.id}">Rompre (🌍 −10 avec ${esc(nm(s, p.seller))})</button></div>`;
+              <button class="link danger" data-a="cancelPurchase" data-p="${p.id}">Rompre (🌍 −10 avec ${flagOf(p.seller)})</button></div>`;
           }).join('')
         : '<p class="muted">Aucun contrat d’achat. Achetez à l’étranger depuis l’onglet 📈 Cours, la fiche d’un pays, ou vos besoins (📦 Ressources).</p>';
     }
@@ -1240,6 +1253,13 @@ export class App {
     for (const k of open) this.el.overlay.querySelector<HTMLDetailsElement>(`details[data-k="${k}"]`)?.setAttribute('open', '');
     const content = this.el.overlay.querySelector('.content');
     if (content) content.scrollTop = scroll;
+  }
+
+  // ——— Drapeaux ———
+
+  /** Drapeau cliquable : toucher affiche le nom du pays. */
+  private flag(id: Id, big = false): string {
+    return `<span class="flag ${big ? 'big' : ''}" role="button" data-a="who" data-p="${esc(id)}" title="${esc(nm(this.state, id))}">${flagOf(id)}</span>`;
   }
 
   // ——— Besoins, stocks et achats ———
@@ -1262,9 +1282,9 @@ export class App {
     html += `<div class="cap-legend"><span><i class="k own"></i>production</span><span><i class="k stock"></i>stocks et achats</span><span><i class="k market"></i>achat d’urgence</span></div>`;
     if (rep.expensive) html += '<div class="verdict bad">🔥 Vie chère : les pénuries se paient au prix fort, la stabilité baisse (⚖️ −0,4/mois).</div>';
     const stocked = (Object.entries(s.stock) as [keyof typeof GOODS, number][]).filter(([, q]) => q > 1e-3);
-    html += `<h3>🏬 Stocks</h3>`;
+    html += `<h3>🏬 Stocks</h3>`; // contrats d’achat et achats au comptant confondus
     html += stocked.length
-      ? `<p class="hint">Vos réserves servent d’abord vos contrats de vente, puis votre population. Stockage : ${num(P.STORAGE * 100, 1)} % de la valeur par mois. Revendez quand le cours monte.</p>` +
+      ? `<p class="hint">Tout ce que vous avez en entrepôt, qu’il vienne de vos contrats d’achat ou de vos achats au comptant. Les réserves servent d’abord vos contrats de vente, puis votre population. Stockage : ${num(P.STORAGE * 100, 1)} % de la valeur par mois. Revendez quand le cours monte.</p>` +
         stocked.map(([g, q]) => {
           const d = GOODS[g];
           const v = q * unitPriceOf(s, g) * (1 - P.SPOT_SELL);
@@ -1296,7 +1316,7 @@ export class App {
     const s = this.state;
     const n = s.nations[id];
     const vs = q.markup * 100;
-    return `<div class="supplier ${q.ok ? '' : 'off'}"><div><i class="dot" style="background:${n.color}"></i><b>${esc(n.name)}</b> <small class="muted">🌍 ${signed(Math.round(rel(s, s.player, id)))}</small><br>
+    return `<div class="supplier ${q.ok ? '' : 'off'}"><div>${this.flag(id, true)} <small class="muted">🌍 ${signed(Math.round(rel(s, s.player, id)))}</small><br>
       <small>${GOODS[g].icon} ${money(q.unitPrice)}/${esc(GOODS[g].unit)} <span class="neg">+${Math.round(vs)} %</span> · jusqu’à ${num(q.max, 2)}/mois</small></div>
       <button class="chip" data-a="pForm" data-p="${esc(id)}|${g}" ${q.ok ? '' : 'disabled'}>${q.ok ? 'Choisir' : esc(q.reason ?? '')}</button></div>`;
   }
@@ -1319,7 +1339,7 @@ export class App {
     const goods = (Object.keys(cap) as (keyof typeof GOODS)[]).filter((g) => (cap[g] ?? 0) > 0.05).sort((a, b) => (cap[b] ?? 0) * unitPriceOf(s, b) - (cap[a] ?? 0) * unitPriceOf(s, a));
     const html = `<p class="hint">Ce que ${esc(nm(s, id))} peut vous vendre chaque mois (la moitié de sa production au plus), au cours du jour plus sa marge.</p>
       ${goods.length ? goods.map((g) => this.supplierRow(id, g, P.quote(s, this.world, id, g))).join('') : '<p class="muted">Ce pays ne produit rien d’exportable.</p>'}`;
-    this.modal(`📥 Acheter à ${esc(nm(s, id))}`, html, [{ label: 'Fermer', a: 'closeModal' }]);
+    this.modal(`📥 Acheter à ${flagOf(id)} ${esc(nm(s, id))}`, html, [{ label: 'Fermer', a: 'closeModal' }]);
   }
 
   private showPurchaseForm() {
@@ -1340,7 +1360,7 @@ export class App {
     const monthly = value + tolls;
     const urgent = f.volume * unitPriceOf(s, g) * (1 + P.EMERGENCY);
     const risk = route ? C.piracyRisk(route, 0, s) : 0;
-    const html = `<div class="offer-head"><span class="big">${d.icon}</span><div><b>${esc(nm(s, f.seller))}</b> vous vend ${esc(partitive(d.name))}<br><small class="muted">Prix verrouillé : ${money(q.unitPrice)}/${esc(d.unit)} (cours ${money(unitPriceOf(s, g))}, marge +${Math.round(q.markup * 100)} %)</small></div></div>
+    const html = `<div class="offer-head"><span class="big">${d.icon}</span><div>${this.flag(f.seller, true)} vous vend ${esc(partitive(d.name))}<br><small class="muted">Prix verrouillé : ${money(q.unitPrice)}/${esc(d.unit)} (cours ${money(unitPriceOf(s, g))}, marge +${Math.round(q.markup * 100)} %)</small></div></div>
       <div class="verdict ${q.ok ? 'ok' : 'bad'}">${q.ok ? `💸 <b>−${money(monthly)}/mois</b> pendant ${f.months} mois <small>(≈ ${money(monthly * f.months)} au total${P.NEEDS[g] ? ` · achat d’urgence équivalent : ${money(urgent)}/mois` : ''})</small>` : `❌ ${esc(q.reason ?? '')}`}</div>
       <h3>Quantité par mois</h3><div class="pick-row">${opts.map(([l, v]) => `<button class="chip ${Math.abs(v - f.volume) < 1e-6 ? 'on' : ''}" data-a="pSet" data-p="v:${v}">${l}</button>`).join('')}</div>
       <h3>Durée</h3><div class="pick-row">${[12, 24, 36].map((m) => `<button class="chip ${m === f.months ? 'on' : ''}" data-a="pSet" data-p="m:${m}">${m} mois</button>`).join('')}</div>
@@ -1391,15 +1411,14 @@ export class App {
     const g = GOODS[c.good];
     const from = s.nations[c.from];
     const to = s.nations[c.to];
-    const dot = (n: typeof from) => `<i class="dot" style="background:${n.color}"></i>`;
     const u = Math.max(0, Math.min(1, V.progressAt(c, t)));
     const weeks = Math.max(1, Math.round((1 - u) * c.duration * 4.3));
     const here = V.currentNode(c, t);
     const relTag = (x: Id) => (x === s.player ? '' : ` <span class="muted">(relations ${signed(Math.round(rel(s, s.player, x)))})</span>`);
     let html = `<div class="convoy-card">
-      <div class="leg">${dot(from)}<b>${esc(from.name)}</b>${relTag(from.id)}<br><span class="muted">depuis ${esc(C.nodeName(c.nodes[0]))}</span></div>
+      <div class="leg">${this.flag(from.id, true)}${relTag(from.id)}<br><span class="muted">depuis ${esc(C.nodeName(c.nodes[0]))}</span></div>
       <div class="arrow">→</div>
-      <div class="leg">${dot(to)}<b>${esc(to.name)}</b>${relTag(to.id)}<br><span class="muted">vers ${esc(C.nodeName(c.nodes[c.nodes.length - 1]))}</span></div></div>
+      <div class="leg">${this.flag(to.id, true)}${relTag(to.id)}<br><span class="muted">vers ${esc(C.nodeName(c.nodes[c.nodes.length - 1]))}</span></div></div>
       <div class="rows">
       <div class="row"><span>Cargaison</span><span>${g.icon} <b>${num(c.qty, 2)} ${g.unit}</b> · <b>${money(c.value)}</b></span></div>
       <div class="row"><span>Position</span><span>${esc(C.nodeName(here))} · arrivée dans ~${weeks} sem.</span></div>
@@ -1408,15 +1427,15 @@ export class App {
       <p class="muted">${c.nodes.map((n) => esc(C.nodeName(n))).join(' › ')}${c.straits.length ? `<br>⚓ ${c.straits.map((x) => esc(C.straitName(x))).join(', ')}` : ''}</p></details>`;
     const buttons: Parameters<App['modal']>[2] = [];
     if (c.from === s.player) {
-      html += `<p class="muted">L’un de vos convois (contrat avec ${esc(to.name)}). Escortez-le depuis 📦 Économie pour le protéger des pirates et des marines ennemies.</p>`;
+      html += `<p class="muted">L’un de vos convois (contrat avec ${this.flag(to.id)}). Escortez-le depuis 📦 Économie pour le protéger des pirates et des marines ennemies.</p>`;
     } else {
       const chk = V.canIntercept(s, this.world, c, t);
       if (chk.legal)
         html += `<h3>⚓ Blocus</h3><p class="muted">Vous êtes en guerre avec ${esc(warBetween(s, s.player, c.from) ? from.name : to.name)} : saisir ce convoi est un acte de guerre légitime, sans conséquence diplomatique.</p>`;
       else
         html += `<h3>🏴‍☠️ Intercepter en temps de paix</h3><p class="muted">Vous saisissez environ 70 % de la cargaison, mais c’est un acte de piraterie d’État :</p>
-          <ul class="consequences"><li>${esc(from.name)} : relations −40, <b>embargo</b> contre vous et <b>casus belli</b> (voire guerre immédiate)</li>
-          <li>${esc(to.name)} : relations −20</li><li>Alliés de ${esc(from.name)} : −15 · reste du monde : −4</li><li>Agressivité +12 · tension mondiale +3</li></ul>`;
+          <ul class="consequences"><li>${this.flag(from.id)} : relations −40, <b>embargo</b> contre vous et <b>casus belli</b> (voire guerre immédiate)</li>
+          <li>${this.flag(to.id)} : relations −20</li><li>Alliés de ${this.flag(from.id)} : −15 · reste du monde : −4</li><li>Agressivité +12 · tension mondiale +3</li></ul>`;
       if (chk.ok) html += `<p>Chance de succès : <b>${Math.round(chk.chance * 100)} %</b> (votre flotte ${num(s.nations[s.player].navy, 1)} contre l’escorte). En cas d’échec, vous perdez une flotte.</p>`;
       buttons.push({ label: '🏴‍☠️ Intercepter', hint: chk.ok ? `≈ +${money(c.value * 0.7)}` : chk.reason, a: 'intercept', p: String(c.id), disabled: !chk.ok });
     }
@@ -1441,7 +1460,7 @@ export class App {
     const tabs = [['trade', 'Commerce'], ['power', 'Armées'], ['faith', 'Religions'], ['wars', 'Guerres'], ['blocs', 'Blocs']];
     let html = `<div class="tabs">${tabs.map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-a="ledger" data-p="${k}">${l}</button>`).join('')}</div>`;
     const row = (id: Id, i: number, v: string) =>
-      `<div class="row" data-a="gotoNation" data-p="${esc(id)}" style="cursor:pointer;${id === s.player ? 'color:var(--gold)' : ''}"><span>${i + 1}. ${esc(nm(s, id))}</span><span>${v}</span></div>`;
+      `<div class="row" data-a="gotoNation" data-p="${esc(id)}" style="cursor:pointer;${id === s.player ? 'color:var(--gold)' : ''}"><span>${i + 1}. ${flagOf(id)} ${esc(nm(s, id))}</span><span>${v}</span></div>`;
     if (tab === 'trade') {
       html += `<div class="rows">${alive(s)
         .map((n) => ({ id: n.id, v: n.income.production + n.income.trade + n.income.tolls }))
@@ -1454,10 +1473,10 @@ export class App {
       html += `<h3>Lieux saints</h3><div class="rows">${holy.flatMap((p) => p.holy!.map((h) => `<div class="row" data-a="goto" data-p="${p.id}" style="cursor:pointer"><span>⭐ ${esc(h.name)} ${h.religions.map((x) => RELIGIONS[x].icon).join('')}</span><span>${esc(nm(s, s.provinces[p.id].owner))}</span></div>`)).join('')}</div>`;
     } else if (tab === 'wars') {
       html += s.wars.length
-        ? s.wars.map((w) => `<div class="row"><span>${esc(w.name)}<br><small class="muted">${w.attackers.map((x) => esc(nm(s, x))).join(', ')} ⚔ ${w.defenders.map((x) => esc(nm(s, x))).join(', ')}</small></span><span class="${cls(w.score)}">${signed(w.score)}</span></div>`).join('')
+        ? s.wars.map((w) => `<div class="row"><span>${esc(w.name)}<br><small class="muted">${w.attackers.map((x) => this.flag(x)).join(' ')} ⚔ ${w.defenders.map((x) => this.flag(x)).join(' ')}</small></span><span class="${cls(w.score)}">${signed(w.score)}</span></div>`).join('')
         : '<p class="muted">Le monde est en paix… pour l’instant.</p>';
     } else {
-      html += Object.values(s.blocs).map((b) => `<h3 style="color:${b.color}">${esc(b.name)} (${b.members.length})</h3><p class="muted" style="font-size:12px">Meneur : ${esc(nm(s, b.leader))} — ${b.members.map((m) => esc(nm(s, m))).join(', ')}</p>`).join('');
+      html += Object.values(s.blocs).map((b) => `<h3 style="color:${b.color}">${esc(b.name)} (${b.members.length})</h3><p class="muted" style="font-size:12px">Meneur : ${this.flag(b.leader)} — ${b.members.map((m) => this.flag(m)).join(' ')}</p>`).join('');
     }
     this.modal('Classements', html, [{ label: 'Fermer', a: 'closeModal' }]);
   }
@@ -1492,7 +1511,7 @@ export class App {
     const sc = scoreFor(war, s.player);
     const mine = war.attackers.includes(s.player) ? war.attackers : war.defenders;
     const theirs = mine === war.attackers ? war.defenders : war.attackers;
-    const side = (ids: Id[]) => ids.map((x, i) => `<div class="row"><span>${i === 0 ? '★ ' : ''}${esc(nm(s, x))}</span><span>${num(power(s.nations[x]), 0)}</span></div>`).join('');
+    const side = (ids: Id[]) => ids.map((x, i) => `<div class="row"><span>${i === 0 ? '★ ' : ''}${flagOf(x)} ${esc(nm(s, x))}</span><span>${num(power(s.nations[x]), 0)}</span></div>`).join('');
     const occ = s.provinces.map((p, pid) => ({ p, pid })).filter(({ p }) => p.occupiedBy && [...war.attackers, ...war.defenders].includes(p.owner) && [...war.attackers, ...war.defenders].includes(p.occupiedBy));
     const leader = isLeader(war, s.player);
     this.modal(
