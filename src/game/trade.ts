@@ -140,7 +140,7 @@ export function computeTrade(s: GameState, w: World): TradeReport {
   const nodes: Record<string, NodeReport> = {};
   const income: TradeReport['income'] = {};
   const inc = (id: Id) => (income[id] ??= { production: 0, trade: 0, tolls: 0, byNode: {} });
-  const powers = tradePower(s, w);
+  const powers = monthlyPower(s, w);
   const home = new Map<Id, string | undefined>();
   for (const n of Object.values(s.nations)) if (n.alive) home.set(n.id, homeNode(s, w, n.id));
 
@@ -279,4 +279,13 @@ export function seedPriceHistory(s: GameState) {
     }
     s.priceHistory[g] = back.reverse();
   }
+}
+
+/** Pouvoir commercial du mois, calculé une seule fois par mois (commerce, missions, interface). */
+const powerCache = new WeakMap<GameState, { key: string; v: ReturnType<typeof tradePower> }>();
+export function monthlyPower(s: GameState, w: World) {
+  const key = `${s.year * 12 + s.month}|${s.trades.length}|${Object.values(s.nations).reduce((a, n) => a + n.merchants.length + n.navy, 0)}`;
+  let c = powerCache.get(s);
+  if (!c || c.key !== key) powerCache.set(s, (c = { key, v: tradePower(s, w) }));
+  return c.v;
 }

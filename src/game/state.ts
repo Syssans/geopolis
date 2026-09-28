@@ -135,6 +135,14 @@ export function sameBloc(s: GameState, a: Id, b: Id): boolean {
 const tradeCache = new WeakMap<string[], { len: number; set: Set<string>; counts: Map<Id, number> }>();
 function trades(s: GameState) {
   let c = tradeCache.get(s.trades);
+  if (c && c.len < s.trades.length) {
+    // Ajouts en fin de liste : mise à jour incrémentale
+    for (const k of s.trades.slice(c.len)) {
+      c.set.add(k);
+      for (const x of k.split('|')) c.counts.set(x, (c.counts.get(x) ?? 0) + 1);
+    }
+    c.len = s.trades.length;
+  }
   if (!c || c.len !== s.trades.length) {
     c = { len: s.trades.length, set: new Set(s.trades), counts: new Map() };
     for (const k of s.trades) for (const x of k.split('|')) c.counts.set(x, (c.counts.get(x) ?? 0) + 1);

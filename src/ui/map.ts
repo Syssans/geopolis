@@ -92,6 +92,10 @@ export class MapView {
   private centers: [number, number][];
   private boxes: [[number, number], [number, number]][];
   private lastOwners = '';
+  private pathState: string[] = [];
+  private tradeSig = '';
+  private lastSel: number | null = null;
+  private view: ZoomTransform = zoomIdentity;
   onSelect: (pid: Pid | null) => void = () => {};
   onConvoy: (id: number) => void = () => {};
 
@@ -149,6 +153,7 @@ export class MapView {
       .clickDistance(6)
       .on('zoom', (e: { transform: ZoomTransform }) => {
         this.root.setAttribute('transform', e.transform.toString());
+        this.view = e.transform;
         if (Math.abs(e.transform.k - this.k) > 0.01) {
           this.k = e.transform.k;
           this.updateLabels();
@@ -308,8 +313,9 @@ export class MapView {
   private syncConvoys(s: GameState, mode: MapMode, selConvoy: number | null) {
     const t = clock(s);
     if (t !== this.baseClock) {
+      // Nouveau mois : on garde l'avance déjà prise (pas de saut en arrière ni d'arrêt des convois)
+      this.frac = t === this.baseClock + 1 ? Math.max(0, Math.min(0.5, this.frac - 1)) : 0;
       this.baseClock = t;
-      this.frac = 0;
     }
     this.showAll = mode === 'trade';
     const keep = new Set<number>();
@@ -322,8 +328,9 @@ export class MapView {
       if (!d) {
         const g = el('g', { class: cls }, this.convoyLayer);
         g.dataset.convoy = String(c.id);
-        el('circle', { class: 'hit' }, g);
-        el('circle', { class: 'dot' }, g);
+        const k = Math.sqrt(this.k);
+        el('circle', { class: 'hit', r: (14 / k).toFixed(2) }, g);
+        el('circle', { class: 'dot', r: ((c.id === selConvoy ? 4 : 2.6) / k).toFixed(2) }, g);
         d = { g, convoy: c, track: this.track(c.nodes) };
         this.dots.set(c.id, d);
       } else {
@@ -339,7 +346,10 @@ export class MapView {
     this.selConvoy = selConvoy !== null && keep.has(selConvoy) ? selConvoy : null;
     const sel = this.selConvoy !== null ? this.dots.get(this.selConvoy) : undefined;
     this.routeLine.setAttribute('d', sel ? (this.path({ type: 'LineString', coordinates: routePath(sel.convoy.nodes) }) ?? '') : '');
-    this.sizeDots();
+    if (this.selConvoy !== this.lastSel) {
+      this.lastSel = this.selConvoy;
+      this.sizeDots();
+    }
     this.placeDots();
   }
 
@@ -359,15 +369,22 @@ export class MapView {
 
   private placeDots() {
     const now = this.baseClock + this.frac;
+    // Zone visible (avec marge : l'écran portrait déborde de la viewBox) : on ne déplace pas les points hors champ
+    const v = this.view;
+    const m = 60 / v.k;
+    const x0 = -v.x / v.k - m, x1 = (W - v.x) / v.k + m;
+    const y0 = (-H * 0.6 - v.y) / v.k - m, y1 = (H * 1.6 - v.y) / v.k + m;
     for (const d of this.dots.values()) {
       const u = (now - d.convoy.depart) / d.convoy.duration;
-      const p = u >= 0 && u < 1 ? this.pointAt(d.track, u) : null;
+      let p = u >= 0 && u < 1 ? this.pointAt(d.track, u) : null;
+      if (p && (p[0] < x0 || p[0] > x1 || p[1] < y0 || p[1] > y1)) p = null;
       if (!p) {
+        if (d.g.style.display === 'none') continue;
         d.g.style.display = 'none';
         continue;
       }
-      d.g.style.display = '';
-      d.g.setAttribute('transform', `translate(${p[0].toFixed(2)},${p[1].toFixed(2)})`);
+      if (d.g.style.display) d.g.style.display = '';
+      d.g.setAttribute('transform', `translate(${p[0].toFixed(1)},${p[1].toFixed(1)})`);
     }
   }
 
@@ -380,7 +397,8 @@ export class MapView {
     const dt = this.lastFrame ? Math.min(100, now - this.lastFrame) : 0;
     this.lastFrame = now;
     if (this.monthMs > 0 && this.dots.size) {
-      this.frac = Math.min(0.999, this.frac + dt / this.monthMs);
+      // Si le mois suivant tarde (calcul en cours), les convois continuent un peu au lieu de se figer
+      this.frac = Math.min(1.5, this.frac + dt / this.monthMs);
       this.placeDots();
     }
     requestAnimationFrame(this.animate);
@@ -401,6 +419,10 @@ export class MapView {
 
   private drawTrade(s: GameState, selectedNode: string | null) {
     const g = this.tradeLayer;
+    // Ne redessiner que si quelque chose de visible a changé (itinéraires, détroits fermés, nœud choisi)
+    const sig = [selectedNode, s.contracts.map((c) => `${c.route.nodes.join('>')}:${c.lastStatus}`).join(','), STRAITS.map((st) => (straitClosed(s, this.world, st.id) ? 1 : 0)).join('')].join('|');
+    if (sig === this.tradeSig && g.childElementCount) return;
+    this.tradeSig = sig;
     g.innerHTML = '';
     // Voies commerciales (tracés réels)
     const links: [string, string][] = [...TRADE_NODES.flatMap((n) => n.out.map((o) => [n.id, o] as [string, string])), ...EXTRA_LANES];
@@ -427,10 +449,10 @@ export class MapView {
     this.sizeTrade();
   }
 
-  render(s: GameState, mode: MapMode, selected: Pid | null, selConvoy: number | null = null) {
+  render(s: GameState, mode: MapMode, selected: Pid | null, selConvoy: number | null = null, selNation: Id | null = null) {
     const me = s.player;
     const nodeIdx = new Map(TRADE_NODES.map((n, i) => [n.id, i]));
-    const selOwner = selected !== null ? s.provinces[selected].owner : null;
+    const selOwner = selected !== null ? s.provinces[selected].owner : selNation;
     s.provinces.forEach((p, i) => {
       const info = this.world.provinces[i];
       const n = s.nations[p.owner];
@@ -452,14 +474,18 @@ export class MapView {
           else fill = ramp((rel(s, me, n.id) + 100) / 200, ['#8e2b2b', '#6b6f76', '#3c8d4f']);
           break;
       }
+      // N'écrire dans le DOM que ce qui change : chaque écriture force le navigateur à redessiner la carte
+      const cls = `prov${p.owner === me ? ' mine' : ''}${i === selected ? ' selected' : ''}${p.owner === selOwner && i !== selected ? ' sel-nation' : ''}`;
+      const occ = p.revolt ? 'fire' : p.occupiedBy ? 'hatch' : '';
+      const key = `${fill}|${cls}|${occ}`;
+      if (this.pathState[i] === key) return;
+      this.pathState[i] = key;
       const path = this.paths[i];
       path.setAttribute('fill', fill);
-      path.classList.toggle('mine', p.owner === me);
-      path.classList.toggle('selected', i === selected);
-      path.classList.toggle('sel-nation', p.owner === selOwner && i !== selected);
+      path.setAttribute('class', cls);
       const o = this.occ[i];
-      o.style.display = p.occupiedBy || p.revolt ? '' : 'none';
-      o.setAttribute('fill', p.revolt ? 'url(#fire)' : 'url(#hatch)');
+      o.style.display = occ ? '' : 'none';
+      if (occ) o.setAttribute('fill', `url(#${occ})`);
     });
     // Frontières nationales : recalculées seulement si la carte politique a changé
     const owners = s.provinces.map((p) => p.owner).join(',');
@@ -476,7 +502,7 @@ export class MapView {
     }
     this.labelLayer.style.display = mode === 'trade' ? 'none' : '';
     if (mode === 'trade') this.drawTrade(s, selected !== null ? this.world.provinces[selected].node : null);
-    else this.tradeLayer.innerHTML = '';
+    else if (this.tradeLayer.childElementCount) this.tradeLayer.innerHTML = '';
     this.syncConvoys(s, mode, selConvoy);
   }
 }

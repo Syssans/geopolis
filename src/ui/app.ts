@@ -62,6 +62,9 @@ export class App {
   private selConvoy: number | null = null;
   private marketGood: string | null = null;
   private provSort = 'value';
+  private renderQueued = false;
+  /** Menu ouvert : celui d'un pays (onglets) ou la fiche d'une province. */
+  private view: 'country' | 'province' = 'province';
   private pf: { seller: Id; good: keyof typeof GOODS; volume: number; months: number; route: number } | null = null;
 
   constructor(private root: HTMLElement, private world: World, topo: Topology) {
@@ -145,10 +148,18 @@ export class App {
       if (l === before) break;
       fresh.push(l);
     }
-    for (const l of fresh.reverse()) if (l.mine) this.toast(l.text, l.kind === 'war' ? 'bad' : '');
-    if (s.month === 1) this.save(true);
+    for (const l of fresh.reverse()) if (l.mine) this.notify(l);
     if (s.events.length || s.gameOver) this.setSpeed(0);
-    this.renderAll();
+    // Affichage à l'image suivante, sauvegarde annuelle un peu plus tard : le calcul du mois,
+    // le rendu et l'écriture ne s'enchaînent pas dans une seule tâche (les convois ne se figent pas)
+    if (!this.renderQueued) {
+      this.renderQueued = true;
+      requestAnimationFrame(() => {
+        this.renderQueued = false;
+        this.renderAll();
+      });
+    }
+    if (s.month === 1) setTimeout(() => this.save(true), 300);
   }
 
   private trade(): TradeReport {
@@ -295,12 +306,13 @@ export class App {
       this.closeModal();
       this.renderAll();
     };
-    h.me = () => {
-      const cap = owned(s(), me()).sort((a, b) => this.world.provinces[b].dev - this.world.provinces[a].dev)[0];
-      this.select(cap ?? null, 'provs');
+    h.me = () => this.openCountry('provs');
+    h.country = () => {
+      if (this.selected !== null) this.openCountry(undefined, s().provinces[this.selected].owner);
     };
     h.close = () => this.select(null);
     h.tab = (t) => {
+      if (this.view === 'province' && this.selected !== null) return this.openCountry(t, s().provinces[this.selected].owner);
       this.tab = t;
       this.renderSheet(true);
     };
@@ -431,14 +443,13 @@ export class App {
     h.ledger = (t) => this.showLedger(t || 'trade');
     h.goto = (pid) => {
       this.closeModal();
-      this.select(Number(pid), 'prov');
+      this.openProvince(Number(pid));
       this.map.focus([Number(pid)], 10, true);
     };
     h.gotoNation = (id) => {
       this.closeModal();
-      const p = owned(s(), id).sort((a, b) => this.world.provinces[b].dev - this.world.provinces[a].dev)[0];
-      if (p !== undefined) {
-        this.select(p, 'nation');
+      if (owned(s(), id).length) {
+        this.openCountry(id === s().player ? 'provs' : 'nation', id);
         this.map.focus(owned(s(), id), 6, true);
       }
     };
@@ -509,7 +520,13 @@ export class App {
       if (pid !== null && this.s) this.confirmPick(this.s.provinces[pid].owner);
       return;
     }
-    if (this.s) this.select(pid);
+    if (!this.s) return;
+    if (pid === null) return this.select(null);
+    // 1er toucher sur un pays : son menu ; toucher à nouveau ce pays : la fiche de la province touchée
+    const owner = this.s.provinces[pid].owner;
+    const current = this.selected !== null ? this.s.provinces[this.selected].owner : null;
+    if (current === owner) this.openProvince(pid);
+    else this.openCountry(undefined, owner);
   }
 
   private select(pid: Pid | null, tab?: string) {
@@ -517,6 +534,26 @@ export class App {
     this.selected = pid;
     if (tab) this.tab = tab;
     else if (pid !== null && pid !== prev) this.tab = 'prov';
+    this.view = this.tab === 'prov' ? 'province' : 'country';
+    this.renderAll(true);
+  }
+
+  /** Menu d'un pays (par défaut le vôtre) : onglets Provinces, Commerce… ou Nation pour un pays étranger. */
+  private openCountry(tab?: string, id: Id = this.state.player) {
+    const s = this.state;
+    const cap = owned(s, id).sort((a, b) => (this.world.provinces[b].capital ? 1 : 0) - (this.world.provinces[a].capital ? 1 : 0) || this.world.provinces[b].dev - this.world.provinces[a].dev)[0];
+    if (cap === undefined) return;
+    this.selected = cap; // province de référence (actions diplomatiques), non surlignée
+    this.view = 'country';
+    this.tab = tab ?? (id === s.player ? 'provs' : 'nation');
+    this.renderAll(true);
+  }
+
+  /** Fiche d'une province. */
+  private openProvince(pid: Pid) {
+    this.selected = pid;
+    this.view = 'province';
+    this.tab = 'prov';
     this.renderAll(true);
   }
 
@@ -524,7 +561,7 @@ export class App {
 
   private renderAll(resetScroll = false) {
     if (!this.s) return;
-    this.map.render(this.s, this.mode, this.selected, this.selConvoy);
+    this.map.render(this.s, this.mode, this.view === 'province' ? this.selected : null, this.selConvoy, this.view === 'country' && this.selected !== null ? this.s.provinces[this.selected].owner : null);
     if (this.touching && !resetScroll) {
       this.dirty = true;
       return;
@@ -557,7 +594,7 @@ export class App {
     patch(q('.date'), dateLabel(s));
     patch(
       q('.speed'),
-      `<button class="${this.speed === 0 ? 'on' : ''}" data-a="toggle" aria-label="Pause">${this.speed === 0 ? '▶' : '⏸'}</button>
+      `<button class="toggle ${this.speed === 0 ? 'paused' : ''}" data-a="toggle" aria-label="${this.speed === 0 ? 'Reprendre' : 'Pause'}">⏸</button>
        ${[1, 2, 3, 4].map((v) => `<button class="${this.speed === v ? 'on' : ''}" data-a="speed" data-p="${v}">${'›'.repeat(v)}</button>`).join('')}`,
     );
     const wars = warsOf(s, s.player);
@@ -607,13 +644,17 @@ export class App {
     const owner = s.provinces[pid].owner;
     const n = s.nations[owner];
     const mine = owner === s.player;
-    const tabs = mine
-      ? [['provs', '🏙️<span>Provinces</span>'], ['prov', '📍<span>Province</span>'], ['trade', '💰<span>Commerce</span>'], ['faith', '🕊️<span>Religion</span>'], ['army', '⚔️<span>Armée</span>'], ['diplo', '🤝<span>Diplo.</span>']]
-      : [['prov', esc('Province')], ['nation', esc(n.name.length > 12 ? 'Nation' : n.name)]];
-    if (!tabs.some(([k]) => k === this.tab)) this.tab = 'prov';
+    const country = this.view === 'country';
+    const tabs = !country
+      ? []
+      : mine
+        ? [['provs', '🏙️<span>Provinces</span>'], ['trade', '💰<span>Commerce</span>'], ['faith', '🕊️<span>Religion</span>'], ['army', '⚔️<span>Armée</span>'], ['diplo', '🤝<span>Diplo.</span>']]
+        : [['nation', `${flagOf(n.id)}<span>${esc(n.name.length > 12 ? 'Nation' : n.name)}</span>`], ['provs', '🏙️<span>Provinces</span>']];
+    if (!country) this.tab = 'prov';
+    else if (!tabs.some(([k]) => k === this.tab)) this.tab = tabs[0][0];
     const content =
       this.tab === 'prov' ? this.provinceTab(pid)
-      : this.tab === 'provs' ? this.provincesTab()
+      : this.tab === 'provs' ? this.provincesTab(owner)
       : this.tab === 'trade' ? this.tradeTab()
       : this.tab === 'faith' ? this.faithTab()
       : this.tab === 'army' ? this.armyTab()
@@ -626,11 +667,13 @@ export class App {
         <h2></h2><button class="close" data-a="close" aria-label="Fermer">✕</button></div><div class="body"></div>`;
     sheet.querySelector<HTMLElement>('.head .dot')!.style.background = n.color;
     // Onglets du pays : le titre est celui du pays, pas de la province sélectionnée
-    patch(sheet.querySelector('h2')!, mine && this.tab !== 'prov' ? `${flagOf(n.id)} ${esc(n.name)}` : `${esc(info.name)} <small class="muted">· ${flagOf(n.id)} ${esc(n.name)}</small>`);
+    patch(sheet.querySelector('h2')!, country ? `${flagOf(n.id)} ${esc(n.name)}` : `${esc(info.name)} <small class="muted">· ${flagOf(n.id)} ${esc(n.name)}</small>`);
     const b = sheet.querySelector<HTMLElement>('.body')!;
     patch(
       b,
-      `<div class="tabs ${mine ? 'icon-tabs sheet-tabs' : ''}">${tabs.map(([k, l]) => `<button class="${this.tab === k ? 'on' : ''}" data-a="tab" data-p="${k}">${l}</button>`).join('')}</div>${content}`,
+      (country
+        ? `<div class="tabs icon-tabs sheet-tabs">${tabs.map(([k, l]) => `<button class="${this.tab === k ? 'on' : ''}" data-a="tab" data-p="${k}">${l}</button>`).join('')}</div>`
+        : `<button class="backbtn" data-a="country">‹ ${flagOf(n.id)} Menu ${mine ? 'de votre pays' : `du pays : ${esc(n.name)}`}</button>`) + content,
     );
     sheet.classList.add('open');
     b.scrollTop = scroll;
@@ -744,10 +787,11 @@ export class App {
   }
 
   // ——— Onglet provinces (menu du pays) ———
-  private provincesTab(): string {
+  private provincesTab(id: Id = this.state.player): string {
     const s = this.state;
     const w = this.world;
-    const me = this.me;
+    const me = s.nations[id];
+    const mine = id === s.player;
     const rows = owned(s, me.id).map((pid) => {
       const p = s.provinces[pid];
       const good = (p.good ?? w.provinces[pid].good) as keyof typeof GOODS;
@@ -782,7 +826,7 @@ export class App {
         .join('');
     } else list = rows.map(line).join('');
     return `<div class="stats three">${stat('Provinces', String(rows.length))}${stat('Production', `<span class="pos">+${money(total)}</span><small>/mois</small>`)}${stat('Chantiers', String(works))}</div>
-      <p class="hint">Touchez une province pour la <b>moderniser</b> ou <b>changer sa production</b>. ★ = niveau de modernisation.</p>
+      <p class="hint">${mine ? 'Touchez une province pour la <b>moderniser</b> ou <b>changer sa production</b>. ★ = niveau de modernisation.' : 'Les provinces de ce pays et ce qu’elles produisent. Touchez-en une pour voir sa fiche.'}</p>
       <div class="seg sortseg">${[['value', 'Rendement'], ['good', 'Marchandise'], ['name', 'Nom']].map(([k, l]) => `<button class="${sortBy === k ? 'on' : ''}" data-a="provSort" data-p="${k}">${l}</button>`).join('')}</div>
       <div class="plist">${list}</div>`;
   }
@@ -1008,7 +1052,7 @@ export class App {
     this.root.classList.remove('modal-open');
     if (this.selConvoy !== null && this.s) {
       this.selConvoy = null;
-      this.map.render(this.s, this.mode, this.selected, null);
+      this.map.render(this.s, this.mode, this.view === 'province' ? this.selected : null, null, this.view === 'country' && this.selected !== null ? this.s.provinces[this.selected].owner : null);
     }
     if (this.s && !this.picking) this.renderEvents();
   }
@@ -1487,7 +1531,7 @@ export class App {
     if (!c) return;
     this.setSpeed(0);
     this.selConvoy = id;
-    this.map.render(s, this.mode, this.selected, id);
+    this.map.render(s, this.mode, this.view === 'province' ? this.selected : null, id, this.view === 'country' && this.selected !== null ? s.provinces[this.selected].owner : null);
     const t = this.map.now;
     const g = GOODS[c.good];
     const from = s.nations[c.from];
@@ -1664,14 +1708,45 @@ export class App {
     this.renderAll();
   }
 
-  private toast(text: string, kind = '') {
+  private toast(text: string, kind = '', action?: () => void) {
     const t = document.createElement('div');
-    t.className = `toast ${kind}`;
-    t.textContent = text;
-    colorSigns(t);
+    t.className = `toast ${kind} ${action ? 'clickable' : ''}`;
+    const msg = document.createElement('span');
+    msg.textContent = text;
+    colorSigns(msg);
+    t.appendChild(msg);
+    if (action) {
+      const go = document.createElement('span');
+      go.className = 'go';
+      go.textContent = '›';
+      t.appendChild(go);
+      t.addEventListener('click', (e) => {
+        e.stopPropagation();
+        t.remove();
+        this.setSpeed(0); // toucher une notification met le jeu en pause
+        action();
+      });
+    }
     this.el.toasts.appendChild(t);
     while (this.el.toasts.children.length > 2) this.el.toasts.firstChild!.remove();
-    setTimeout(() => t.remove(), 4000);
+    setTimeout(() => t.remove(), action ? 6000 : 4000);
+  }
+
+  /** Notification tirée du journal : emoji selon le thème, et un toucher mène à l'écran concerné. */
+  private notify(l: import('../game/types').LogEntry) {
+    const icons: Record<string, string> = { war: '⚔️', diplo: '🤝', trade: '💼', religion: '🕊️', info: 'ℹ️', event: '📣' };
+    const text = /^\p{Extended_Pictographic}/u.test(l.text) ? l.text : `${icons[l.kind] ?? '📣'} ${l.text}`;
+    const low = l.text.toLowerCase();
+    let action: () => void;
+    if (low.includes('offre')) action = () => this.showContracts('offers');
+    else if (low.includes('contrat') || low.includes('achat') || low.includes('cargaison') || low.includes('convoi')) action = () => this.showContracts('active');
+    else if (low.includes('chantier') || low.includes('modernisation') || low.includes('gisement') || low.includes('produit désormais')) action = () => this.openCountry('provs');
+    else if (low.includes('mission')) action = () => this.showObjectives();
+    else if (l.kind === 'war') action = () => (warsOf(this.state, this.state.player).length ? this.showLedger('wars') : this.showLog());
+    else if (l.kind === 'religion') action = () => this.openCountry('faith');
+    else if (l.kind === 'diplo') action = () => this.openCountry('diplo');
+    else action = () => this.showLog();
+    this.toast(text, l.kind === 'war' ? 'bad' : '', action);
   }
 }
 

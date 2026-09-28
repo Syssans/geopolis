@@ -41,7 +41,16 @@ function describe(nodes: string[]): Route {
 }
 
 /** Jusqu'à trois itinéraires distincts (par détroits franchis), du plus court au plus long. */
+/** Le réseau est fixe : les itinéraires entre deux nœuds sont mis en cache. */
+const routeCache = new Map<string, Route[]>();
 export function findRoutes(from: string, to: string): Route[] {
+  const k = `${from}>${to}`;
+  let r = routeCache.get(k);
+  if (!r) routeCache.set(k, (r = computeRoutes(from, to)));
+  return r;
+}
+
+function computeRoutes(from: string, to: string): Route[] {
   if (from === to) return [{ nodes: [from], straits: [], piracy: PIRACY[from] ? [from] : [] }];
   const paths: string[][] = [];
   const walk = (path: string[]) => {

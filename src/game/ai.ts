@@ -85,14 +85,21 @@ function threatOf(s: GameState, w: World, n: Nation): number {
 
 function diplomacy(s: GameState, w: World, n: Nation) {
   if (n.influence >= 70 && rand(s) < 0.3) {
+    const nb = neighbours(s, w, n.id);
     const partners = alive(s)
-      .filter((o) => o.id !== n.id && (sameBloc(s, n.id, o.id) || o.religion === n.religion || neighbours(s, w, n.id).includes(o.id)))
-      .filter((o) => rel(s, n.id, o.id) > -20 && rel(s, n.id, o.id) < 60);
+      .filter((o) => o.id !== n.id && (sameBloc(s, n.id, o.id) || o.religion === n.religion || nb.includes(o.id)))
+      .filter((o) => { const r = rel(s, n.id, o.id); return r > -20 && r < 60; });
     const p = pick(s, partners);
     if (p) improveRelations(s, n.id, p.id);
   }
   if (n.influence >= 60 && rand(s) < 0.1) {
-    const p = pick(s, alive(s).filter((o) => o.id !== n.id && o.id !== s.player && rel(s, n.id, o.id) >= 25 && !hasTrade(s, n.id, o.id)));
+    // Échantillon de partenaires possibles plutôt que tout le monde (coûteux avec 200 nations)
+    const pool = alive(s);
+    let p: Nation | undefined;
+    for (let k = 0; k < 24 && !p; k++) {
+      const o = pool[Math.floor(rand(s) * pool.length)];
+      if (o.id !== n.id && o.id !== s.player && rel(s, n.id, o.id) >= 25 && !hasTrade(s, n.id, o.id)) p = o;
+    }
     if (p && !embargoes(s, n.id, p.id) && !embargoes(s, p.id, n.id)) signTrade(s, n.id, p.id);
   }
   // Embargo contre les agresseurs

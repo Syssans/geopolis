@@ -3,7 +3,7 @@ import { HOLY_SITES } from '../data/religions';
 import { STRAITS } from '../data/trade';
 import { alive, devOf, log, neighbours, nm, owned, power, rel } from './state';
 import { holySitesOf } from './religion';
-import { straitOwner, tradePower } from './trade';
+import { monthlyPower, straitOwner } from './trade';
 import type { GameState, Id, MissionState, World } from './types';
 
 export const monthlyIncome = (s: GameState, id: Id) => {
@@ -71,7 +71,7 @@ export function progress(s: GameState, w: World, mi: { check: Check }): { done: 
     case 'contractsDone':
       return frac(s.stats.contractsDone, c.count);
     case 'nodeShare': {
-      const p = tradePower(s, w)[c.node] ?? {};
+      const p = monthlyPower(s, w)[c.node] ?? {};
       const total = Object.values(p).reduce((a, b) => a + b, 0) || 1;
       return frac(((p[me] ?? 0) / total) * 100, c.share * 100, (x) => `${Math.round(x)} %`);
     }
@@ -160,3 +160,4 @@ export function scoreBreakdown(s: GameState, w: World): { lines: ScoreLine[]; to
 
 export const holySiteNames = HOLY_SITES.map((h) => h.name);
 export type { MissionState };
+
