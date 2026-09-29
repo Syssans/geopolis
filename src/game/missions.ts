@@ -71,7 +71,7 @@ export function progress(s: GameState, w: World, mi: { check: Check }): { done: 
     case 'contractsDone':
       return frac(s.stats.contractsDone, c.count);
     case 'nodeShare': {
-      const p = monthlyPower(s, w)[c.node] ?? {};
+      const p = monthlyPower(s, w, true)[c.node] ?? {};
       const total = Object.values(p).reduce((a, b) => a + b, 0) || 1;
       return frac(((p[me] ?? 0) / total) * 100, c.share * 100, (x) => `${Math.round(x)} %`);
     }

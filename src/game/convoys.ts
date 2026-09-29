@@ -6,7 +6,7 @@ import { pick, rand } from './rng';
 import { addRel, alive, clamp, devOf, embargoes, log, nm, owned, power, sameBloc, warBetween } from './state';
 import { homeNode, NODES, straitClosed, straitOwner, unitPrice } from './trade';
 import { declareWar, leaveBloc } from './war';
-import type { Convoy, GameState, Id, Route, World } from './types';
+import type { Convoy, GameState, Id, Nation, Route, World } from './types';
 
 export type { Convoy };
 
@@ -106,7 +106,16 @@ export function monthlyConvoys(s: GameState, w: World) {
     if (!c) caps.set(id, (c = capacity(s, w, id)));
     return c;
   };
-  const buyers = alive(s).filter((b) => devOf(s, b.id) > 40);
+  const buyers = alive(s)
+    .filter((b) => devOf(s, b.id) > 40)
+    .map((b) => ({ b, dev: devOf(s, b.id) }));
+  // Importateurs de chaque marchandise : ceux qui en produisent peu (calculé une fois par marchandise)
+  const lacking = new Map<Good, Nation[]>();
+  const lackingOf = (g: Good) => {
+    let l = lacking.get(g);
+    if (!l) lacking.set(g, (l = buyers.filter((x) => (capOf(x.b.id)[g] ?? 0) < x.dev * 0.02).map((x) => x.b)));
+    return l;
+  };
   for (let k = 0; k < toSpawn && total > 0; k++) {
     let r = rand(s) * total;
     const ex = exporters.find((x) => (r -= x.v) <= 0)?.n ?? exporters[0].n;
@@ -118,14 +127,7 @@ export function monthlyConvoys(s: GameState, w: World) {
     const good = (goods.find(([g, q]) => (rg -= q * unitPrice(s, g)) <= 0) ?? goods[0])[0];
     const buyer = pick(
       s,
-      buyers.filter(
-        (b) =>
-          b.id !== ex.id &&
-          !warBetween(s, ex.id, b.id) &&
-          !embargoes(s, b.id, ex.id) &&
-          !embargoes(s, ex.id, b.id) &&
-          (capOf(b.id)[good] ?? 0) < devOf(s, b.id) * 0.02,
-      ),
+      lackingOf(good).filter((b) => b.id !== ex.id && !warBetween(s, ex.id, b.id) && !embargoes(s, b.id, ex.id) && !embargoes(s, ex.id, b.id)),
     );
     const from = sourceNode(s, w, ex.id, good);
     const to = buyer && homeNode(s, w, buyer.id);
@@ -149,11 +151,12 @@ export function monthlyConvoys(s: GameState, w: World) {
   }
 
   // En guerre, les marines ennemies arraisonnent les convois du joueur qui passent près de leurs côtes
-  for (const c of [...s.convoys]) {
+  const enemies = s.wars.some((wr) => wr.attackers.includes(s.player) || wr.defenders.includes(s.player)) ? alive(s).filter((e) => warBetween(s, e.id, s.player)) : [];
+  for (const c of enemies.length ? [...s.convoys] : []) {
     if (c.contract === undefined) continue;
     const node = currentNode(c, now + 0.5);
-    for (const e of alive(s)) {
-      if (!warBetween(s, e.id, s.player) || e.navy < 1) continue;
+    for (const e of enemies) {
+      if (e.navy < 1) continue;
       const coastal = owned(s, e.id).some((pid) => w.provinces[pid].coastal && w.provinces[pid].node === node);
       if (!coastal) continue;
       const risk = 0.25 * (e.navy / (e.navy + c.escort * 4 + s.nations[s.player].navy * 0.2));

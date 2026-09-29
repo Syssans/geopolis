@@ -20,7 +20,20 @@ import type { GameState, World } from './types';
 
 /** Avance la simulation d'un mois. */
 export function advanceMonth(s: GameState, w: World) {
-  if (s.gameOver) return;
+  const ctx = monthEconomy(s, w);
+  if (ctx) monthPolitics(s, w, ctx);
+}
+
+export interface MonthContext {
+  news: ReturnType<typeof processContracts>['news'];
+}
+
+/**
+ * Première moitié du mois : commerce, revenus, guerres, religion. L'interface peut laisser passer une image
+ * avant la seconde moitié (`monthPolitics`) pour que l'animation ne se fige pas. `null` : partie terminée.
+ */
+export function monthEconomy(s: GameState, w: World): MonthContext | null {
+  if (s.gameOver) return null;
 
   // Commerce et revenus
   s.prevPrices = { ...s.prices };
@@ -57,7 +70,9 @@ export function advanceMonth(s: GameState, w: World) {
       n.stability = clamp(n.stability - 0.8 * p, 0, 100);
     }
     // Défiance des partenaires : instabilité, mauvaises relations et agressions détournent le commerce
-    const trust = tradeTrust(s, report, n.id);
+    // Recalculée chaque mois pour le joueur, tous les six mois (en décalé) pour l'IA : c'est coûteux
+    const stale = n.id === s.player || !n.trust || (s.month + n.id.length) % 6 === 0;
+    const trust = stale ? tradeTrust(s, report, n.id) : n.trust!;
     n.trust = trust;
     const lostTrust = inc.trade * trust.loss;
     inc.trade -= lostTrust;
@@ -136,15 +151,19 @@ export function advanceMonth(s: GameState, w: World) {
   if (clash && s.tension >= 95 && rand(s) < 0.04) {
     s.gameOver = 'Escalade nucléaire : les missiles ont été lancés. Personne ne gagne une guerre nucléaire.';
     log(s, '☢ Guerre nucléaire.', 'war', [s.player]);
-    return;
+    return null;
   }
+  return { news: contracts.news };
+}
 
+/** Seconde moitié du mois : décisions de l'IA, organisations, offres, crises, missions, convois. */
+export function monthPolitics(s: GameState, w: World, ctx: MonthContext) {
   runAI(s, w);
   monthlyOrgs(s, w);
   aiOrgs(s, w);
   // Le joueur : offres commerciales, rival, crises, missions
   generateOffers(s, w);
-  contractCrises(s, w, contracts.news);
+  contractCrises(s, w, ctx.news);
   runRival(s, w);
   marketCrisis(s, w);
   processMissions(s, w);

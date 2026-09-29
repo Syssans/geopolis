@@ -1,6 +1,6 @@
 import { RELIGIONS, religiousDistance } from '../data/religions';
 import { rand } from './rng';
-import { addRel, alive, clamp, invalidate, log, nm, power } from './state';
+import { addRel, alive, clamp, invalidate, invalidateAlive, log, nm, power } from './state';
 import type { GameState, Id, Pid, Policy, World } from './types';
 
 export const POLICIES: Record<Policy, { name: string; desc: string; unrest: number; fervor: number; mission: number }> = {
@@ -134,6 +134,7 @@ function secede(s: GameState, w: World, pid: Pid) {
   const dest = s.nations[to];
   if (!dest.alive) {
     dest.alive = true;
+    invalidateAlive(s);
     dest.army = Math.max(1, info.dev / 4);
     dest.stability = 40;
     dest.treasury = 0;

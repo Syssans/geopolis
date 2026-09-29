@@ -8,7 +8,7 @@ import {
   MONTHS, alive, dateLabel, devOf, hasTrade, embargoes, inReach, neighbours, nm, owned, popOf, power, powerRank, rel, sameBloc,
   warBetween, warsOf, desecratedHolySites,
 } from '../game/state';
-import { advanceMonth } from '../game/tick';
+import { monthEconomy, monthPolitics } from '../game/tick';
 import * as C from '../game/contracts';
 import * as V from '../game/convoys';
 import * as P from '../game/purchases';
@@ -125,6 +125,13 @@ export class App {
     });
   }
 
+  /** Provinces du territoire d'origine d'un pays (sans ses territoires lointains, comme le Groenland), pour cadrer la carte. */
+  private homeland(id: Id): number[] {
+    const all = owned(this.state, id);
+    const home = all.filter((p) => this.world.provinces[p].country === id);
+    return home.length ? home : all;
+  }
+
   private get state(): GameState {
     return this.s!;
   }
@@ -155,8 +162,27 @@ export class App {
       this.renderAll();
       return;
     }
+    if (this.midMonth) return;
     const before = s.log[0] ?? null;
-    advanceMonth(s, this.world);
+    // Le mois est calculé en deux moitiés séparées par une image : les convois continuent d'avancer entre les deux
+    const ctx = monthEconomy(s, this.world);
+    if (ctx) {
+      this.midMonth = true;
+      setTimeout(() => {
+        this.midMonth = false;
+        if (this.s !== s) return; // partie changée entre-temps
+        monthPolitics(s, this.world, ctx);
+        this.afterMonth(before);
+      }, 0);
+      return;
+    }
+    this.afterMonth(before);
+  }
+
+  private midMonth = false;
+
+  private afterMonth(before: GameState['log'][number] | null) {
+    const s = this.state;
     this.report = null;
     const fresh = [];
     for (const l of s.log) {
@@ -196,7 +222,7 @@ export class App {
     this.picking = false;
     this.seenLog = s.log.length;
     this.renderAll();
-    this.map.focus(owned(s, s.player), 8);
+    this.map.focus(this.homeland(s.player), 8);
     this.setSpeed(0);
   }
 
@@ -283,7 +309,7 @@ export class App {
   private confirmPick(id: Id) {
     const s = this.s!;
     const n = s.nations[id];
-    this.map.focus(owned(s, id), 6);
+    this.map.focus(this.homeland(id), 6);
     const inc = computeTrade(s, this.world).income[id];
     const goods = [...new Set(owned(s, id).map((p) => this.world.provinces[p].good))].map((g) => GOODS[g].icon).join(' ');
     this.modal(
@@ -497,7 +523,7 @@ export class App {
       this.closeModal();
       if (owned(s(), id).length) {
         this.openCountry(id === s().player ? 'provs' : 'nation', id);
-        this.map.focus(owned(s(), id), 6, true);
+        this.map.focus(this.homeland(id), 6, true);
       }
     };
     h.event = (p) => {

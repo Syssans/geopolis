@@ -417,6 +417,10 @@ for (let i = 0; i < provinces.length; i++)
     }
   }
 
+// Territoires d'une seule province : on garde le nom du territoire plutôt que celui de sa plus grande région
+const SINGLE_NAMES = { Greenland: 'Groenland' };
+for (const p of provinces) if (SINGLE_NAMES[p.country]) p.name = SINGLE_NAMES[p.country];
+
 const data = {
   topology: simple,
   provinces: provinces.map((p, i) => ({

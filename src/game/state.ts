@@ -99,8 +99,18 @@ export function capitalOf(s: GameState, w: World, id: Id): Pid | undefined {
   return mine.find((p) => w.provinces[p].capital && w.provinces[p].owner === id) ?? mine.slice().sort((a, b) => w.provinces[b].dev - w.provinces[a].dev)[0];
 }
 
+const aliveCache = new WeakMap<GameState, Nation[]>();
+
+/** Nations en vie (liste mise en cache : appelée des milliers de fois par mois). */
 export function alive(s: GameState): Nation[] {
-  return Object.values(s.nations).filter((n) => n.alive);
+  let a = aliveCache.get(s);
+  if (!a || a.some((n) => !n.alive)) aliveCache.set(s, (a = Object.values(s.nations).filter((n) => n.alive)));
+  return a.slice();
+}
+
+/** À appeler quand une nation renaît (indépendance) : la liste en cache ne la contient pas. */
+export function invalidateAlive(s: GameState) {
+  aliveCache.delete(s);
 }
 
 /** Puissance de combat terrestre. */

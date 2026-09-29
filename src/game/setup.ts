@@ -8,7 +8,7 @@ import { BLOCS, HAWKS, RELATIONS } from '../data/geopolitics';
 import { STATE_RELIGION } from '../data/religions';
 import { GOODS } from '../data/trade';
 import { runMerchantAI } from './ai';
-import { alive, clamp, dateLabel, invalidate, pairKey, setRel } from './state';
+import { alive, clamp, dateLabel, invalidate, invalidateAlive, pairKey, setRel } from './state';
 import { computeTrade } from './trade';
 import { initCampaign } from './missions';
 import type { GameState, Id, Nation, Policy, World } from './types';
@@ -155,6 +155,7 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
 
   colorNations(s, world);
   s.log.unshift({ date: dateLabel(s), text: 'Bienvenue au 1er janvier 2026. Le monde vous attend.', kind: 'info', mine: true });
+  invalidateAlive(s);
   return s;
 }
 

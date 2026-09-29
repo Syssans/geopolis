@@ -77,10 +77,18 @@ function faith(s: GameState, w: World, n: Nation) {
   if (n.fervor > 200 && rand(s) < 0.05) appealToFaithful(s, n.id);
 }
 
-function threatOf(s: GameState, w: World, n: Nation): number {
-  let t = 0;
-  for (const o of neighbours(s, w, n.id)) if (rel(s, n.id, o) < -30 && !sameBloc(s, n.id, o)) t = Math.max(t, power(s.nations[o]));
-  return t / Math.max(power(n), 1);
+/** Menace du voisin hostile le plus fort, rapportée à sa propre puissance ; `min` écarte d'avance les voisins trop faibles pour compter. */
+function threatOf(s: GameState, w: World, n: Nation, min = 0): number {
+  const own = Math.max(power(n), 1);
+  let t = min * own;
+  let found = 0;
+  for (const o of neighbours(s, w, n.id)) {
+    const p = power(s.nations[o]);
+    // La puissance d'abord (bon marché), les relations ensuite (coûteuses)
+    if (p <= t) continue;
+    if (rel(s, n.id, o) < -30 && !sameBloc(s, n.id, o)) (t = p), (found = p);
+  }
+  return found / own;
 }
 
 function diplomacy(s: GameState, w: World, n: Nation) {
@@ -112,7 +120,7 @@ function diplomacy(s: GameState, w: World, n: Nation) {
     if ((rel(s, n.id, to) > 20 || (s.nations[to].aggression < 15 && rel(s, n.id, to) > -50)) && rand(s) < 0.04) toggleEmbargo(s, n.id, to);
   }
   // Chercher la protection d'un bloc
-  if (!n.bloc && threatOf(s, w, n) > 1.5 && rand(s) < 0.02) {
+  if (!n.bloc && threatOf(s, w, n, 1.5) > 1.5 && rand(s) < 0.02) {
     const bloc = Object.values(s.blocs)
       .filter((b) => rel(s, n.id, b.leader) >= 40 && !b.members.some((m) => rel(s, n.id, m) < -20))
       .sort((a, b) => rel(s, n.id, b.leader) - rel(s, n.id, a.leader))[0];

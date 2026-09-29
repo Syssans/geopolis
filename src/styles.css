@@ -27,6 +27,11 @@ button { font: inherit; color: inherit; }
 #map { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--sea); touch-action: none; display: block; }
 #map path.prov { stroke: #0d111755; stroke-width: 0.3; vector-effect: non-scaling-stroke; cursor: pointer; }
 #map path.prov.sel-nation { filter: brightness(1.18); }
+#map path.nation-outline { fill: none; stroke: #fff; stroke-width: 1.6; vector-effect: non-scaling-stroke; pointer-events: none; stroke-linejoin: round; }
+#map path.nation-outline.mine { stroke: var(--gold); }
+#map g.prov-goods { pointer-events: none; }
+#map g.prov-goods text { text-anchor: middle; dominant-baseline: middle; }
+#map g.prov-goods .pg-level { fill: var(--gold); paint-order: stroke; stroke: #0d1117; stroke-width: 0.5; font-weight: 700; }
 #map path.prov.selected { stroke: #fff; stroke-width: 2; filter: brightness(1.3); }
 #map path.borders { fill: none; stroke: #0d1117; stroke-width: 1.1; vector-effect: non-scaling-stroke; pointer-events: none; }
 #map g.trade { pointer-events: none; }
@@ -35,15 +40,16 @@ button { font: inherit; color: inherit; }
 #map path.route { fill: none; stroke: var(--gold); stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linecap: round; opacity: .8; }
 #map path.route.blocked { stroke: var(--bad); stroke-dasharray: 6 4; }
 #map path.route.piracy { stroke: #ff9800; }
-#map g.convoys { pointer-events: none; }
-#map g.convoy { cursor: pointer; }
-#map g.convoy circle.hit { fill: transparent; pointer-events: all; }
-#map g.convoy circle.dot { fill: #e6edf3; opacity: .85; stroke: #0d1117; stroke-width: .5; vector-effect: non-scaling-stroke; }
-#map g.convoy.mine circle.dot { fill: var(--gold); opacity: 1; }
-#map g.convoy.inbound circle.dot { fill: #5ad17a; opacity: 1; }
-#map g.convoy.enemy circle.dot { fill: var(--bad); opacity: 1; }
-#map g.convoy.sel circle.dot { fill: #fff; stroke: var(--gold); stroke-width: 2; opacity: 1; }
-#map path.convoy-route { fill: none; stroke: #fff; stroke-width: 2; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; opacity: .9; }
+#convoy-map { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; display: block; will-change: transform; }
+#convoy-map g.convoys { pointer-events: none; }
+#convoy-map g.convoy { cursor: pointer; }
+#convoy-map g.convoy circle.hit { fill: transparent; pointer-events: all; }
+#convoy-map g.convoy circle.dot { fill: #e6edf3; opacity: .85; stroke: #0d1117; stroke-width: .5; vector-effect: non-scaling-stroke; }
+#convoy-map g.convoy.mine circle.dot { fill: var(--gold); opacity: 1; }
+#convoy-map g.convoy.inbound circle.dot { fill: #5ad17a; opacity: 1; }
+#convoy-map g.convoy.enemy circle.dot { fill: var(--bad); opacity: 1; }
+#convoy-map g.convoy.sel circle.dot { fill: #fff; stroke: var(--gold); stroke-width: 2; opacity: 1; }
+#convoy-map path.convoy-route { fill: none; stroke: #fff; stroke-width: 2; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; opacity: .9; }
 .convoy-card { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .convoy-card .leg { flex: 1; font-size: 14px; line-height: 1.35; }
 .convoy-card .arrow { font-size: 22px; color: var(--gold); }
@@ -66,6 +72,7 @@ ul.consequences li { margin: 2px 0; }
 #map g.marker.own .m-icon { fill: #fff3b0; }
 #map g.marker.lost .m-icon { fill: #8b949e; }
 #map g.marker .m-name { fill: #fff; font-weight: 700; dominant-baseline: hanging; }
+#map g.marker.cap .m-name { fill: #f0f3f6; font-weight: 600; font-style: italic; stroke: none; }
 #map g.marker.lost .m-name { fill: #8b949e; text-decoration: line-through; }
 #map path.occ { fill: url(#hatch); pointer-events: none; }
 #map path.graticule { fill: none; stroke: #ffffff10; stroke-width: .5; vector-effect: non-scaling-stroke; }

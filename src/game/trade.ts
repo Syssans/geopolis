@@ -290,8 +290,12 @@ export function seedPriceHistory(s: GameState) {
 
 /** Pouvoir commercial du mois, calculé une seule fois par mois (commerce, missions, interface). */
 const powerCache = new WeakMap<GameState, { key: string; v: ReturnType<typeof tradePower> }>();
-export function monthlyPower(s: GameState, w: World) {
-  const key = `${s.year * 12 + s.month}|${s.trades.length}|${Object.values(s.nations).reduce((a, n) => a + n.merchants.length + n.navy, 0)}`;
+export function monthlyPower(s: GameState, w: World, sameMonthOk = false) {
+  const cached = powerCache.get(s);
+  // Pour un simple suivi (missions), la valeur calculée plus tôt dans le mois suffit
+  if (sameMonthOk && cached && cached.key.startsWith(`${s.year * 12 + s.month}|`)) return cached.v;
+  // Les flottes changent un peu chaque mois : on ne recalcule que sur un écart notable (arrondi)
+  const key = `${s.year * 12 + s.month}|${s.trades.length}|${s.embargoes.length}|${Object.values(s.nations).reduce((a, n) => a + n.merchants.length * 1000 + Math.round(n.navy / 4), 0)}`;
   let c = powerCache.get(s);
   if (!c || c.key !== key) powerCache.set(s, (c = { key, v: tradePower(s, w) }));
   return c.v;

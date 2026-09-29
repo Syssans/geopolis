@@ -7,7 +7,7 @@ import type { Feature, Geometry } from 'geojson';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 import CAPITALS from '../data/capitals.json';
 import { RELIGIONS } from '../data/religions';
-import { STRAITS, TRADE_NODES } from '../data/trade';
+import { GOODS, STRAITS, TRADE_NODES } from '../data/trade';
 import { EXTRA_LANES, LAND, lane, laneKey, PORTS, routePath, type LonLat } from '../data/routes';
 import { clock } from '../game/convoys';
 import { rel, sameBloc, warBetween } from '../game/state';
@@ -75,8 +75,14 @@ export class MapView {
   private labelLayer: SVGGElement;
   private tradeLayer: SVGGElement;
   private markerLayer: SVGGElement;
+  private outline: SVGPathElement;
+  private outlineSig = '';
+  private goodsLayer: SVGGElement;
+  private goodsSig = '';
   private markerSig = '';
   private convoyLayer: SVGGElement;
+  private overlay: SVGSVGElement;
+  private overlayRoot: SVGGElement;
   private trackCache = new Map<string, Track>();
   private dots = new Map<number, Dot>();
   private routeLine: SVGPathElement;
@@ -154,10 +160,16 @@ export class MapView {
     const provLayer = el('g', {}, this.root);
     const occLayer = el('g', {}, this.root);
     this.borders = el('path', { class: 'borders' }, this.root);
+    this.outline = el('path', { class: 'nation-outline' }, this.root);
+    this.goodsLayer = el('g', { class: 'prov-goods' }, this.root);
     this.tradeLayer = el('g', { class: 'trade' }, this.root);
     this.labelLayer = el('g', {}, this.root);
     this.markerLayer = el('g', { class: 'markers' }, this.root);
-    this.convoyLayer = el('g', { class: 'convoys' }, this.root);
+    // Les convois bougent à chaque image : dans un SVG à part, leur animation ne force plus à repeindre les ~900 provinces
+    this.overlay = el('svg', { id: 'convoy-map', viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'xMidYMid meet' });
+    parent.appendChild(this.overlay);
+    this.overlayRoot = el('g', {}, this.overlay);
+    this.convoyLayer = el('g', { class: 'convoys' }, this.overlayRoot);
     this.routeLine = el('path', { class: 'convoy-route' }, this.convoyLayer);
     requestAnimationFrame(this.animate);
     this.areas = [];
@@ -176,6 +188,10 @@ export class MapView {
       this.boxes.push(this.path.bounds(f));
     });
 
+    this.overlay.addEventListener('click', (e) => {
+      const convoy = (e.target as SVGElement).closest<SVGElement>('[data-convoy]')?.dataset.convoy;
+      if (convoy) this.onConvoy(Number(convoy));
+    });
     this.svg.addEventListener('click', (e) => {
       const convoy = (e.target as SVGElement).closest<SVGElement>('[data-convoy]')?.dataset.convoy;
       if (convoy) return this.onConvoy(Number(convoy));
@@ -189,6 +205,7 @@ export class MapView {
       .clickDistance(6)
       .on('zoom', (e: { transform: ZoomTransform }) => {
         this.root.setAttribute('transform', e.transform.toString());
+        this.overlayRoot.setAttribute('transform', e.transform.toString());
         this.view = e.transform;
         if (Math.abs(e.transform.k - this.k) > 0.01) {
           this.k = e.transform.k;
@@ -196,6 +213,7 @@ export class MapView {
           this.sizeDots();
           this.sizeTrade();
           this.sizeMarkers();
+          this.sizeGoods();
         }
       });
     select(this.svg).call(this.zoomer);
@@ -257,13 +275,15 @@ export class MapView {
       byNation.get(p.owner)!.push(i);
     });
     for (const [id, pids] of byNation) {
-      const main = pids.reduce((a, b) => (this.areas[a] >= this.areas[b] ? a : b));
+      // Nom posé sur le territoire d'origine du pays, pas sur un territoire rattaché (Groenland pour le Danemark…)
+      const home = pids.filter((p) => this.world.provinces[p].country === id);
+      const main = (home.length ? home : pids).reduce((a, b) => (this.areas[a] >= this.areas[b] ? a : b));
       const [cx, cy] = this.centers[main];
       // Aire de la « masse principale » : provinces proches de la plus grande
-      const area = pids.filter((p) => Math.hypot(this.centers[p][0] - cx, this.centers[p][1] - cy) < 80).reduce((a, p) => a + this.areas[p], 0);
+      const area = (home.length ? home : pids).filter((p) => Math.hypot(this.centers[p][0] - cx, this.centers[p][1] - cy) < 80).reduce((a, p) => a + this.areas[p], 0);
       // Barycentre pondéré de cette masse
       let sx = 0, sy = 0, sw = 0;
-      for (const p of pids) {
+      for (const p of home.length ? home : pids) {
         const [x, y] = this.centers[p];
         if (Math.hypot(x - cx, y - cy) >= 80) continue;
         sx += x * this.areas[p]; sy += y * this.areas[p]; sw += this.areas[p];
@@ -517,6 +537,57 @@ export class MapView {
     }
   }
 
+  /** Contour du pays sélectionné (blanc) ou, sans sélection, du vôtre (or). */
+  private drawOutline(s: GameState, focus: Id, owners: string) {
+    const sig = `${focus}|${owners}`;
+    if (sig === this.outlineSig) return;
+    this.outlineSig = sig;
+    const arcs = this.arcs();
+    let d = '';
+    for (let i = 0; i < arcs.users.length; i++) {
+      const u = arcs.users[i];
+      const a = s.provinces[u[0]].owner;
+      const b = u.length > 1 ? s.provinces[u[1]].owner : null;
+      if ((a === focus) !== (b === focus)) d += arcs.paths[i];
+    }
+    this.outline.setAttribute('d', d);
+    this.outline.setAttribute('class', `nation-outline ${focus === s.player ? 'mine' : ''}`);
+  }
+
+  /** Marchandise et niveau de modernisation sur chaque province du pays sélectionné. */
+  private drawGoods(s: GameState, nation: Id | null) {
+    const pids = nation ? s.provinces.map((p, i) => (p.owner === nation ? i : -1)).filter((i) => i >= 0) : [];
+    const sig = pids.map((i) => `${i}:${s.provinces[i].good ?? ''}:${s.provinces[i].level ?? 0}`).join(',');
+    if (sig === this.goodsSig) return;
+    this.goodsSig = sig;
+    this.goodsLayer.innerHTML = '';
+    for (const i of pids) {
+      const p = s.provinces[i];
+      const [x, y] = this.centers[i];
+      const g = el('g', { transform: `translate(${x.toFixed(2)},${y.toFixed(2)})` }, this.goodsLayer);
+      g.dataset.size = String(Math.sqrt(this.areas[i]));
+      el('text', { class: 'pg-icon' }, g).textContent = GOODS[p.good ?? this.world.provinces[i].good].icon;
+      if (p.level) el('text', { class: 'pg-level' }, g).textContent = '▲'.repeat(p.level);
+    }
+    this.sizeGoods();
+  }
+
+  private sizeGoods() {
+    // Taille à l'écran : à la mesure de la province, plafonnée à ~16 px ; masquée si elle serait illisible
+    const pxPerUnit = (this.svg.clientWidth || 390) / W;
+    for (const g of this.goodsLayer.children as HTMLCollectionOf<SVGGElement>) {
+      const [icon, level] = g.children as unknown as SVGTextElement[];
+      const screen = Math.min(16, Number(g.dataset.size) * 0.55 * this.k * pxPerUnit);
+      g.style.display = screen < 7 ? 'none' : '';
+      const size = screen / (this.k * pxPerUnit);
+      icon.setAttribute('font-size', size.toFixed(2));
+      if (level) {
+        level.setAttribute('font-size', (size * 0.55).toFixed(2));
+        level.setAttribute('dy', (size * 0.85).toFixed(2));
+      }
+    }
+  }
+
   private drawTrade(s: GameState, selectedNode: string | null) {
     const g = this.tradeLayer;
     // Ne redessiner que si quelque chose de visible a changé (itinéraires, détroits fermés, nœud choisi)
@@ -607,6 +678,8 @@ export class MapView {
     if (mode === 'trade') this.drawTrade(s, selected !== null ? this.world.provinces[selected].node : null);
     else if (this.tradeLayer.childElementCount) this.tradeLayer.innerHTML = '';
     this.drawMarkers(s, mode);
+    this.drawOutline(s, selOwner ?? me, owners);
+    this.drawGoods(s, mode === 'trade' ? null : selOwner);
     this.syncConvoys(s, mode, selConvoy);
   }
 }
