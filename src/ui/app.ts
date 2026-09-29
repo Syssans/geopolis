@@ -1484,46 +1484,58 @@ export class App {
   private needsHtml(): string {
     const s = this.state;
     const qty = (v: number) => num(v, v < 10 ? 2 : 1);
-    const rep = s.needs;
     const needs = P.needsOf(s, s.player);
     const promisedAll = P.purchased(s);
-    let html = this.tierHtml() + `<h3>🍞 Besoins et stocks</h3><p class="hint">Une barre par ressource. Jusqu’au trait blanc (le besoin mensuel) : ce que votre <span class="pos">production</span> couvre, ce qui a été pris dans vos <span class="c-blue">stocks et achats</span>, et ce qu’il a fallu acheter <span class="neg">en urgence</span> (cours +${Math.round(P.EMERGENCY * 100)} %) le mois dernier. Au-delà : votre <span class="c-blue">réserve</span> en entrepôt et, <span class="c-blue">hachurées</span>, les livraisons <b>promises</b> chaque mois par vos contrats d’achat.</p>`;
-    const goods = [...new Set([...(Object.keys(needs) as (keyof typeof GOODS)[]), ...(Object.keys(s.stock) as (keyof typeof GOODS)[]).filter((g) => (s.stock[g] ?? 0) > 1e-3), ...(Object.keys(promisedAll) as (keyof typeof GOODS)[])])];
+    const cap = C.capacity(s, this.world, s.player);
+    const com = C.committed(s);
     const now = clockOf(s);
     const dateAt = (m: number) => { const t = now + m; return `${MONTHS[t % 12]} ${Math.floor(t / 12)}`; };
+    let html = this.tierHtml() + `<h3>🍞 Besoins de la population</h3>
+      <p class="hint">Pour chaque besoin, la barre montre comment le <b>mois prochain</b> sera couvert :
+      <span class="pos">■ votre production</span>, <span class="c-blue">■ vos stocks et achats</span>, <span class="neg">■ le manque</span>, acheté en urgence au cours <span class="neg">+${Math.round(P.EMERGENCY * 100)} %</span>.</p>`;
+    const goods = [...new Set([...(Object.keys(needs) as (keyof typeof GOODS)[]), ...(Object.keys(s.stock) as (keyof typeof GOODS)[]).filter((g) => (s.stock[g] ?? 0) > 1e-3), ...(Object.keys(promisedAll) as (keyof typeof GOODS)[])])];
     html += goods.map((g) => {
       const d = GOODS[g];
-      const l: NeedLine | undefined = rep?.lines[g];
-      const need = l?.need ?? needs[g] ?? 0;
-      const own = l?.own ?? Math.min(need, C.capacity(s, this.world, s.player)[g] ?? 0);
-      const used = l?.stock ?? 0;
-      const market = l?.market ?? 0;
+      const u = esc(d.unit);
+      const need = needs[g] ?? 0;
       const st = s.stock[g] ?? 0;
       const promised = promisedAll[g] ?? 0;
       const contracts = s.purchases.filter((p) => p.good === g);
       const until = contracts.length ? Math.min(...contracts.map((p) => p.monthsLeft)) : 0;
-      const total = Math.max(need, own + used + market + st + promised, 1e-6);
-      const w = (v: number) => `${Math.max(0, Math.min(100, (v / total) * 100)).toFixed(2)}%`;
-      const gap = need - Math.min(need, own); // ce que la production ne couvre pas
-      const short = market > 1e-3;
-      const marker = need > 0 && total > need * 1.001 ? `<i class="limit" style="left:${w(need)}"><b>besoin</b></i>` : '';
-      let status: string;
-      if (need <= 0) status = '<span class="muted">hors besoins de la population</span>';
-      else if (gap <= 1e-3) status = '<b class="pos">✅ couvert par votre production</b>';
-      else if (promised + 1e-6 >= gap) status = `<b class="c-blue">✅ couvert par vos contrats d’achat jusqu’en ${dateAt(until)}</b>`;
-      else if (promised > 0) status = `<b class="c-warn">⚠️ contrats : ${Math.round((promised / gap) * 100)} % du manque, jusqu’en ${dateAt(until)}</b>`;
-      else if (st > 1e-3) status = `<b class="c-blue">🏬 réserve ≈ ${num(st / gap, st / gap < 10 ? 1 : 0)} mois</b>`;
-      else status = short ? `<b class="neg">🚨 ${qty(market)} en urgence · −${money(l!.cost)}/mois</b>` : '<b class="neg">🚨 rien de prévu</b>';
-      return `<div class="need ${short && promised + st < gap ? '' : 'ok'}"><div class="mh"><b>${this.gi(g)} ${d.name}</b><small>${esc(P.NEED_LABEL[g] ?? '')}</small></div>
-        <div class="needbar"><i class="own" style="width:${w(own)}"></i><i class="stock" style="width:${w(used)}"></i><i class="market" style="width:${w(market)}"></i><i class="reserve" style="width:${w(st)}"></i><i class="promised" style="width:${w(promised)}"></i>${marker}</div>
-        <div class="needtxt"><span>${need > 0 ? `besoin ${qty(need)} ${esc(d.unit)}/mois` : esc(d.unit)}</span><span>${own > 1e-3 ? `<b class="pos">🏭 ${qty(own)}</b> ` : ''}${used > 1e-3 ? `<b class="c-blue">🏬 ${qty(used)}</b> ` : ''}${short ? `<b class="neg">🚨 ${qty(market)}</b>` : ''}</span></div>
-        <div class="needtxt"><span>${st > 1e-3 ? `réserve <b class="c-blue">${qty(st)}</b>` : 'réserve 0'}</span><span>${promised > 0 ? `📥 promis <b class="c-blue">${qty(promised)}/mois</b>` : ''}</span></div>
+      const sell = st > 1e-3 ? `<span class="seg"><button data-a="spotSell" data-p="${g}:0.5">Vendre ½</button><button data-a="spotSell" data-p="${g}:1">Tout (+${money(st * unitPriceOf(s, g) * (1 - P.SPOT_SELL))})</button></span>` : '';
+      if (need <= 0) {
+        // Marchandise en stock sans besoin de la population : simple réserve à revendre
+        return `<div class="need ok"><div class="mh"><b>${this.gi(g)} ${d.name}</b><small>en stock</small></div>
+          <div class="needtxt"><span>Réserve : <b class="c-blue">${qty(st)} ${u}</b>${promised > 0 ? ` · achats <b class="c-blue">+${qty(promised)}/mois</b>` : ''}</span></div>
+          <div class="needact">${sell}</div></div>`;
+      }
+      // Prévision du mois prochain : production libre, puis contrats d'achat, puis réserve ; le reste manque
+      const free = Math.max(0, (cap[g] ?? 0) - Math.min(cap[g] ?? 0, com[g] ?? 0));
+      const own = Math.min(need, free);
+      const fromBuy = Math.min(need - own, promised + st);
+      const gap = Math.max(0, need - own - fromBuy);
+      const w = (v: number) => `${Math.max(0, Math.min(100, (v / need) * 100)).toFixed(1)}%`;
+      const reserveMonths = need - own - Math.min(need - own, promised) > 1e-6 ? st / (need - own - Math.min(need - own, promised)) : Infinity;
+      const status =
+        gap > 1e-3
+          ? `<b class="neg">⚠️ Il manque ${qty(gap)} ${u}/mois : achat d’urgence ≈ −${money(gap * unitPriceOf(s, g) * (1 + P.EMERGENCY + (this.me.sanctions?.p ?? 0)))}/mois</b>`
+          : own >= need - 1e-6
+            ? '<b class="pos">✅ Couvert par votre production</b>'
+            : reserveMonths === Infinity
+              ? `<b class="pos">✅ Couvert par vos contrats d’achat</b>`
+              : `<b class="pos">✅ Couvert</b> <span class="muted">— la réserve tient encore ≈ ${num(reserveMonths, reserveMonths < 10 ? 1 : 0)} mois</span>`;
+      const details = [
+        st > 1e-3 ? `réserve <b class="c-blue">${qty(st)} ${u}</b>` : '',
+        promised > 0 ? `contrats d’achat <b class="c-blue">${qty(promised)}/mois</b> jusqu’en ${dateAt(until)}${promised > need - own + 1e-3 ? ` (${qty(promised - (need - own))} de plus que le besoin : mis en stock)` : ''}` : '',
+      ].filter(Boolean).join(' · ');
+      return `<div class="need ${gap > 1e-3 ? '' : 'ok'}"><div class="mh"><b>${this.gi(g)} ${d.name}</b><small>${esc(P.NEED_LABEL[g] ?? '')}</small></div>
+        <div class="needbar"><i class="own" style="width:${w(own)}"></i><i class="stock" style="width:${w(fromBuy)}"></i><i class="market" style="width:${w(gap)}"></i></div>
+        <div class="needtxt"><span>Besoin : <b>${qty(need)} ${u}/mois</b></span><span>${own > 1e-3 ? `<b class="pos">${qty(own)}</b>` : ''}${own > 1e-3 && (fromBuy > 1e-3 || gap > 1e-3) ? ' + ' : ''}${fromBuy > 1e-3 ? `<b class="c-blue">${qty(fromBuy)}</b>` : ''}${fromBuy > 1e-3 && gap > 1e-3 ? ' + ' : ''}${gap > 1e-3 ? `<b class="neg">${qty(gap)}</b>` : ''}</span></div>
         <div class="needfoot">${status}</div>
-        <div class="needact">${gap > promised + 1e-3 ? `<button class="chip" data-a="suppliers" data-p="${g}">📥 Trouver un fournisseur</button>` : ''}${st > 1e-3 ? `<span class="seg"><button data-a="spotSell" data-p="${g}:0.5">Vendre ½</button><button data-a="spotSell" data-p="${g}:1">Tout (+${money(st * unitPriceOf(s, g) * (1 - P.SPOT_SELL))})</button></span>` : ''}</div></div>`;
+        ${details ? `<div class="needfoot muted">${details}</div>` : ''}
+        <div class="needact">${gap > 1e-3 ? `<button class="chip" data-a="suppliers" data-p="${g}">📥 Trouver un fournisseur</button>` : ''}${sell}</div></div>`;
     }).join('');
-    html += `<div class="cap-legend"><span><i class="k own"></i>production</span><span><i class="k stock"></i>stocks utilisés</span><span><i class="k market"></i>urgence</span><span><i class="k reserve"></i>réserve</span><span><i class="k promised"></i>promis / mois</span><span><i class="k limit"></i>besoin</span></div>`;
-    if (!rep) html += '<p class="muted">Premier bilan de consommation à la fin du mois.</p>';
-    if (rep?.expensive) html += '<div class="verdict bad">🔥 Vie chère : les pénuries se paient au prix fort, la stabilité baisse (⚖️ −0,4/mois).</div>';
+    if (s.needs?.expensive) html += '<div class="verdict bad">🔥 Vie chère : les pénuries se paient au prix fort, la stabilité baisse (⚖️ −0,4/mois).</div>';
     return html;
   }
 
