@@ -148,6 +148,7 @@ export function scoreBreakdown(s: GameState, w: World): { lines: ScoreLine[]; to
   if (holy) lines.push({ label: `Lieux saints de votre foi (${holy})`, value: holy * 10 });
   const straits = STRAITS.filter((st) => straitOwner(s, w, st.id) === me).length;
   if (straits) lines.push({ label: `Détroits contrôlés (${straits})`, value: straits * 10 });
+  lines.push({ label: `Niveau de vie (palier ${s.nations[me].tier})`, value: (s.nations[me].tier - 3) * 15 });
   lines.push({ label: `Stabilité (${Math.round(s.nations[me].stability)})`, value: Math.round((s.nations[me].stability - 50) / 3) });
   if (s.rival && s.nations[s.rival]) {
     const r = ratioToRival(s);

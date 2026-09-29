@@ -1,3 +1,5 @@
+import { tierFromGdp } from '../data/tiers';
+import { adminCost } from './needs';
 import { initOrgs } from './orgs';
 import { seedConvoys } from './convoys';
 import { seedPriceHistory } from './trade';
@@ -41,6 +43,7 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
     passes: {},
     notForSale: [],
     storePolicy: {},
+    prosperity: { points: 40, satisfaction: 1, months: 0 },
     orgs: {},
     prevPrices: {},
     priceHistory: {},
@@ -99,6 +102,7 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
       upkeepRate: ARMY_UPKEEP / Math.sqrt(clamp(45000 / Math.max(pc, 1), 1, 6)),
       milShare: clamp(0.3 * ((c.mil / c.gdp) * 100) / 2, 0.08, 0.6),
       aggression: 0,
+      tier: tierFromGdp(pc / 1000),
       exhaustion: 0,
       nuclear: !!c.nuclear,
       nukeProgram: null,
@@ -135,13 +139,14 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
   const report = computeTrade(s, world);
   for (const n of alive(s)) {
     const inc = report.income[n.id] ?? { production: 0, trade: 0, tolls: 0 };
-    const monthly = inc.production + inc.trade + inc.tolls;
-    const budget = monthly * n.milShare;
+    const admin = adminCost(s, n.id);
+    const monthly = inc.production + inc.trade + inc.tolls - admin;
+    const budget = Math.max(0, monthly) * n.milShare;
     const coastal = world.provinces.some((p) => p.owner === n.id && p.coastal);
     n.army = Math.max(1, Math.round(((budget * (coastal ? 0.75 : 1)) / n.upkeepRate) * 10) / 10);
     n.navy = coastal ? Math.round(((budget * 0.25) / (n.upkeepRate * 2)) * 10) / 10 : 0;
-    n.treasury = Math.round(monthly * 12 * 10) / 10;
-    n.income = { production: inc.production, trade: inc.trade, tolls: inc.tolls, contracts: 0, upkeep: n.army * n.upkeepRate + n.navy * n.upkeepRate * 2, byNode: {} };
+    n.treasury = Math.round(Math.max(monthly, 0.2) * 12 * 10) / 10;
+    n.income = { production: inc.production, trade: inc.trade, tolls: inc.tolls, contracts: 0, admin, upkeep: n.army * n.upkeepRate + n.navy * n.upkeepRate * 2, byNode: {} };
   }
   initOrgs(s);
   initCampaign(s, world);

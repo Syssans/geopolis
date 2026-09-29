@@ -69,6 +69,7 @@ export interface Nation {
   upkeepRate: number; // coût mensuel d'une division (main-d'œuvre locale)
   milShare: number; // part du revenu que l'IA consacre à ses forces
   aggression: number;
+  tier: number; // niveau de vie (1 à 5)
   exhaustion: number;
   nuclear: boolean;
   nukeProgram: number | null;
@@ -82,7 +83,7 @@ export interface Nation {
   missionProgress: number;
   closedStraits: string[];
   /** Dernier bilan mensuel (affichage). */
-  income: { production: number; trade: number; tolls: number; contracts: number; upkeep: number; byNode: Record<string, number>; sanctions?: number; war?: number };
+  income: { production: number; trade: number; tolls: number; contracts: number; upkeep: number; byNode: Record<string, number>; sanctions?: number; war?: number; admin?: number };
   /** Pression des sanctions subies (0 → 0,8) et nations qui les imposent. */
   sanctions?: { p: number; by: Id[] };
 }
@@ -256,6 +257,7 @@ export interface GameState {
   passes: Record<string, number>; // droits de passage achetés : détroit → mois restants
   notForSale: Good[]; // marchandises retirées de la vente (pas d'offres)
   orgs: Record<string, Org>; // organisations internationales
+  prosperity: { points: number; satisfaction: number; months: number }; // progression vers le palier suivant (0-100)
   storePolicy: Partial<Record<Good, number>>; // part du surplus de production mise en stock (0, 0,5 ou 1)
   prevPrices: Record<string, number>; // cours du mois précédent (tendance)
   priceHistory: Record<string, number[]>; // cours mensuels (multiplicateur), le plus récent en dernier

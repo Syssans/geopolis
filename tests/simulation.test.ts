@@ -4,6 +4,7 @@ import * as P from '../src/game/purchases';
 import * as T from '../src/game/trade';
 import { decide } from '../src/game/orgs';
 import { negotiateLift } from '../src/game/sanctions';
+import { adminCost } from '../src/game/needs';
 import { WORLD as world } from '../src/game/world';
 import { createGame } from '../src/game/setup';
 import { advanceMonth } from '../src/game/tick';
@@ -449,5 +450,45 @@ describe('OPEP, sanctions et stockage', () => {
     advanceMonth(s, world);
     expect(s.stock.petrole ?? 0).toBeGreaterThan(0.5);
     expect(s.nations['Saudi Arabia'].income.production).toBeLessThan(prod0);
+  });
+});
+
+describe('niveau de vie et coûts', () => {
+  it('chaque palier ajoute des besoins et alourdit l’État', () => {
+    const s = createGame(world, 'Nigeria', 7);
+    const n = s.nations.Nigeria;
+    expect(n.tier).toBe(1);
+    const low = P.needsOf(s, 'Nigeria');
+    expect(low.petrole ?? 0).toBe(0);
+    const admin1 = adminCost(s, 'Nigeria');
+    n.tier = 3;
+    const mid = P.needsOf(s, 'Nigeria');
+    expect(mid.petrole ?? 0).toBeGreaterThan(0);
+    expect(mid.gaz ?? 0).toBeGreaterThan(0);
+    expect(mid.cereales ?? 0).toBeGreaterThan(low.cereales ?? 0);
+    expect(adminCost(s, 'Nigeria')).toBeGreaterThan(admin1 * 2);
+  });
+
+  it('une population bien servie progresse, une population en pénurie régresse', () => {
+    const s = createGame(world, 'Japan', 7);
+    s.prosperity.points = 99;
+    s.nations.Japan.tier = 3;
+    // Tout est fourni par des stocks : besoins satisfaits
+    for (const g of Object.keys(P.needsOf(s, 'Japan'))) s.stock[g as keyof typeof s.stock] = 1000;
+    advanceMonth(s, world);
+    expect(s.nations.Japan.tier).toBe(4);
+    // Plus de stocks et une production qui ne répond à aucun besoin : tout s'achète en urgence
+    s.stock = {};
+    for (const pid of owned(s, 'Japan')) s.provinces[pid].good = 'textile';
+    s.prosperity.points = 0.1;
+    advanceMonth(s, world);
+    expect(s.nations.Japan.tier).toBe(3);
+  });
+
+  it('un contrat rapporte à peu près la valeur de marché, coûts de production déduits', () => {
+    const route = { nodes: ['ormuz'], straits: [], piracy: [] };
+    const e = C.estimate(1, 0.1, route, 1.6, 0.5);
+    expect(e.net).toBeLessThan(1.6); // le brut du baril n'est plus du bénéfice pur
+    expect(e.net).toBeCloseTo(1.6 * 1.1 * 0.5, 5);
   });
 });

@@ -15,6 +15,8 @@ import * as P from '../game/purchases';
 import * as O from '../game/orgs';
 import { initOrgs } from '../game/orgs';
 import { LIFT_COST, MAX_PRESSURE, liftChance, negotiateLift } from '../game/sanctions';
+import { MARGIN, TIERS, tierFromGdp } from '../data/tiers';
+import { COUNTRIES } from '../data/countries';
 import * as E from '../game/economy';
 import { progress, scoreBreakdown, monthlyIncome } from '../game/missions';
 import { CAMPAIGNS } from '../data/campaign';
@@ -215,6 +217,12 @@ export class App {
       const s = JSON.parse(raw) as GameState;
       s.storePolicy ??= {}; // champs ajoutés depuis
       if (!s.orgs || !Object.keys(s.orgs).length) initOrgs(s);
+      s.prosperity ??= { points: 40, satisfaction: 1, months: 0 };
+      for (const n of Object.values(s.nations)) {
+        if (n.tier) continue;
+        const c = COUNTRIES.find((x) => x.atlas === n.id);
+        n.tier = c ? tierFromGdp(c.gdp / c.pop) : 3;
+      }
       if (s.version === 4 || s.version === 5 || s.version === 6) {
         s.purchases ??= [];
         s.stock ??= {};
@@ -621,7 +629,7 @@ export class App {
     if (!s || this.picking) return;
     const me = s.nations[s.player];
     const inc = me.income;
-    const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
+    const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (inc.admin ?? 0) - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
     if (!this.el.hud.firstChild)
       this.el.hud.innerHTML = `<button class="me" data-a="me"></button>
         <div class="time"><span class="date"></span><div class="speed"></div></div><div class="res"></div>`;
@@ -654,6 +662,7 @@ export class App {
         (s.rival && s.nations[s.rival].alive
           ? `<button class="rivalchip" data-a="gotoNation" data-p="${esc(s.rival)}">🗡️ Rival : ${esc(nm(s, s.rival))}<i style="width:${s.rivalHostility}%"></i></button>`
           : '') +
+        `<button class="warchip tierchip" data-a="contracts" data-p="resources">${TIERS[me.tier - 1].icon} ${esc(TIERS[me.tier - 1].name)} <b class="${s.prosperity.satisfaction >= 0.8 ? 'pos' : 'neg'}">${s.prosperity.satisfaction >= 0.8 ? '▲' : '▼'} ${Math.round(s.prosperity.points)} %</b></button>` +
         (me.sanctions ? `<button class="warchip sanctions" data-a="explain" data-p="sanctions">🚫 Sanctions <b class="neg">−${Math.round(me.sanctions.p * 100)} %</b></button>` : '') +
         (s.contracts.some((c) => c.lastStatus !== 'ok')
           ? `<button class="warchip" data-a="contracts" data-p="active">📦 ${s.contracts.filter((c) => c.lastStatus !== 'ok').length} contrat(s) en difficulté</button>`
@@ -882,7 +891,7 @@ export class App {
     const s = this.state;
     const me = this.me;
     const inc = me.income;
-    const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
+    const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (inc.admin ?? 0) - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
     const report = this.trade();
     const home = homeNode(s, this.world, me.id);
     const nodeName = (id: string) => NODES.get(id)!.name;
@@ -1157,11 +1166,11 @@ export class App {
     let title = '';
     let html = '';
     if (key === 'treasury') {
-      const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
+      const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (inc.admin ?? 0) - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
       title = '💰 Trésor';
       html = `<p>L’argent de l’État : <b>${money(me.treasury)}</b>. S’il devient négatif, c’est la faillite : l’armée déserte et la stabilité chute.</p>
         <h3>Chaque mois</h3><div class="rows">
-        ${row('Contrats commerciaux', inc.contracts ?? 0, 'Md$')}${row('Production vendue localement', inc.production, 'Md$')}${row('Commerce (nœuds)', inc.trade, 'Md$')}${row('Péages des détroits', inc.tolls, 'Md$')}${row('Entretien armée et flotte', -inc.upkeep, 'Md$')}${row('Contrats d’achat', -(s.needs?.purchases ?? 0), 'Md$')}${row('Besoins de la population (achats d’urgence, stockage)', -(s.needs?.cost ?? 0), 'Md$')}${inc.sanctions ? row('Pertes dues aux sanctions', -inc.sanctions, 'Md$') : ''}${inc.war ? row('Guerre : blocus et lassitude', -inc.war, 'Md$') : ''}
+        ${row('Contrats commerciaux', inc.contracts ?? 0, 'Md$')}${row('Production vendue localement', inc.production, 'Md$')}${row('Commerce (nœuds)', inc.trade, 'Md$')}${row('Péages des détroits', inc.tolls, 'Md$')}${row('Entretien armée et flotte', -inc.upkeep, 'Md$')}${row('Contrats d’achat', -(s.needs?.purchases ?? 0), 'Md$')}${row('Besoins de la population (achats d’urgence, stockage)', -(s.needs?.cost ?? 0), 'Md$')}${row(`Fonctionnement de l’État (${TIERS[me.tier - 1].name.toLowerCase()})`, -(inc.admin ?? 0), 'Md$')}${inc.sanctions ? row('Pertes dues aux sanctions', -inc.sanctions, 'Md$') : ''}${inc.war ? row('Guerre : blocus et lassitude', -inc.war, 'Md$') : ''}
         <div class="row"><span><b>Solde</b></span><span class="${cls(net)}"><b>${net >= 0 ? '+' : ''}${money(net)}</b></span></div></div>
         <h3>À quoi il sert</h3><p class="muted">Moderniser, reconvertir ou prospecter vos provinces · recruter armée et flotte · acheter des droits de passage · aide aux pays amis.</p>
         <h3>Comment l’augmenter</h3><p class="muted">Signer des contrats (📦 Économie), moderniser les provinces qui produisent les marchandises chères, placer vos marchands, contrôler un détroit.</p>`;
@@ -1364,33 +1373,34 @@ export class App {
             const g = GOODS[o.good];
             const sel = this.offerRoute[o.id] ?? 0;
             const route = o.routes[sel] ?? o.routes[0];
-            const est = route ? C.estimate(o.volume, o.bonus, route, o.unitPrice) : null;
+            const mg = MARGIN[o.good];
+            const est = route ? C.estimate(o.volume, o.bonus, route, o.unitPrice, mg) : null;
             const risk = route ? C.piracyRisk(route, 0, s) : 0;
             const c = sup[o.good] ?? 0;
             const used = com[o.good] ?? 0;
             const left = c - used - o.volume;
             const tooMuch = left < -c * 0.02;
             const blocked = route ? C.blockedStraits(s, this.world, route).length > 0 : true;
-            const market = o.volume * unitPriceOf(s, o.good);
+            const market = o.volume * unitPriceOf(s, o.good) * mg; // même quantité vendue au cours du jour, après coûts de production
             const vsMarket = est ? (est.net / Math.max(market, 1e-6) - 1) * 100 : 0;
             const verdict = tooMuch
               ? `<div class="verdict bad">❌ Production insuffisante : il manque <b>${qty(-left)} ${esc(g.unit)}/mois</b>. Modernisez une province, attendez la fin d’un contrat ou achetez-en à l’étranger (📈 Cours).</div>`
               : blocked
                 ? `<div class="verdict warn">⛔ Cet itinéraire passe par un détroit fermé : choisissez-en un autre.</div>`
-                : `<div class="verdict ok">✅ <b>+${money(est!.net)}/mois</b> pendant ${o.months} mois <small>(≈ ${money(est!.net * o.months)} au total · ${pct(vsMarket, 0)} vs cours actuel)</small></div>`;
+                : `<div class="verdict ok">✅ <b>+${money(est!.net)}/mois</b> pendant ${o.months} mois <small>(≈ ${money(est!.net * o.months)} au total · ${pct(vsMarket, 0)} vs vente au cours actuel · coûts de production déduits : ${Math.round((1 - mg) * 100)} %)</small></div>`;
             return `<div class="card offer"><div class="offer-head">${this.gi(o.good, true)}<div>${this.flag(o.buyer, true)} achète ${esc(partitive(g.name))}<br><small class="muted">Répondre sous ${o.expires} mois</small></div></div>
               ${verdict}
-              <div class="stats three">${stat('Chaque mois', `${qty(o.volume)} <small>${esc(g.unit)}</small>`)}${stat('Prix garanti', `${money(o.unitPrice * (1 + o.bonus))} <small class="pos">+${Math.round(o.bonus * 100)} %</small>`)}${stat('Durée', `${o.months} mois`)}</div>
+              <div class="stats three">${stat('Chaque mois', `${qty(o.volume)} <small>${esc(g.unit)}</small>`)}${stat('Prix garanti', `${money(o.unitPrice * (1 + o.bonus))} <small class="${o.bonus >= 0 ? 'pos' : 'neg'}">${o.bonus >= 0 ? '+' : '−'}${Math.abs(Math.round(o.bonus * 100))} %</small>`)}${stat('Durée', `${o.months} mois`)}</div>
               <div class="cap-line"><span>Production${(P.purchased(s)[o.good] ?? 0) > 0 ? ' + achats' : ''}</span><span>${qty(c)} ${esc(g.unit)}/mois</span></div>
               ${this.gauge(c, used, o.volume)}
               <div class="cap-legend"><span><i class="k used"></i>déjà vendu <b class="c-gold">${qty(used)}</b></span><span><i class="k add"></i>ce contrat <b class="c-blue">${qty(o.volume)}</b></span><span><i class="k free"></i>reste <b class="${left < 0 ? 'neg' : 'pos'}">${qty(Math.max(0, left))}</b></span></div>
               <details class="route-pick" data-k="o${o.id}"><summary>🚢 Itinéraire : ${route ? this.routeLabel(route) : '—'}${risk > 0 ? ` · <span class="neg">pirates ${Math.round(risk * 100)} %/mois</span>` : ''}</summary>
-                ${o.routes.map((r, i) => `<label class="check"><input type="radio" name="r${o.id}" data-a="offerRoute" data-p="${o.id}:${i}" ${i === sel ? 'checked' : ''}><span>${this.routeLabel(r)} · net ${money(C.estimate(o.volume, o.bonus, r, o.unitPrice).net)}</span></label>`).join('')}
+                ${o.routes.map((r, i) => `<label class="check"><input type="radio" name="r${o.id}" data-a="offerRoute" data-p="${o.id}:${i}" ${i === sel ? 'checked' : ''}><span>${this.routeLabel(r)} · net ${money(C.estimate(o.volume, o.bonus, r, o.unitPrice, mg).net)}</span></label>`).join('')}
                 ${route ? this.routeSteps(route) : ''}
                 ${est ? `<small class="muted">Péages ${money(est.tolls)} · transport ${money(est.transport)} par mois. Une escorte (onglet Contrats) réduit le risque pirate.</small>` : ''}</details>
               <div class="actions three">
                 <button class="act primary-act" data-a="sign" data-p="${o.id}" ${tooMuch || blocked ? 'disabled' : ''}><span class="t">✍️ Signer</span><span class="c">🌍 +8</span></button>
-                <button class="act" data-a="negotiate" data-p="${o.id}" ${o.negotiated ? 'disabled' : ''}><span class="t">💬 Négocier</span><span class="c">${o.negotiated ? 'Déjà tenté' : 'prime +10 % · 🤝 −10 · risque'}</span></button>
+                <button class="act" data-a="negotiate" data-p="${o.id}" ${o.negotiated ? 'disabled' : ''}><span class="t">💬 Négocier</span><span class="c">${o.negotiated ? 'Déjà tenté' : 'prime +5 % · 🤝 −10 · risque'}</span></button>
                 <button class="act" data-a="decline" data-p="${o.id}"><span class="t">✖ Décliner</span><span class="c">sans effet</span></button>
               </div></div>`;
           }).join('')
@@ -1448,6 +1458,27 @@ export class App {
     return `<span class="flag ${big ? 'big' : ''}" role="button" data-a="who" data-p="${esc(id)}" title="${esc(nm(this.state, id))}">${flagOf(id)}</span>`;
   }
 
+  // ——— Niveau de vie ———
+
+  /** Palier de niveau de vie : progression, satisfaction, prochains besoins, coût de l'État. */
+  private tierHtml(): string {
+    const s = this.state;
+    const me = this.me;
+    const pr = s.prosperity;
+    const t = TIERS[me.tier - 1];
+    const next = TIERS[me.tier];
+    const sat = Math.round(pr.satisfaction * 100);
+    const trend = (pr.satisfaction - 0.8) * 15;
+    const ladder = TIERS.map((x, i) => `<span class="rung ${i + 1 === me.tier ? 'on' : i + 1 < me.tier ? 'done' : ''}" title="${esc(x.name)}">${x.icon}</span>`).join('<i class="sep"></i>');
+    return `<h3>🏙️ Niveau de vie</h3>
+      <div class="card tier-card"><div class="ladder">${ladder}</div>
+        <div class="mh"><b>${t.icon} ${t.name}</b><small>palier ${me.tier}/${TIERS.length}</small></div>
+        <p class="hint" style="margin:0 0 6px">${esc(t.desc)} Productivité ×${num(t.productivity, 2)} · coût de l’État <b class="neg">−${money(me.income.admin ?? 0)}</b>/mois.</p>
+        <div class="pbar big"><i style="width:${Math.round(pr.points)}%"></i></div>
+        <div class="needtxt"><span>${me.tier < TIERS.length ? `vers « ${next.icon} ${next.name} » : <b class="c-gold">${Math.round(pr.points)} %</b>` : '<b class="c-gold">palier maximal</b>'}</span><span>satisfaction <b class="${sat >= 90 ? 'pos' : sat >= 80 ? 'c-warn' : 'neg'}">${sat} %</b> (${trend >= 0 ? '+' : '−'}${num(Math.abs(trend), 1)}/mois)</span></div>
+        <p class="hint" style="margin:6px 0 0">Au-dessus de 80 % de besoins satisfaits, la population progresse ; en dessous, elle régresse et la stabilité baisse. Les achats d’urgence ne comptent qu’aux trois quarts.${next ? ` Au palier suivant, elle réclamera aussi : ${Object.keys(next.adds).map((g) => this.gi(g as keyof typeof GOODS)).join(' ')} — et l’État coûtera ${money(devOf(s, me.id) * next.admin)}/mois.` : ''}</p></div>`;
+  }
+
   // ——— Besoins, stocks et achats ———
 
   private needsHtml(): string {
@@ -1456,7 +1487,7 @@ export class App {
     const rep = s.needs;
     const needs = P.needsOf(s, s.player);
     const promisedAll = P.purchased(s);
-    let html = `<h3>🍞 Besoins et stocks</h3><p class="hint">Une barre par ressource. Jusqu’au trait blanc (le besoin mensuel) : ce que votre <span class="pos">production</span> couvre, ce qui a été pris dans vos <span class="c-blue">stocks et achats</span>, et ce qu’il a fallu acheter <span class="neg">en urgence</span> (cours +${Math.round(P.EMERGENCY * 100)} %) le mois dernier. Au-delà : votre <span class="c-blue">réserve</span> en entrepôt et, <span class="c-blue">hachurées</span>, les livraisons <b>promises</b> chaque mois par vos contrats d’achat.</p>`;
+    let html = this.tierHtml() + `<h3>🍞 Besoins et stocks</h3><p class="hint">Une barre par ressource. Jusqu’au trait blanc (le besoin mensuel) : ce que votre <span class="pos">production</span> couvre, ce qui a été pris dans vos <span class="c-blue">stocks et achats</span>, et ce qu’il a fallu acheter <span class="neg">en urgence</span> (cours +${Math.round(P.EMERGENCY * 100)} %) le mois dernier. Au-delà : votre <span class="c-blue">réserve</span> en entrepôt et, <span class="c-blue">hachurées</span>, les livraisons <b>promises</b> chaque mois par vos contrats d’achat.</p>`;
     const goods = [...new Set([...(Object.keys(needs) as (keyof typeof GOODS)[]), ...(Object.keys(s.stock) as (keyof typeof GOODS)[]).filter((g) => (s.stock[g] ?? 0) > 1e-3), ...(Object.keys(promisedAll) as (keyof typeof GOODS)[])])];
     const now = clockOf(s);
     const dateAt = (m: number) => { const t = now + m; return `${MONTHS[t % 12]} ${Math.floor(t / 12)}`; };
@@ -1580,6 +1611,7 @@ export class App {
       `<p>Vous dirigez une nation à partir de janvier 2026. Le temps s'écoule mois par mois : <b>▶</b> lance ou met en pause, <b>›››</b> règle la vitesse. Touchez une province pour agir.</p>
       <p><b>But</b> 🎯 : une campagne de 10 ans (2026-2036). Remplissez vos missions, battez votre rival et soignez votre rang : un bilan noté de S à D tombe à la fin.</p>
       <p><b>Contrats</b> 📦 : des acheteurs vous proposent d'acheter votre production à prix fixe avec une prime. Choisissez l'itinéraire de vos convois (détroits à péage, zones de piraterie), escortez-les avec votre flotte, contournez les blocus. C'est votre principale source de richesse.</p>
+      <p><b>Niveau de vie</b> 🏙️ : votre population passe de la subsistance à l'économie du savoir. Chaque palier la rend plus productive mais réclame de nouveaux biens (pétrole, gaz, puces, services…) et fait grimper le coût de l'État. Satisfaites plus de 80 % de ses besoins pour progresser ; en dessous, elle régresse et la stabilité baisse. Rien n'est gratuit : chaque marchandise a un coût de production.</p>
       <p><b>Trois ressources</b> : 💰 le trésor (contrats + production + commerce − entretien des forces), 🤝 l'influence (diplomatie) et 🔥 la ferveur (religion).</p>
       <p><b>Commerce</b> : chaque province produit une marchandise dont la valeur entre dans un <b>nœud commercial</b>. La richesse coule d'amont en aval vers trois grands pôles : Manche, New York et Shanghai. Vous touchez une part de chaque zone où vous êtes présent (ports, flotte), surtout dans votre zone d'attache ; vos marchands travaillent seuls pour y attirer la richesse. Votre flotte renforce votre poids dans les nœuds côtiers.</p>
       <p><b>Détroits</b> ⚓ : Ormuz, Suez, Malacca, Panama, Bosphore… leur propriétaire touche un péage et peut les fermer — le commerce en aval s'effondre et les prix s'envolent.</p>

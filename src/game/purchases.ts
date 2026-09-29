@@ -13,6 +13,7 @@ import type { GameState, Id, NeedLine, NeedsReport, Purchase, Route, World } fro
 /** Consommation mensuelle par point de développement. */
 export { NEEDS, needsOf } from './needs';
 import { needsOf } from './needs';
+import { TIERS } from '../data/tiers';
 export const NEED_LABEL: Partial<Record<Good, string>> = {
   cereales: 'Nourrir la population',
   petrole: 'Carburants et transports',
@@ -249,6 +250,7 @@ export function consumeNeeds(s: GameState, w: World, delivered: Partial<Record<G
   }
   me.treasury -= cost;
   if (expensive) me.stability = clamp(me.stability - 0.4, 0, 100);
+  updateProsperity(s, lines);
   return { lines, cost, purchases: purchaseCost, sales: 0, expensive, stored };
 }
 
@@ -263,4 +265,43 @@ export function setPurchaseEscort(s: GameState, id: number, delta: number, used:
 /** Taux mensuel de stockage : 1 % de la valeur, 2 % au-delà de 6 mois de production et de besoins. */
 export function storageRate(q: number, monthly: number): number {
   return q > 6 * Math.max(monthly, 0.5) ? STORAGE * 2 : STORAGE;
+}
+
+/**
+ * Satisfaction de la population : part (en valeur) des besoins couverts, les achats d'urgence ne comptant qu'aux trois quarts
+ * (files d'attente, rationnement). Elle fait monter ou descendre le niveau de vie.
+ */
+export function satisfactionOf(s: GameState, lines: Partial<Record<Good, NeedLine>>): number {
+  let want = 0;
+  let got = 0;
+  for (const [g, l] of Object.entries(lines) as [Good, NeedLine][]) {
+    const v = unitPrice(s, g);
+    want += l.need * v;
+    got += (l.own + l.stock + 0.75 * l.market) * v;
+  }
+  return want > 0 ? Math.min(1, got / want) : 1;
+}
+
+function updateProsperity(s: GameState, lines: Partial<Record<Good, NeedLine>>) {
+  const me = s.nations[s.player];
+  const pr = (s.prosperity ??= { points: 40, satisfaction: 1, months: 0 });
+  const sat = satisfactionOf(s, lines);
+  pr.satisfaction = Math.round(sat * 100) / 100;
+  pr.months++;
+  pr.points = clamp(pr.points + (sat - 0.8) * 15, 0, 100);
+  if (sat < 0.8) me.stability = clamp(me.stability - (0.8 - sat) * 3, 0, 100);
+  if (pr.points >= 100 && me.tier < TIERS.length) {
+    me.tier++;
+    pr.points = 25;
+    me.stability = clamp(me.stability + 5, 0, 100);
+    s.score += 5;
+    const t = TIERS[me.tier - 1];
+    log(s, `📈 Niveau de vie : votre population passe au palier « ${t.icon} ${t.name} » (+5 points). Nouveaux besoins : ${Object.keys(t.adds).map((g) => GOODS[g as Good].icon).join(' ')} — et l'État coûte plus cher.`, 'info', [s.player]);
+  } else if (pr.points <= 0 && me.tier > 1) {
+    me.tier--;
+    pr.points = 70;
+    me.stability = clamp(me.stability - 10, 0, 100);
+    const t = TIERS[me.tier - 1];
+    log(s, `📉 Pénuries : votre population retombe au palier « ${t.icon} ${t.name} ». Stabilité −10.`, 'war', [s.player]);
+  }
 }

@@ -4,6 +4,7 @@ import { generateOffers, processContracts } from './contracts';
 import { monthlyConvoys } from './convoys';
 import { aiOrgs, monthlyOrgs } from './orgs';
 import { sanctionsPressure } from './sanctions';
+import { adminCost } from './needs';
 import { consumeNeeds, processPurchases } from './purchases';
 import { contractCrises, marketCrisis, runRival } from './crises';
 import { processMissions } from './missions';
@@ -66,8 +67,9 @@ export function advanceMonth(s: GameState, w: World) {
       inc.tolls *= 1 - blockade;
       inc.production *= 1 - weary;
     }
-    n.income = { ...inc, contracts: fromContracts * (1 - 0.3 * (n.sanctions?.p ?? 0)), upkeep, sanctions: lostSanctions, war: lostWar };
-    n.treasury += inc.production + inc.trade + inc.tolls + n.income.contracts - upkeep;
+    const admin = adminCost(s, n.id);
+    n.income = { ...inc, contracts: fromContracts * (1 - 0.3 * (n.sanctions?.p ?? 0)), upkeep, sanctions: lostSanctions, war: lostWar, admin };
+    n.treasury += inc.production + inc.trade + inc.tolls + n.income.contracts - upkeep - admin;
     if (n.treasury < 0) {
       // Faillite : désertions et mécontentement
       n.stability = clamp(n.stability - 0.5, 0, 100);

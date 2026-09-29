@@ -4,6 +4,7 @@ import { pick, rand } from './rng';
 import { addRel, alive, devOf, embargoes, log, nm, owned, rel, warBetween } from './state';
 import { goodOf, homeNode, NODES, output, straitClosed, straitOwner, TOLL, unitPrice } from './trade';
 import { needsOf } from './needs';
+import { MARGIN } from '../data/tiers';
 import type { Contract, ContractOffer, GameState, Id, Route, World } from './types';
 
 /** Zones de piraterie : probabilité mensuelle d'attaque d'un convoi non escorté. */
@@ -146,8 +147,12 @@ export function blockedStraits(s: GameState, w: World, route: Route): string[] {
 }
 
 /** Estimation des revenus mensuels nets d'un contrat sur un itinéraire. */
-export function estimate(volume: number, bonus: number, route: Route, price: number) {
-  const gross = volume * price * (1 + bonus);
+/**
+ * Revenu d'un contrat : prix verrouillé et prime, moins la marge de production (`margin`, coûts d'extraction
+ * et de fabrication, comme sur le marché), les péages et le transport.
+ */
+export function estimate(volume: number, bonus: number, route: Route, price: number, margin = 1) {
+  const gross = volume * price * (1 + bonus) * margin;
   const tolls = gross * TOLL * route.straits.length;
   const transport = gross * 0.015 * Math.max(0, route.nodes.length - 1);
   return { gross, tolls, transport, net: gross - tolls - transport };
@@ -194,7 +199,8 @@ export function generateOffers(s: GameState, w: World, force = false) {
   const to = buyer && homeNode(s, w, buyer.id);
   if (!buyer || !from || !to) return;
   const market = s.prices[good] ?? 1;
-  const bonus = Math.round(Math.max(0.05, 0.12 + rand(s) * 0.25 + rel(s, me, buyer.id) / 500 + (1 - market) * 0.2) * 100) / 100;
+  // Prime alignée sur le marché : de −8 % (l'acheteur négocie une remise) à +20 % (besoin pressant, bonnes relations)
+  const bonus = Math.round(Math.min(0.2, Math.max(-0.08, -0.04 + rand(s) * 0.14 + rel(s, me, buyer.id) / 600 + (1 - market) * 0.15)) * 100) / 100;
   const volume = Math.round(free * (0.3 + rand(s) * 0.4) * 100) / 100;
   const price = Math.round(unitPrice(s, good) * 1000) / 1000;
   s.offers.push({
@@ -209,7 +215,7 @@ export function generateOffers(s: GameState, w: World, force = false) {
     routes: findRoutes(from, to),
     negotiated: false,
   });
-  log(s, `📦 Nouvelle offre : ${buyer.name} veut acheter votre production (${GOODS[good].name.toLowerCase()}, +${Math.round(bonus * 100)} %).`, 'trade', [me]);
+  log(s, `📦 Nouvelle offre : ${buyer.name} veut acheter votre production (${GOODS[good].name.toLowerCase()}, prime ${bonus >= 0 ? '+' : '−'}${Math.abs(Math.round(bonus * 100))} %).`, 'trade', [me]);
 }
 
 /** Nœud d'où partent les convois d'une marchandise : celui de la province qui en produit le plus. */
@@ -269,7 +275,7 @@ export function negotiate(s: GameState, offerId: number): Result {
   o.negotiated = true;
   const chance = 0.45 + rel(s, s.player, o.buyer) / 250;
   if (rand(s) < chance) {
-    o.bonus = Math.round((o.bonus + 0.1) * 100) / 100;
+    o.bonus = Math.round((o.bonus + 0.05) * 100) / 100;
     return { ok: true, msg: `${nm(s, o.buyer)} accepte : prime portée à +${Math.round(o.bonus * 100)} %` };
   }
   if (rand(s) < 0.5) {
@@ -322,6 +328,7 @@ export function processContracts(
   let revenue = 0;
   // Livrables : la production du mois et les stocks (achats compris)
   const cap = capacity(s, w, s.player);
+  const prod = { ...cap };
   for (const [g, q] of Object.entries(s.stock ?? {}) as [Good, number][]) cap[g] = (cap[g] ?? 0) + q;
   const com = committed(s);
   // Escortes limitées par la flotte réelle
@@ -359,7 +366,9 @@ export function processContracts(
         c.lastStatus = 'piracy';
         news.pirated.push(c);
       } else {
-        const e = estimate(c.volume, c.bonus, c.route, c.unitPrice);
+        // La part tirée de notre production supporte ses coûts ; celle tirée des stocks (déjà payée) non
+        const own = Math.min(1, (prod[c.good] ?? 0) / Math.max(com[c.good] ?? 0, 1e-6));
+        const e = estimate(c.volume, c.bonus, c.route, c.unitPrice, own * MARGIN[c.good] + (1 - own));
         // Production insuffisante (provinces perdues) : livraisons réduites
         const ratio = Math.min(1, (cap[c.good] ?? 0) / Math.max(com[c.good] ?? 0, 1e-6));
         c.lastRevenue = e.net * ratio;

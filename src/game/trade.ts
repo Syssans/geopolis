@@ -2,6 +2,7 @@ import { GOODS, STRAITS, TRADE_NODES, type Good } from '../data/trade';
 import { divertedShare } from './contracts';
 import { embargoes, owned, tradeCount } from './state';
 import { oilPricePush, oilQuota } from './orgs';
+import { MARGIN, TIERS } from '../data/tiers';
 import type { GameState, Id, Pid, World } from './types';
 
 /** Part de la production versée directement au propriétaire ; le reste entre dans le commerce. */
@@ -78,7 +79,10 @@ export function output(s: GameState, w: World, pid: Pid): number {
 
 /** Valeur produite par une province (Md$/mois). */
 export function production(s: GameState, w: World, pid: Pid): number {
-  return output(s, w, pid) * unitPrice(s, goodOf(s, w, pid));
+  const g = goodOf(s, w, pid);
+  const tier = s.nations[s.provinces[pid].owner]?.tier ?? 3;
+  // Valeur nette : cours × marge (coûts d'extraction et de fabrication) × productivité du niveau de vie
+  return output(s, w, pid) * unitPrice(s, g) * MARGIN[g] * TIERS[tier - 1].productivity;
 }
 
 export interface NodeReport {
