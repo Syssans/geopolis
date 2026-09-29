@@ -55,6 +55,15 @@ ul.consequences li { margin: 2px 0; }
 #map text.node-label { fill: #fff; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: #0d1117; }
 #map text.strait { text-anchor: middle; dominant-baseline: middle; }
 #map text.strait.closed { filter: drop-shadow(0 0 2px #f85149); }
+#map text.strait-name { fill: #9fd3ff; font-weight: 700; font-style: italic; text-anchor: middle; dominant-baseline: hanging; paint-order: stroke; stroke: #0d1117; pointer-events: none; }
+#map text.strait-name.closed { fill: #ff7b72; }
+#map g.markers { pointer-events: none; }
+#map g.marker text { text-anchor: middle; paint-order: stroke; stroke: #0d1117; }
+#map g.marker .m-icon { dominant-baseline: middle; fill: #ffd54a; stroke-width: 0.6; }
+#map g.marker.own .m-icon { fill: #fff3b0; }
+#map g.marker.lost .m-icon { fill: #8b949e; }
+#map g.marker .m-name { fill: #fff; font-weight: 700; dominant-baseline: hanging; }
+#map g.marker.lost .m-name { fill: #8b949e; text-decoration: line-through; }
 #map path.occ { fill: url(#hatch); pointer-events: none; }
 #map path.graticule { fill: none; stroke: #ffffff10; stroke-width: .5; vector-effect: non-scaling-stroke; }
 #map text.label { fill: #fff; font-weight: 700; text-anchor: middle; dominant-baseline: middle; pointer-events: none;

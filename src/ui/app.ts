@@ -1373,7 +1373,7 @@ export class App {
             const g = GOODS[o.good];
             const sel = this.offerRoute[o.id] ?? 0;
             const route = o.routes[sel] ?? o.routes[0];
-            const mg = MARGIN[o.good];
+            const mg = C.contractFactor(s, this.world, o.good); // part réellement encaissée par unité
             const est = route ? C.estimate(o.volume, o.bonus, route, o.unitPrice, mg) : null;
             const risk = route ? C.piracyRisk(route, 0, s) : 0;
             const c = sup[o.good] ?? 0;
@@ -1387,7 +1387,7 @@ export class App {
               ? `<div class="verdict bad">❌ Production insuffisante : il manque <b>${qty(-left)} ${esc(g.unit)}/mois</b>. Modernisez une province, attendez la fin d’un contrat ou achetez-en à l’étranger (📈 Cours).</div>`
               : blocked
                 ? `<div class="verdict warn">⛔ Cet itinéraire passe par un détroit fermé : choisissez-en un autre.</div>`
-                : `<div class="verdict ok">✅ <b>+${money(est!.net)}/mois</b> pendant ${o.months} mois <small>(≈ ${money(est!.net * o.months)} au total · ${pct(vsMarket, 0)} vs vente au cours actuel · coûts de production déduits : ${Math.round((1 - mg) * 100)} %)</small></div>`;
+                : `<div class="verdict ok">✅ <b>+${money(est!.net)}/mois</b> pendant ${o.months} mois <small>(≈ ${money(est!.net * o.months)} au total · ${pct(vsMarket, 0)} vs vente au cours actuel · l’État encaisse ${Math.round(mg * 100)} % du cours, comme au marché)</small></div>`;
             return `<div class="card offer"><div class="offer-head">${this.gi(o.good, true)}<div>${this.flag(o.buyer, true)} achète ${esc(partitive(g.name))}<br><small class="muted">Répondre sous ${o.expires} mois</small></div></div>
               ${verdict}
               <div class="stats three">${stat('Chaque mois', `${qty(o.volume)} <small>${esc(g.unit)}</small>`)}${stat('Prix garanti', `${money(o.unitPrice * (1 + o.bonus))} <small class="${o.bonus >= 0 ? 'pos' : 'neg'}">${o.bonus >= 0 ? '+' : '−'}${Math.abs(Math.round(o.bonus * 100))} %</small>`)}${stat('Durée', `${o.months} mois`)}</div>

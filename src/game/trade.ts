@@ -296,3 +296,22 @@ export function monthlyPower(s: GameState, w: World) {
   if (!c || c.key !== key) powerCache.set(s, (c = { key, v: tradePower(s, w) }));
   return c.v;
 }
+
+/**
+ * Part de la valeur injectée dans chaque nœud qui finit dans les caisses d'une nation : ce qu'elle y collecte,
+ * plus ce qu'elle récupère en aval de ce qui en sort (calcul de l'aval vers l'amont).
+ */
+export function nodeCapture(report: TradeReport, id: Id): Record<string, number> {
+  const cap: Record<string, number> = {};
+  for (const n of [...NODE_ORDER].reverse()) {
+    const r = report.nodes[n];
+    if (!r || r.value <= 0) {
+      cap[n] = 0;
+      continue;
+    }
+    let v = (r.collected[id] ?? 0) / r.value;
+    for (const [o, amount] of Object.entries(r.out)) v += (amount / r.value) * TRANSFER_BONUS * (cap[o] ?? 0);
+    cap[n] = Math.min(1, v);
+  }
+  return cap;
+}

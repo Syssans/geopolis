@@ -5,6 +5,7 @@ import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zo
 import { feature } from 'topojson-client';
 import type { Feature, Geometry } from 'geojson';
 import type { GeometryCollection, Topology } from 'topojson-specification';
+import CAPITALS from '../data/capitals.json';
 import { RELIGIONS } from '../data/religions';
 import { STRAITS, TRADE_NODES } from '../data/trade';
 import { EXTRA_LANES, LAND, lane, laneKey, PORTS, routePath, type LonLat } from '../data/routes';
@@ -73,6 +74,8 @@ export class MapView {
   private borders: SVGPathElement;
   private labelLayer: SVGGElement;
   private tradeLayer: SVGGElement;
+  private markerLayer: SVGGElement;
+  private markerSig = '';
   private convoyLayer: SVGGElement;
   private trackCache = new Map<string, Track>();
   private dots = new Map<number, Dot>();
@@ -153,6 +156,7 @@ export class MapView {
     this.borders = el('path', { class: 'borders' }, this.root);
     this.tradeLayer = el('g', { class: 'trade' }, this.root);
     this.labelLayer = el('g', {}, this.root);
+    this.markerLayer = el('g', { class: 'markers' }, this.root);
     this.convoyLayer = el('g', { class: 'convoys' }, this.root);
     this.routeLine = el('path', { class: 'convoy-route' }, this.convoyLayer);
     requestAnimationFrame(this.animate);
@@ -191,6 +195,7 @@ export class MapView {
           this.updateLabels();
           this.sizeDots();
           this.sizeTrade();
+          this.sizeMarkers();
         }
       });
     select(this.svg).call(this.zoomer);
@@ -447,6 +452,66 @@ export class MapView {
       label.setAttribute('stroke-width', (2 * f).toFixed(2));
     }
     for (const x of this.tradeLayer.querySelectorAll<SVGTextElement>('text.strait')) x.setAttribute('font-size', (9 * f).toFixed(2));
+    for (const x of this.tradeLayer.querySelectorAll<SVGTextElement>('text.strait-name')) {
+      x.setAttribute('dy', (9 * f).toFixed(2));
+      x.setAttribute('font-size', (5.5 * f).toFixed(2));
+      x.setAttribute('stroke-width', (1.6 * f).toFixed(2));
+    }
+  }
+
+  // ————— Capitales (carte politique) et lieux saints (carte religieuse) —————
+
+  private drawMarkers(s: GameState, mode: MapMode) {
+    const g = this.markerLayer;
+    const wanted = mode === 'political' || mode === 'religion';
+    const owners = wanted ? this.world.provinces.filter((p) => p.capital || p.holy?.length).map((p) => s.provinces[p.id].owner).join(',') : '';
+    const sig = `${mode}|${s.player}|${owners}`;
+    if (sig === this.markerSig) return;
+    this.markerSig = sig;
+    g.innerHTML = '';
+    if (!wanted) return;
+    const caps = CAPITALS as Record<string, { name: string; lon: number; lat: number }>;
+    const add = (x: number, y: number, icon: string, name: string, cls: string) => {
+      const m = el('g', { class: `marker ${cls}`, transform: `translate(${x.toFixed(2)},${y.toFixed(2)})` }, g);
+      el('text', { class: 'm-icon' }, m).textContent = icon;
+      el('text', { class: 'm-name' }, m).textContent = name;
+    };
+    if (mode === 'political') {
+      for (const p of this.world.provinces) {
+        if (!p.capital) continue;
+        const owner = s.provinces[p.id].owner;
+        const c = caps[p.country];
+        const [x, y] = c ? (this.projection([c.lon, c.lat]) ?? this.centers[p.id]) : this.centers[p.id];
+        // Capitale tombée aux mains d'un autre pays : étoile grisée
+        const cls = owner !== p.country ? 'lost' : owner === s.player ? 'own' : '';
+        add(x, y, '★', c?.name ?? p.name, `cap ${cls}`);
+      }
+    } else {
+      for (const p of this.world.provinces) {
+        if (!p.holy?.length) continue;
+        const [x, y] = this.centers[p.id];
+        const rels = [...new Set(p.holy.flatMap((h) => h.religions))];
+        const icons = [...new Set(rels.map((r) => RELIGIONS[r].icon))].join('');
+        add(x, y, icons, p.holy.map((h) => h.name).join(' · '), s.provinces[p.id].owner === s.player ? 'own' : '');
+      }
+    }
+    this.sizeMarkers();
+  }
+
+  /** Taille lisible à tout zoom ; les noms n'apparaissent qu'en zoomant (sauf pour son propre pays). */
+  private sizeMarkers() {
+    const f = 1 / Math.sqrt(this.k);
+    for (const m of this.markerLayer.querySelectorAll<SVGGElement>('g.marker')) {
+      const [icon, name] = m.children as unknown as SVGTextElement[];
+      const big = m.classList.contains('own');
+      // Les capitales sont nombreuses : leurs noms attendent un zoom plus fort que ceux des lieux saints
+      const names = this.k >= (m.classList.contains('cap') ? 4.5 : 2.5);
+      icon.setAttribute('font-size', ((big ? 9 : 7) * f).toFixed(2));
+      name.style.display = names || big ? '' : 'none';
+      name.setAttribute('font-size', (5.5 * f).toFixed(2));
+      name.setAttribute('dy', (8 * f).toFixed(2));
+      name.setAttribute('stroke-width', (1.6 * f).toFixed(2));
+    }
   }
 
   private drawTrade(s: GameState, selectedNode: string | null) {
@@ -477,6 +542,8 @@ export class MapView {
       const [x, y] = this.centers[info.id];
       const t = el('text', { x: String(x), y: String(y), class: `strait ${straitClosed(s, this.world, st.id) ? 'closed' : ''}` }, g);
       t.textContent = '⚓';
+      const name = el('text', { x: String(x), y: String(y), class: `strait-name ${straitClosed(s, this.world, st.id) ? 'closed' : ''}` }, g);
+      name.textContent = st.name;
     }
     this.sizeTrade();
   }
@@ -536,6 +603,7 @@ export class MapView {
     this.labelLayer.style.display = mode === 'trade' ? 'none' : '';
     if (mode === 'trade') this.drawTrade(s, selected !== null ? this.world.provinces[selected].node : null);
     else if (this.tradeLayer.childElementCount) this.tradeLayer.innerHTML = '';
+    this.drawMarkers(s, mode);
     this.syncConvoys(s, mode, selConvoy);
   }
 }

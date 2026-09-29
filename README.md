@@ -37,7 +37,7 @@ npm run build      # build de production dans dist/ (PWA installable)
 | **Stockage** 🏬 | Pour chaque marchandise, le surplus (ni vendu sous contrat, ni consommé) part au marché, à moitié ou entièrement en stock ; 1 % de la valeur par mois, 2 % au-delà de 6 mois de réserve. |
 | **Drapeaux** 🏳️ | Dans les listes compactes (offres, contrats, fournisseurs, convois, guerres, blocs), les pays sont représentés par leur drapeau emoji ; toucher un drapeau affiche le nom et la relation. |
 | **Stocks et revente** 🏬 | Les marchandises reçues vont en stock : elles servent vos contrats de vente (on peut revendre ce qu'on ne produit pas), nourrissent la population, ou se revendent au comptant (cours −3 %). Achat au comptant au cours +5 %, stockage 0,5 %/mois. |
-| **Contrats** 📦 | Des acheteurs proposent d'acheter une quantité de votre production à prix verrouillé avec une prime ; une jauge montre la capacité restante et empêche de vendre ce que vous ne produisez pas. On peut retirer une marchandise de la vente. Vous signez, négociez ou déclinez, puis choisissez l'itinéraire des convois (jusqu'à 3 : détroits à péage, zones de piraterie), assignez des escortes, réacheminez en cas de blocus. 4 mois sans livraison = rupture. |
+| **Contrats** 📦 | Des acheteurs proposent d'acheter, à prix verrouillé avec une prime (−8 à +20 %), une quantité à la mesure de leur propre consommation : une vente pèse autant qu'un achat. Sans prime, un contrat rapporte exactement ce que la même production aurait rapporté au marché (seule la marge de production reste à l'État) ; une jauge montre la capacité restante et empêche de vendre ce que vous ne produisez pas. On peut retirer une marchandise de la vente. Vous signez, négociez ou déclinez, puis choisissez l'itinéraire des convois (jusqu'à 3 : détroits à péage, zones de piraterie), assignez des escortes, réacheminez en cas de blocus. 4 mois sans livraison = rupture. |
 | **Rival** 🗡️ | Désigné au départ (Iran pour l'Arabie saoudite, Chine pour Taïwan…), il arme vos minorités, vous impose des embargos, sabote vos contrats, ferme ses détroits sur vos routes, monte vos voisins contre vous et pose des ultimatums. |
 | **Crises** | Blocus, pirates, ingérence étrangère, concurrence déloyale, ultimatums, krachs : chaque crise propose 2 à 3 réponses avec leurs coûts. |
 | **Temps** | Tick mensuel, pause + 4 vitesses. Le jeu se met en pause sur les événements. |
@@ -45,6 +45,7 @@ npm run build      # build de production dans dist/ (PWA installable)
 | **Provinces** | ~900 provinces (régions françaises, États américains, provinces chinoises…), chacune avec développement, population, marchandise, religion et nœud commercial. |
 | **Commerce** | 26 nœuds commerciaux (Golfe Persique, Malacca, Suez, Manche, Shanghai, New York…) reliés d'amont en aval. La production des provinces y entre ; les nations collectent leur part selon leur pouvoir commercial (provinces, côtes, flotte, marchands, accords). |
 | **Marchands** | Automatiques : ils attirent la richesse des zones voisines vers votre zone d'attache (même logique que l'IA). L'onglet Commerce du pays montre vos revenus et votre part dans chaque zone. |
+| **Cartes** 🗺️ | Politique : capitales (★, noms en zoomant). Religions : lieux saints avec l'icône des religions concernées. Commerce : nœuds, voies maritimes et noms des détroits (⚓).|
 | **Détroits** | Ormuz, Bab-el-Mandeb, Suez, Malacca, Panama, Bosphore, Gibraltar, détroits danois : péage de 5 % pour le propriétaire, qui peut les fermer (commerce aval effondré, prix mondiaux en hausse). |
 | **Marchés** | 11 marchandises (pétrole, gaz, céréales, café-cacao, métaux, terres rares, semi-conducteurs…) dont les prix fluctuent. |
 | **Religion** | 11 confessions (catholique, protestante, évangélique, orthodoxe, sunnite, chiite, juive, hindoue, bouddhiste, traditionnelle, sécularisée), réparties par province avec les minorités réelles (Nigeria, Liban, Irak, Inde, Xinjiang…). |
@@ -76,7 +77,7 @@ src/ui/                       carte SVG (d3-geo + d3-zoom), HUD, fiches, modales
 tests/                        commerce, religion, guerre, simulation de 30 ans
 ```
 
-Pour regénérer la carte : `node scripts/build-provinces.mjs` (télécharge Natural Earth, domaine public ; `KEEP=0.05` règle la finesse des contours).
+Pour regénérer la carte : `node scripts/build-provinces.mjs` (puis `node scripts/build-capitals.mjs` pour les capitales) (télécharge Natural Earth, domaine public ; `KEEP=0.05` règle la finesse des contours).
 
 ## Publier sur GitHub Pages
 

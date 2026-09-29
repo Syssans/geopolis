@@ -2,9 +2,9 @@ import { GOODS, STRAITS, TRADE_NODES, type Good } from '../data/trade';
 import { EXTRA_LANES } from '../data/routes';
 import { pick, rand } from './rng';
 import { addRel, alive, devOf, embargoes, log, nm, owned, rel, warBetween } from './state';
-import { goodOf, homeNode, NODES, output, straitClosed, straitOwner, TOLL, unitPrice } from './trade';
+import { computeTrade, goodOf, homeNode, nodeCapture, NODES, output, PRODUCTION_SHARE, straitClosed, straitOwner, TOLL, unitPrice, type TradeReport } from './trade';
 import { needsOf } from './needs';
-import { MARGIN } from '../data/tiers';
+import { MARGIN, TIERS } from '../data/tiers';
 import type { Contract, ContractOffer, GameState, Id, Route, World } from './types';
 
 /** Zones de piraterie : probabilité mensuelle d'attaque d'un convoi non escorté. */
@@ -170,6 +170,11 @@ export function escortsUsed(s: GameState): number {
 
 // ————— Offres —————
 
+/** Consommation mensuelle d'un pays pour une marchandise : besoins de sa population, ou demande de ses entreprises. */
+export function buyerDemand(s: GameState, id: Id, good: Good): number {
+  return needsOf(s, id)[good] || devOf(s, id) * 0.002;
+}
+
 export function generateOffers(s: GameState, w: World, force = false) {
   if (!force) s.offers = s.offers.filter((o) => --o.expires > 0 && s.nations[o.buyer].alive);
   if (!force && (s.offers.length >= 3 || rand(s) > 0.25)) return;
@@ -201,7 +206,9 @@ export function generateOffers(s: GameState, w: World, force = false) {
   const market = s.prices[good] ?? 1;
   // Prime alignée sur le marché : de −8 % (l'acheteur négocie une remise) à +20 % (besoin pressant, bonnes relations)
   const bonus = Math.round(Math.min(0.2, Math.max(-0.08, -0.04 + rand(s) * 0.14 + rel(s, me, buyer.id) / 600 + (1 - market) * 0.15)) * 100) / 100;
-  const volume = Math.round(free * (0.3 + rand(s) * 0.4) * 100) / 100;
+  // Quantité à la mesure de ce que l'acheteur consomme, pas de toute votre production : une vente pèse autant qu'un achat
+  const volume = Math.round(Math.min(free * 0.5, buyerDemand(s, buyer.id, good) * (0.6 + rand(s) * 0.8)) * 100) / 100;
+  if (volume < 0.02) return;
   const price = Math.round(unitPrice(s, good) * 1000) / 1000;
   s.offers.push({
     id: s.nextUid++,
@@ -368,7 +375,7 @@ export function processContracts(
       } else {
         // La part tirée de notre production supporte ses coûts ; celle tirée des stocks (déjà payée) non
         const own = Math.min(1, (prod[c.good] ?? 0) / Math.max(com[c.good] ?? 0, 1e-6));
-        const e = estimate(c.volume, c.bonus, c.route, c.unitPrice, own * MARGIN[c.good] + (1 - own));
+        const e = estimate(c.volume, c.bonus, c.route, c.unitPrice, own * contractFactor(s, w, c.good) + (1 - own));
         // Production insuffisante (provinces perdues) : livraisons réduites
         const ratio = Math.min(1, (cap[c.good] ?? 0) / Math.max(com[c.good] ?? 0, 1e-6));
         c.lastRevenue = e.net * ratio;
@@ -394,3 +401,42 @@ export function processContracts(
 
 export const nodeName = (id: string) => NODES.get(id)?.name ?? id;
 export const straitName = (id: string) => STRAITS.find((x) => x.id === id)?.name ?? id;
+
+/** Ce que rapporte au joueur, en part du cours, une unité de chaque marchandise vendue au marché. */
+const captureCache = new WeakMap<GameState, { key: number; v: Partial<Record<Good, number>> }>();
+
+/** À appeler avec le bilan commercial du mois (tick) ; recalculé sinon à la demande. */
+export function setMarketCapture(s: GameState, w: World, report: TradeReport) {
+  const cap = nodeCapture(report, s.player);
+  const sum: Partial<Record<Good, [number, number]>> = {};
+  for (const pid of owned(s, s.player)) {
+    const g = goodOf(s, w, pid);
+    const v = output(s, w, pid) || 1e-6;
+    const loss = PRODUCTION_SHARE + (1 - PRODUCTION_SHARE) * (cap[w.provinces[pid].node] ?? 0);
+    const e = (sum[g] ??= [0, 0]);
+    e[0] += loss * v;
+    e[1] += v;
+  }
+  const res: Partial<Record<Good, number>> = {};
+  for (const [g, [a, b]] of Object.entries(sum) as [Good, [number, number]][]) res[g] = a / b;
+  captureCache.set(s, { key: s.year * 12 + s.month, v: res });
+}
+
+export function marketCapture(s: GameState, w: World, good: Good): number {
+  let c = captureCache.get(s);
+  if (!c || c.key !== s.year * 12 + s.month) {
+    setMarketCapture(s, w, computeTrade(s, w));
+    c = captureCache.get(s)!;
+  }
+  return c.v[good] ?? 0.5;
+}
+
+/**
+ * Revenu d'une unité vendue sous contrat, en part du cours : exactement ce que la même unité aurait rapporté
+ * au marché (coûts de production déduits, part captée par les négociants des nœuds commerciaux),
+ * la prime du contrat faisant la différence.
+ */
+export function contractFactor(s: GameState, w: World, good: Good): number {
+  const tier = s.nations[s.player].tier ?? 3;
+  return MARGIN[good] * TIERS[tier - 1].productivity * marketCapture(s, w, good);
+}

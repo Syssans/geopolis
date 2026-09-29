@@ -1,6 +1,6 @@
 import { processPeace, runAI } from './ai';
 import { maybeRandomEvent } from './events';
-import { generateOffers, processContracts } from './contracts';
+import { generateOffers, processContracts, setMarketCapture } from './contracts';
 import { monthlyConvoys } from './convoys';
 import { aiOrgs, monthlyOrgs } from './orgs';
 import { sanctionsPressure } from './sanctions';
@@ -27,6 +27,7 @@ export function advanceMonth(s: GameState, w: World) {
   recordPrices(s);
   monthlyWorks(s, w);
   const report = computeTrade(s, w);
+  setMarketCapture(s, w, report);
   const escortsLeft = Math.floor(s.nations[s.player].navy) - s.contracts.reduce((a, c) => a + c.escort, 0);
   const bought = processPurchases(s, w, escortsLeft);
   const contracts = processContracts(s, w);
