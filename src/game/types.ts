@@ -82,7 +82,9 @@ export interface Nation {
   missionProgress: number;
   closedStraits: string[];
   /** Dernier bilan mensuel (affichage). */
-  income: { production: number; trade: number; tolls: number; contracts: number; upkeep: number; byNode: Record<string, number> };
+  income: { production: number; trade: number; tolls: number; contracts: number; upkeep: number; byNode: Record<string, number>; sanctions?: number; war?: number };
+  /** Pression des sanctions subies (0 → 0,8) et nations qui les imposent. */
+  sanctions?: { p: number; by: Id[] };
 }
 
 export interface Bloc {
@@ -219,6 +221,18 @@ export interface NeedsReport {
   purchases: number; // paiements des contrats d'achat
   sales: number; // reventes au comptant du mois
   expensive: boolean; // vie chère : pénurie couverte à prix fort
+  stored?: Partial<Record<Good, number>>; // surplus de production mis en stock ce mois
+}
+
+/** Organisation internationale (OPEP…). */
+export interface Org {
+  id: string;
+  name: string;
+  icon: string;
+  members: Id[];
+  quota: number; // multiplicateur de production de pétrole des membres (1 = normal)
+  nextMeeting: number; // temps absolu (mois) de la prochaine réunion
+  last: string; // dernière décision
 }
 
 export interface MissionState extends MissionDef {
@@ -241,6 +255,8 @@ export interface GameState {
   score: number; // points de missions et d'événements
   passes: Record<string, number>; // droits de passage achetés : détroit → mois restants
   notForSale: Good[]; // marchandises retirées de la vente (pas d'offres)
+  orgs: Record<string, Org>; // organisations internationales
+  storePolicy: Partial<Record<Good, number>>; // part du surplus de production mise en stock (0, 0,5 ou 1)
   prevPrices: Record<string, number>; // cours du mois précédent (tendance)
   priceHistory: Record<string, number[]>; // cours mensuels (multiplicateur), le plus récent en dernier
   stats: { converted: number; contractsDone: number; warsWon: number; startIncome: number; startDev: number };

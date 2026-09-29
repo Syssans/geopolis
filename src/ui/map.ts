@@ -2,8 +2,8 @@ import { geoArea, geoCentroid, geoDistance, geoGraticule10, geoInterpolate, geoN
 import { select } from 'd3-selection';
 import 'd3-transition';
 import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom';
-import { feature, mesh } from 'topojson-client';
-import type { Feature, Geometry, MultiLineString } from 'geojson';
+import { feature } from 'topojson-client';
+import type { Feature, Geometry } from 'geojson';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 import { RELIGIONS } from '../data/religions';
 import { STRAITS, TRADE_NODES } from '../data/trade';
@@ -92,6 +92,38 @@ export class MapView {
   private centers: [number, number][];
   private boxes: [[number, number], [number, number]][];
   private lastOwners = '';
+  private arcCache: { users: number[][]; paths: string[] } | null = null;
+
+  /** Chaque segment de frontière du fond de carte : les provinces qu'il sépare et son tracé projeté. */
+  private arcs() {
+    if (this.arcCache) return this.arcCache;
+    const topo = this.topo as unknown as { arcs: number[][][]; transform: { scale: [number, number]; translate: [number, number] } };
+    const users: number[][] = topo.arcs.map(() => []);
+    const obj = this.topo.objects.provinces as GeometryCollection;
+    const add = (ring: number[], id: number) => {
+      for (const idx of ring) {
+        const a = idx < 0 ? ~idx : idx;
+        if (!users[a].includes(id)) users[a].push(id);
+      }
+    };
+    for (const g of obj.geometries as unknown as { type: string; id: number; arcs: number[][] | number[][][] }[]) {
+      if (g.type === 'Polygon') for (const ring of g.arcs as number[][]) add(ring, g.id);
+      else if (g.type === 'MultiPolygon') for (const poly of g.arcs as number[][][]) for (const ring of poly) add(ring, g.id);
+    }
+    const [sx, sy] = topo.transform.scale;
+    const [tx, ty] = topo.transform.translate;
+    const paths = topo.arcs.map((arc) => {
+      let x = 0;
+      let y = 0;
+      const coords = arc.map(([dx, dy]) => {
+        x += dx;
+        y += dy;
+        return [x * sx + tx, y * sy + ty];
+      });
+      return this.path({ type: 'LineString', coordinates: coords }) ?? '';
+    });
+    return (this.arcCache = { users, paths });
+  }
   private pathState: string[] = [];
   private tradeSig = '';
   private lastSel: number | null = null;
@@ -491,13 +523,14 @@ export class MapView {
     const owners = s.provinces.map((p) => p.owner).join(',');
     if (owners !== this.lastOwners) {
       this.lastOwners = owners;
-      const obj = this.topo.objects.provinces as GeometryCollection;
-      const m = mesh(this.topo, obj, (a, b) => {
-        const ia = (a as { id?: number }).id!;
-        const ib = (b as { id?: number }).id!;
-        return a === b || s.provinces[ia].owner !== s.provinces[ib].owner;
-      }) as MultiLineString;
-      this.borders.setAttribute('d', this.path(m) ?? '');
+      // Segments précalculés : on ne garde que les côtes et ceux qui séparent deux pays
+      const arcs = this.arcs();
+      let d = '';
+      for (let i = 0; i < arcs.users.length; i++) {
+        const u = arcs.users[i];
+        if (u.length === 1 || s.provinces[u[0]].owner !== s.provinces[u[1]].owner) d += arcs.paths[i];
+      }
+      this.borders.setAttribute('d', d);
       this.buildLabels(s);
     }
     this.labelLayer.style.display = mode === 'trade' ? 'none' : '';

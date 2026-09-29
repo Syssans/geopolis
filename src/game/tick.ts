@@ -2,13 +2,15 @@ import { processPeace, runAI } from './ai';
 import { maybeRandomEvent } from './events';
 import { generateOffers, processContracts } from './contracts';
 import { monthlyConvoys } from './convoys';
+import { aiOrgs, monthlyOrgs } from './orgs';
+import { sanctionsPressure } from './sanctions';
 import { consumeNeeds, processPurchases } from './purchases';
 import { contractCrises, marketCrisis, runRival } from './crises';
 import { processMissions } from './missions';
 import { monthlyWorks } from './economy';
 import { monthlyReligion } from './religion';
 import { rand } from './rng';
-import { alive, atWar, clamp, invalidate, log, nm, owned } from './state';
+import { alive, atWar, clamp, invalidate, log, nm, owned, warsOf } from './state';
 import { computeTrade, recordPrices, updatePrices } from './trade';
 import { checkElimination, involvesNuclearClash, resolveWarMonth } from './war';
 import { GOODS } from '../data/trade';
@@ -35,12 +37,37 @@ export function advanceMonth(s: GameState, w: World) {
     .sort((a, b) => b.v - a.v);
   const topTraders = new Set(ranked.slice(0, 10).map((x) => x.id));
 
+  const pressure = sanctionsPressure(s);
   for (const n of alive(s)) {
-    const inc = report.income[n.id] ?? { production: 0, trade: 0, tolls: 0, byNode: {} };
+    const inc = { ...(report.income[n.id] ?? { production: 0, trade: 0, tolls: 0, byNode: {} }) };
     const upkeep = n.army * n.upkeepRate + n.navy * n.upkeepRate * 2;
     const fromContracts = n.id === s.player ? contracts.revenue : 0;
-    n.income = { ...inc, contracts: fromContracts, upkeep };
-    n.treasury += inc.production + inc.trade + inc.tolls + fromContracts - upkeep;
+    // Sanctions : marchés d'exportation fermés, commerce étranglé, pénuries
+    const sp = pressure.get(n.id);
+    n.sanctions = sp && sp.p > 0.01 ? sp : undefined;
+    let lostSanctions = 0;
+    if (n.sanctions) {
+      const p = n.sanctions.p;
+      lostSanctions = inc.production * 0.6 * p + inc.trade * p + fromContracts * 0.3 * p;
+      inc.production *= 1 - 0.6 * p;
+      inc.trade *= 1 - p;
+      n.stability = clamp(n.stability - 0.8 * p, 0, 100);
+    }
+    // Guerre : blocus naval de l'ennemi et lassitude de la population
+    let lostWar = 0;
+    const wars = warsOf(s, n.id);
+    if (wars.length) {
+      const foes = new Set(wars.flatMap((wr) => (wr.attackers.includes(n.id) ? wr.defenders : wr.attackers)));
+      const enemyNavy = [...foes].reduce((a, f) => a + (s.nations[f]?.navy ?? 0), 0);
+      const blockade = Math.min(0.5, (enemyNavy / (enemyNavy + n.navy + 1)) * 0.6);
+      const weary = Math.min(0.3, n.exhaustion / 300);
+      lostWar = inc.trade * blockade + inc.tolls * blockade + inc.production * weary;
+      inc.trade *= 1 - blockade;
+      inc.tolls *= 1 - blockade;
+      inc.production *= 1 - weary;
+    }
+    n.income = { ...inc, contracts: fromContracts * (1 - 0.3 * (n.sanctions?.p ?? 0)), upkeep, sanctions: lostSanctions, war: lostWar };
+    n.treasury += inc.production + inc.trade + inc.tolls + n.income.contracts - upkeep;
     if (n.treasury < 0) {
       // Faillite : désertions et mécontentement
       n.stability = clamp(n.stability - 0.5, 0, 100);
@@ -104,6 +131,8 @@ export function advanceMonth(s: GameState, w: World) {
   }
 
   runAI(s, w);
+  monthlyOrgs(s, w);
+  aiOrgs(s, w);
   // Le joueur : offres commerciales, rival, crises, missions
   generateOffers(s, w);
   contractCrises(s, w, contracts.news);

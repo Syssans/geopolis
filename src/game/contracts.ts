@@ -3,6 +3,7 @@ import { EXTRA_LANES } from '../data/routes';
 import { pick, rand } from './rng';
 import { addRel, alive, devOf, embargoes, log, nm, owned, rel, warBetween } from './state';
 import { goodOf, homeNode, NODES, output, straitClosed, straitOwner, TOLL, unitPrice } from './trade';
+import { needsOf } from './needs';
 import type { Contract, ContractOffer, GameState, Id, Route, World } from './types';
 
 /** Zones de piraterie : probabilité mensuelle d'attaque d'un convoi non escorté. */
@@ -102,12 +103,35 @@ export function committed(s: GameState): Partial<Record<Good, number>> {
   return c;
 }
 
-/** Part de la production du joueur détournée vers ses contrats (elle n'entre plus dans les nœuds). */
+/** Part de la production du joueur détournée vers ses contrats ou ses entrepôts (elle n'entre plus dans les nœuds). */
 export function divertedShare(s: GameState, w: World): Partial<Record<Good, number>> {
   const cap = capacity(s, w, s.player);
   const com = committed(s);
+  const stored = storedUnits(s, w);
   const res: Partial<Record<Good, number>> = {};
-  for (const g of Object.keys(com) as Good[]) res[g] = Math.min(1, (com[g] ?? 0) / Math.max(cap[g] ?? 0, 1e-6));
+  for (const g of new Set([...Object.keys(com), ...Object.keys(stored)]) as Set<Good>)
+    res[g] = Math.min(1, ((com[g] ?? 0) + (stored[g] ?? 0)) / Math.max(cap[g] ?? 0, 1e-6));
+  return res;
+}
+
+/**
+ * Surplus mis en stock chaque mois : la production qui n'est ni vendue sous contrat ni consommée
+ * par la population, selon la part choisie pour chaque marchandise (0 = tout au marché, 1 = tout en stock).
+ */
+export function storedUnits(s: GameState, w: World): Partial<Record<Good, number>> {
+  const res: Partial<Record<Good, number>> = {};
+  const pol = s.storePolicy ?? {};
+  if (!Object.values(pol).some((p) => p)) return res;
+  const cap = capacity(s, w, s.player);
+  const com = committed(s);
+  const need = needsOf(s, s.player);
+  for (const [g, p] of Object.entries(pol) as [Good, number][]) {
+    if (!p) continue;
+    const c = cap[g] ?? 0;
+    const free = Math.max(0, c - Math.min(c, com[g] ?? 0));
+    const surplus = Math.max(0, free - Math.min(free, need[g] ?? 0));
+    if (surplus > 1e-6) res[g] = Math.round(p * surplus * 1000) / 1000;
+  }
   return res;
 }
 

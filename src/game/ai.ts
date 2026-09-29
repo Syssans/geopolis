@@ -103,8 +103,8 @@ function diplomacy(s: GameState, w: World, n: Nation) {
     if (p && !embargoes(s, n.id, p.id) && !embargoes(s, p.id, n.id)) signTrade(s, n.id, p.id);
   }
   // Embargo contre les agresseurs
-  if (n.influence >= 30 && rand(s) < 0.04) {
-    const agg = alive(s).find((o) => o.aggression > 50 && o.id !== n.id && rel(s, n.id, o.id) < 0 && !sameBloc(s, n.id, o.id) && !embargoes(s, n.id, o.id) && inReach(s, w, n.id, o.id));
+  if (n.influence >= 25 && rand(s) < 0.08) {
+    const agg = alive(s).find((o) => o.aggression > 35 && o.id !== n.id && rel(s, n.id, o.id) < 10 && !sameBloc(s, n.id, o.id) && !embargoes(s, n.id, o.id) && inReach(s, w, n.id, o.id));
     if (agg) toggleEmbargo(s, n.id, agg.id);
   }
   for (const k of s.embargoes.filter((x) => x.startsWith(`${n.id}>`))) {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { iconize } from '../src/ui/format';
 import * as P from '../src/game/purchases';
+import * as T from '../src/game/trade';
+import { decide } from '../src/game/orgs';
+import { negotiateLift } from '../src/game/sanctions';
 import { WORLD as world } from '../src/game/world';
 import { createGame } from '../src/game/setup';
 import { advanceMonth } from '../src/game/tick';
@@ -407,5 +410,44 @@ describe('trahison d’un allié', () => {
     s.wars.push(war);
     joinWar(s, war, 'United Kingdom', 'def');
     expect(war.defenders).not.toContain('United Kingdom');
+  });
+});
+
+describe('OPEP, sanctions et stockage', () => {
+  it('l’OPEP réduit la production de ses membres et fait monter le pétrole', () => {
+    const s = createGame(world, 'France', 6);
+    expect(s.orgs.opep.members).toContain('Saudi Arabia');
+    const pid = world.provinces.findIndex((p, i) => s.provinces[i].owner === 'Saudi Arabia' && (s.provinces[i].good ?? p.good) === 'petrole');
+    const before = output(s, world, pid);
+    s.prices.petrole = 0.8; // cours bas : les membres réduisent
+    decide(s, world, null);
+    expect(s.orgs.opep.quota).toBeLessThan(1);
+    expect(output(s, world, pid)).toBeLessThan(before);
+    for (let i = 0; i < 12; i++) T.updatePrices(s, world, () => 0.5);
+    expect(s.prices.petrole).toBeGreaterThan(1);
+  });
+
+  it('Cuba démarre sous sanctions américaines qui pèsent sur ses revenus', () => {
+    const s = createGame(world, 'Cuba', 6);
+    advanceMonth(s, world);
+    const n = s.nations.Cuba;
+    expect(n.sanctions?.p ?? 0).toBeGreaterThan(0.2);
+    expect(n.income.sanctions ?? 0).toBeGreaterThan(0);
+    s.relations['Cuba|United States of America'] = 200;
+    n.influence = 999;
+    let lifted = false;
+    for (let i = 0; i < 20 && !lifted; i++) lifted = negotiateLift(s, 'Cuba', 'United States of America').ok;
+    expect(lifted).toBe(true);
+    expect(s.embargoes).not.toContain('United States of America>Cuba');
+  });
+
+  it('le surplus mis en stock remplit les entrepôts au lieu d’être vendu', () => {
+    const s = createGame(world, 'Saudi Arabia', 6);
+    advanceMonth(s, world);
+    const prod0 = s.nations['Saudi Arabia'].income.production;
+    s.storePolicy.petrole = 1;
+    advanceMonth(s, world);
+    expect(s.stock.petrole ?? 0).toBeGreaterThan(0.5);
+    expect(s.nations['Saudi Arabia'].income.production).toBeLessThan(prod0);
   });
 });

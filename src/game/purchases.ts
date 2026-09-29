@@ -4,14 +4,15 @@
  * sa population, ou pour revendre (au comptant ou via ses contrats de vente) quand le cours monte.
  */
 import { GOODS, type Good } from '../data/trade';
-import { capacity, blockedStraits, findRoutes, piracyRisk, sourceNode, type Result } from './contracts';
+import { capacity, blockedStraits, storedUnits, findRoutes, piracyRisk, sourceNode, type Result } from './contracts';
 import { rand } from './rng';
 import { addRel, alive, clamp, devOf, embargoes, log, nm, rel, warBetween } from './state';
 import { homeNode, straitOwner, TOLL, unitPrice } from './trade';
 import type { GameState, Id, NeedLine, NeedsReport, Purchase, Route, World } from './types';
 
 /** Consommation mensuelle par point de développement. */
-export const NEEDS: Partial<Record<Good, number>> = { cereales: 0.003, petrole: 0.003, gaz: 0.0015, industrie: 0.0025 };
+export { NEEDS, needsOf } from './needs';
+import { needsOf } from './needs';
 export const NEED_LABEL: Partial<Record<Good, string>> = {
   cereales: 'Nourrir la population',
   petrole: 'Carburants et transports',
@@ -24,16 +25,9 @@ export const EMERGENCY = 0.25;
 export const SPOT_BUY = 0.05;
 export const SPOT_SELL = 0.03;
 /** Coût mensuel de stockage (part de la valeur). */
-export const STORAGE = 0.005;
+export const STORAGE = 0.01; // doublé au-delà de 6 mois de production et de besoins
 /** Part de sa production qu'un pays accepte d'exporter. */
 const EXPORTABLE = 0.5;
-
-export function needsOf(s: GameState, id: Id): Partial<Record<Good, number>> {
-  const dev = devOf(s, id);
-  const res: Partial<Record<Good, number>> = {};
-  for (const [g, k] of Object.entries(NEEDS) as [Good, number][]) res[g] = Math.round(dev * k * 100) / 100;
-  return res;
-}
 
 /** Unités achetées chaque mois par contrat, par marchandise. */
 export function purchased(s: GameState): Partial<Record<Good, number>> {
@@ -61,7 +55,7 @@ export interface Quote {
 /** Conditions d'un fournisseur : marge selon les relations, quantité selon sa production. */
 export function quote(s: GameState, w: World, seller: Id, good: Good): Quote {
   const r = rel(s, s.player, seller);
-  const markup = Math.round(clamp(0.15 - r / 500 + (s.rival === seller ? 0.15 : 0), 0.02, 0.4) * 100) / 100;
+  const markup = Math.round(clamp(0.15 - r / 500 + (s.rival === seller ? 0.15 : 0) + (s.nations[s.player].sanctions?.p ?? 0) * 0.5, 0.02, 0.8) * 100) / 100;
   const price = Math.round(unitPrice(s, good) * (1 + markup) * 1000) / 1000;
   const max = exportable(s, w, seller, good);
   const from = sourceNode(s, w, seller, good);
@@ -239,19 +233,23 @@ export function consumeNeeds(s: GameState, w: World, delivered: Partial<Record<G
     const fromStock = Math.min(need - own, s.stock[g] ?? 0);
     s.stock[g] = (s.stock[g] ?? 0) - fromStock;
     const market = Math.max(0, need - own - fromStock);
-    const c = market * unitPrice(s, g) * (1 + EMERGENCY);
+    const c = market * unitPrice(s, g) * (1 + EMERGENCY + (me.sanctions?.p ?? 0)); // contrebande sous sanctions
     cost += c;
     if (market > need * 0.2 && (s.prices[g] ?? 1) > 1.3) expensive = true;
     lines[g] = { need, own, stock: fromStock, market, cost: c };
   }
-  // Frais de stockage
+  // Surplus de production mis en réserve (politique de stockage)
+  const stored = storedUnits(s, w);
+  for (const [g, q] of Object.entries(stored) as [Good, number][]) s.stock[g] = (s.stock[g] ?? 0) + q;
+  // Frais de stockage : plus chers quand les entrepôts débordent
+  const needs = needsOf(s, s.player);
   for (const [g, q] of Object.entries(s.stock) as [Good, number][]) {
     if (q < 1e-4) delete s.stock[g];
-    else cost += q * unitPrice(s, g) * STORAGE;
+    else cost += q * unitPrice(s, g) * storageRate(q, (cap[g] ?? 0) + (needs[g] ?? 0));
   }
   me.treasury -= cost;
   if (expensive) me.stability = clamp(me.stability - 0.4, 0, 100);
-  return { lines, cost, purchases: purchaseCost, sales: 0, expensive };
+  return { lines, cost, purchases: purchaseCost, sales: 0, expensive, stored };
 }
 
 export function setPurchaseEscort(s: GameState, id: number, delta: number, used: number): Result {
@@ -260,4 +258,9 @@ export function setPurchaseEscort(s: GameState, id: number, delta: number, used:
   if (delta > 0 && used + delta > Math.floor(s.nations[s.player].navy)) return { ok: false, msg: 'Plus de flotte disponible' };
   p.escort = Math.max(0, p.escort + delta);
   return { ok: true, msg: `Escorte : ${p.escort} flotte(s)` };
+}
+
+/** Taux mensuel de stockage : 1 % de la valeur, 2 % au-delà de 6 mois de production et de besoins. */
+export function storageRate(q: number, monthly: number): number {
+  return q > 6 * Math.max(monthly, 0.5) ? STORAGE * 2 : STORAGE;
 }

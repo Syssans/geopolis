@@ -428,3 +428,7 @@ button.link.danger { color: var(--bad); }
 .toast.clickable .go { margin-left: auto; color: var(--gold); font-size: 20px; font-weight: 700; }
 .toast.clickable:active { background: #30363d; }
 .backbtn { display: block; width: 100%; text-align: left; background: #21262d; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; margin: 0 0 10px; font-size: 13px; color: var(--gold); cursor: pointer; }
+.store-pol { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0 2px; }
+.store-pol .seg button { font-size: 12px; padding: 5px 8px; white-space: nowrap; }
+.org-flags { display: flex; flex-wrap: wrap; gap: 2px; margin: 4px 0 8px; }
+.warchip.sanctions { border-color: var(--bad); }

@@ -1,3 +1,4 @@
+import { initOrgs } from './orgs';
 import { seedConvoys } from './convoys';
 import { seedPriceHistory } from './trade';
 import { COUNTRIES } from '../data/countries';
@@ -39,6 +40,8 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
     score: 0,
     passes: {},
     notForSale: [],
+    storePolicy: {},
+    orgs: {},
     prevPrices: {},
     priceHistory: {},
     stats: { converted: 0, contractsDone: 0, warsWon: 0, startIncome: 0, startDev: 0 },
@@ -123,7 +126,9 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
   }
   for (const [a, b, v] of RELATIONS) if (s.nations[a] && s.nations[b]) setRel(s, a, b, v);
   for (const from of ['United States of America', 'United Kingdom', 'Germany', 'France', 'Japan', 'Canada'])
-    for (const to of ['Russia', 'Iran', 'North Korea']) s.embargoes.push(`${from}>${to}`);
+    for (const to of ['Russia', 'Iran', 'North Korea', 'Syria']) s.embargoes.push(`${from}>${to}`);
+  // Sanctions américaines historiques
+  for (const to of ['Cuba', 'Venezuela']) if (s.nations[to]) s.embargoes.push(`United States of America>${to}`);
 
   // Marchands, puis forces armées calibrées sur les revenus réels
   runMerchantAI(s, world, true);
@@ -138,6 +143,7 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
     n.treasury = Math.round(monthly * 12 * 10) / 10;
     n.income = { production: inc.production, trade: inc.trade, tolls: inc.tolls, contracts: 0, upkeep: n.army * n.upkeepRate + n.navy * n.upkeepRate * 2, byNode: {} };
   }
+  initOrgs(s);
   initCampaign(s, world);
   seedConvoys(s, world);
   seedPriceHistory(s);

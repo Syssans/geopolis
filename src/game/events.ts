@@ -1,3 +1,4 @@
+import { decide } from './orgs';
 import { RELIGIONS, religiousDistance } from '../data/religions';
 import { GOODS } from '../data/trade';
 import { addToBloc } from './actions';
@@ -221,6 +222,8 @@ export function resolveEvent(s: GameState, w: World, uid: number, option: number
   const me = s.nations[s.player];
   const p = e.params;
   switch (e.kind) {
+    case 'opec':
+      return decide(s, w, ([-1, 0, 1] as const)[option] ?? 0);
     case 'callToArms': {
       const war = s.wars.find((x) => x.id === p.war);
       if (!war) return 'La guerre est déjà terminée.';

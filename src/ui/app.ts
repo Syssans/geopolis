@@ -12,6 +12,9 @@ import { advanceMonth } from '../game/tick';
 import * as C from '../game/contracts';
 import * as V from '../game/convoys';
 import * as P from '../game/purchases';
+import * as O from '../game/orgs';
+import { initOrgs } from '../game/orgs';
+import { LIFT_COST, MAX_PRESSURE, liftChance, negotiateLift } from '../game/sanctions';
 import * as E from '../game/economy';
 import { progress, scoreBreakdown, monthlyIncome } from '../game/missions';
 import { CAMPAIGNS } from '../data/campaign';
@@ -63,6 +66,13 @@ export class App {
   private marketGood: string | null = null;
   private provSort = 'value';
   private renderQueued = false;
+  /** Vitesse à reprendre une fois les alertes traitées (0 : rester en pause). */
+  private resumeSpeed = 0;
+
+  private pauseForEvents() {
+    if (this.speed > 0) this.resumeSpeed = this.speed;
+    this.setSpeed(0);
+  }
   /** Menu ouvert : celui d'un pays (onglets) ou la fiche d'une province. */
   private view: 'country' | 'province' = 'province';
   private pf: { seller: Id; good: keyof typeof GOODS; volume: number; months: number; route: number } | null = null;
@@ -126,7 +136,10 @@ export class App {
   private setSpeed(v: number) {
     this.speed = v;
     this.map.setMonthMs(SPEEDS[v]);
-    if (v > 0) this.lastSpeed = v;
+    if (v > 0) {
+      this.lastSpeed = v;
+      this.resumeSpeed = 0;
+    }
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     if (v > 0 && this.s && !this.s.gameOver) this.timer = window.setInterval(() => this.tick(), SPEEDS[v]);
@@ -136,7 +149,7 @@ export class App {
   private tick() {
     const s = this.state;
     if (s.events.length || s.gameOver) {
-      this.setSpeed(0);
+      this.pauseForEvents();
       this.renderAll();
       return;
     }
@@ -149,7 +162,7 @@ export class App {
       fresh.push(l);
     }
     for (const l of fresh.reverse()) if (l.mine) this.notify(l);
-    if (s.events.length || s.gameOver) this.setSpeed(0);
+    if (s.events.length || s.gameOver) this.pauseForEvents();
     // Affichage à l'image suivante, sauvegarde annuelle un peu plus tard : le calcul du mois,
     // le rendu et l'écriture ne s'enchaînent pas dans une seule tâche (les convois ne se figent pas)
     if (!this.renderQueued) {
@@ -159,7 +172,12 @@ export class App {
         this.renderAll();
       });
     }
-    if (s.month === 1) setTimeout(() => this.save(true), 300);
+    // Sauvegarde annuelle quand le navigateur est inactif (elle ne doit pas figer l'animation)
+    if (s.month === 1) {
+      const w = window as unknown as { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => void };
+      if (w.requestIdleCallback) w.requestIdleCallback(() => this.save(true), { timeout: 3000 });
+      else setTimeout(() => this.save(true), 300);
+    }
   }
 
   private trade(): TradeReport {
@@ -195,6 +213,8 @@ export class App {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return null;
       const s = JSON.parse(raw) as GameState;
+      s.storePolicy ??= {}; // champs ajoutés depuis
+      if (!s.orgs || !Object.keys(s.orgs).length) initOrgs(s);
       if (s.version === 4 || s.version === 5 || s.version === 6) {
         s.purchases ??= [];
         s.stock ??= {};
@@ -380,6 +400,16 @@ export class App {
       this.select(null);
       this.map.focusStrait(x);
     };
+    h.storePol = (v) => {
+      const [g, x] = v.split(':');
+      const k = g as keyof typeof GOODS;
+      if (Number(x)) this.state.storePolicy[k] = Number(x);
+      else delete this.state.storePolicy[k];
+      this.report = null;
+      this.toast(Number(x) ? `${GOODS[k].icon} Surplus de ${GOODS[k].name.toLowerCase()} : ${Number(x) === 1 ? 'tout' : 'la moitié'} en stock chaque mois` : `${GOODS[k].icon} Surplus de ${GOODS[k].name.toLowerCase()} vendu au marché`, 'good');
+      this.showContracts(this.contractsTab);
+      this.renderHud();
+    };
     h.provSort = (k) => {
       this.provSort = k;
       this.renderSheet();
@@ -389,6 +419,15 @@ export class App {
       this.showContracts('markets');
       this.el.overlay.querySelector('.content')?.scrollTo({ top: 0 });
     };
+    h.liftSanction = (id) => {
+      const r = negotiateLift(this.state, this.state.player, id);
+      this.toast(r.msg, r.ok ? 'good' : 'bad');
+      this.report = null;
+      this.explain('sanctions');
+      this.renderHud();
+    };
+    h.opecJoin = () => this.run(O.joinOpec(this.state, this.world, this.state.player));
+    h.opecLeave = () => this.run(O.leaveOpec(this.state, this.state.player));
     h.suppliers = (g) => this.showSuppliers(g as keyof typeof GOODS);
     h.buyFrom = (id) => this.showSellerGoods(id);
     h.pForm = (v) => {
@@ -459,6 +498,12 @@ export class App {
       this.closeModal();
       if (msg) this.toast(msg);
       this.renderAll();
+      // Dernière alerte traitée : la partie reprend à la vitesse d'avant
+      if (!s().events.length && this.resumeSpeed && !s().gameOver && this.el.overlay.style.display === 'none') {
+        const v = this.resumeSpeed;
+        this.resumeSpeed = 0;
+        this.setSpeed(v);
+      }
     };
     h.war = (id) => this.showWar(id);
     h.peace = (id) => this.showPeace(id);
@@ -525,7 +570,7 @@ export class App {
     // 1er toucher sur un pays : son menu ; toucher à nouveau ce pays : la fiche de la province touchée
     const owner = this.s.provinces[pid].owner;
     const current = this.selected !== null ? this.s.provinces[this.selected].owner : null;
-    if (current === owner) this.openProvince(pid);
+    if (current === owner || owner === this.s.player) this.openProvince(pid);
     else this.openCountry(undefined, owner);
   }
 
@@ -609,6 +654,7 @@ export class App {
         (s.rival && s.nations[s.rival].alive
           ? `<button class="rivalchip" data-a="gotoNation" data-p="${esc(s.rival)}">🗡️ Rival : ${esc(nm(s, s.rival))}<i style="width:${s.rivalHostility}%"></i></button>`
           : '') +
+        (me.sanctions ? `<button class="warchip sanctions" data-a="explain" data-p="sanctions">🚫 Sanctions <b class="neg">−${Math.round(me.sanctions.p * 100)} %</b></button>` : '') +
         (s.contracts.some((c) => c.lastStatus !== 'ok')
           ? `<button class="warchip" data-a="contracts" data-p="active">📦 ${s.contracts.filter((c) => c.lastStatus !== 'ok').length} contrat(s) en difficulté</button>`
           : ''),
@@ -947,6 +993,21 @@ export class App {
   }
 
   // ——— Diplomatie (soi) ———
+  /** Organisations internationales (OPEP) : membres, quotas, adhésion. */
+  private orgsHtml(): string {
+    const s = this.state;
+    const o = s.orgs?.opep;
+    if (!o) return '';
+    const member = o.members.includes(s.player);
+    const t = o.nextMeeting;
+    const why = member ? null : O.canJoin(s, this.world, s.player);
+    return `<h3>Organisations</h3><div class="card org"><div class="mh"><b>${o.icon} ${o.name}</b><small>${member ? '<b class="c-gold">vous êtes membre</b>' : `${o.members.length} membres`}</small></div>
+      <div class="org-flags">${o.members.map((m) => this.flag(m)).join('')}</div>
+      <div class="stats three">${stat('Quota pétrole', `<span class="${o.quota < 1 ? 'neg' : o.quota > 1 ? 'pos' : ''}">${Math.round(o.quota * 100)} %</span>`)}${stat('Cours du baril', `<span class="c-blue">${money(unitPriceOf(s, 'petrole'))}</span>`)}${stat('Prochaine réunion', `${MONTHS[t % 12]} ${Math.floor(t / 12)}`)}</div>
+      <p class="hint">Tous les six mois, les membres votent leurs quotas de production (poids selon le pétrole produit). Réduire fait monter le cours mondial — tous les producteurs en profitent — mais les membres vendent moins de barils. Dernière décision : ${esc(o.last)}.</p>
+      <div class="actions">${member ? this.action('opecLeave', 'Quitter l’OPEP', 'Plus de quota · 🌍 −15 avec les membres', { danger: true, wide: true }) : this.action('opecJoin', 'Adhérer à l’OPEP', `🤝${O.JOIN_COST} · voter les quotas · 🌍 +10 avec les membres`, { wide: true, disabled: why ?? undefined })}</div></div>`;
+  }
+
   private ownDiplo(): string {
     const s = this.state;
     const me = this.me;
@@ -961,7 +1022,8 @@ export class App {
         : '<p class="muted">Non-aligné. Touchez un pays pour proposer une alliance ou rejoindre son bloc.</p>'}
       <h3>Échanges</h3><div class="rows">
         <div class="row"><span>Accords commerciaux</span><span>${s.trades.filter((k) => k.split('|').includes(me.id)).length}</span></div>
-        <div class="row"><span>Embargos subis</span><span class="${emb.length ? 'neg' : ''}">${emb.length ? esc(emb.join(', ')) : 'aucun'}</span></div></div>
+        <div class="row" data-a="explain" data-p="sanctions" style="cursor:pointer"><span>Embargos subis</span><span class="${emb.length ? 'neg' : ''}">${emb.length ? `${s.embargoes.filter((k) => k.endsWith(`>${me.id}`)).map((k) => flagOf(k.split('>')[0])).join(' ')} · −${Math.round((me.sanctions?.p ?? 0) * 100)} % ›` : 'aucun'}</span></div></div>
+      ${this.orgsHtml()}
       <h3>Meilleures relations</h3><div class="rows">${rels.slice().sort((a, b) => b.r - a.r).slice(0, 6).map(line).join('')}</div>
       <h3>Pires relations</h3><div class="rows">${rels.slice().sort((a, b) => a.r - b.r).slice(0, 6).map(line).join('')}</div>`;
   }
@@ -983,6 +1045,8 @@ export class App {
     const badges: string[] = [];
     if (n.bloc) badges.push(`<span class="badge-i ally">🛡️ ${esc(s.blocs[n.bloc].name)}</span>`);
     if (n.nuclear) badges.push('<span class="badge-i nuke">☢ Nucléaire</span>');
+    if (O.isMember(s, 'opep', id)) badges.push('<span class="badge-i ally">🛢️ OPEP</span>');
+    if (n.sanctions) badges.push(`<span class="badge-i war">🚫 Sanctionné −${Math.round(n.sanctions.p * 100)} %</span>`);
     if (trade) badges.push('<span class="badge-i ally">Accord commercial</span>');
     if (emb) badges.push('<span class="badge-i war">Sous votre embargo</span>');
     if (embargoes(s, id, me.id)) badges.push('<span class="badge-i war">Vous impose un embargo</span>');
@@ -1097,7 +1161,7 @@ export class App {
       title = '💰 Trésor';
       html = `<p>L’argent de l’État : <b>${money(me.treasury)}</b>. S’il devient négatif, c’est la faillite : l’armée déserte et la stabilité chute.</p>
         <h3>Chaque mois</h3><div class="rows">
-        ${row('Contrats commerciaux', inc.contracts ?? 0, 'Md$')}${row('Production vendue localement', inc.production, 'Md$')}${row('Commerce (nœuds)', inc.trade, 'Md$')}${row('Péages des détroits', inc.tolls, 'Md$')}${row('Entretien armée et flotte', -inc.upkeep, 'Md$')}${row('Contrats d’achat', -(s.needs?.purchases ?? 0), 'Md$')}${row('Besoins de la population (achats d’urgence, stockage)', -(s.needs?.cost ?? 0), 'Md$')}
+        ${row('Contrats commerciaux', inc.contracts ?? 0, 'Md$')}${row('Production vendue localement', inc.production, 'Md$')}${row('Commerce (nœuds)', inc.trade, 'Md$')}${row('Péages des détroits', inc.tolls, 'Md$')}${row('Entretien armée et flotte', -inc.upkeep, 'Md$')}${row('Contrats d’achat', -(s.needs?.purchases ?? 0), 'Md$')}${row('Besoins de la population (achats d’urgence, stockage)', -(s.needs?.cost ?? 0), 'Md$')}${inc.sanctions ? row('Pertes dues aux sanctions', -inc.sanctions, 'Md$') : ''}${inc.war ? row('Guerre : blocus et lassitude', -inc.war, 'Md$') : ''}
         <div class="row"><span><b>Solde</b></span><span class="${cls(net)}"><b>${net >= 0 ? '+' : ''}${money(net)}</b></span></div></div>
         <h3>À quoi il sert</h3><p class="muted">Moderniser, reconvertir ou prospecter vos provinces · recruter armée et flotte · acheter des droits de passage · aide aux pays amis.</p>
         <h3>Comment l’augmenter</h3><p class="muted">Signer des contrats (📦 Économie), moderniser les provinces qui produisent les marchandises chères, placer vos marchands, contrôler un détroit.</p>`;
@@ -1116,6 +1180,16 @@ export class App {
         <h3>Ce qui la fait baisser</h3><p class="muted">Guerres sans casus belli, lassitude de guerre, insurrections, faillite, crises mal gérées, réformes brutales.</p>
         <h3>Ce qui la fait monter</h3><p class="muted">Appel à l’unité nationale (🔥40), victoires, concessions aux minorités, politique de tolérance.</p>
         <h3>Effets</h3><p class="muted">Sous 50, les minorités s’agitent davantage ; sous 35, l’armée perd en efficacité et les insurrections se multiplient.</p>`;
+    } else if (key === 'sanctions') {
+      const sp = me.sanctions;
+      title = '🚫 Sanctions internationales';
+      html = sp
+        ? `<p>Des pays pesant lourd dans l’économie mondiale vous imposent un embargo, et leurs alliés suivent en partie. Pression actuelle : <b class="neg">${Math.round(sp.p * 100)} %</b> (plafond ${Math.round(MAX_PRESSURE * 100)} %).</p>
+          <ul class="consequences"><li>Commerce (nœuds) −${Math.round(sp.p * 100)} %</li><li>Production vendue −${Math.round(sp.p * 60)} %, contrats −${Math.round(sp.p * 30)} %</li><li>Achats d’urgence et fournisseurs plus chers (<span class="neg">+${Math.round(sp.p * 100)} %</span> et <span class="neg">+${Math.round(sp.p * 50)} %</span>)</li><li>Stabilité −${num(sp.p * 0.8, 2)} par mois</li></ul>
+          <p>Pertes ce mois : <b class="neg">−${money(inc.sanctions ?? 0)}</b>.</p>
+          <h3>Qui vous sanctionne</h3><div class="rows">${sp.by.map((id) => `<div class="row"><span>${this.flag(id)} ${esc(nm(s, id))} <small class="muted">🌍 ${signed(Math.round(rel(s, me.id, id)))}</small></span><button class="chip" data-a="liftSanction" data-p="${esc(id)}" ${me.influence < LIFT_COST ? 'disabled' : ''}>Négocier 🤝${LIFT_COST} · ${Math.round(liftChance(s, me.id, id) * 100)} %</button></div>`).join('')}</div>
+          <p class="hint">Les chances montent avec vos relations et baissent avec votre agressivité ; votre rival est le plus dur à convaincre. Améliorer d’abord les relations (fiche du pays) aide beaucoup.</p>`
+        : '<p>Aucune sanction ne vous vise. Attention : une guerre sans motif, une interception de convoi ou une agressivité élevée poussent les grandes puissances à vous sanctionner.</p>';
     } else {
       title = '☢️ Tension mondiale';
       html = `<p>Le niveau de danger du monde : <b>${num(s.tension)} %</b>. Elle monte avec les guerres, les détroits fermés et surtout les affrontements entre puissances nucléaires.</p><p class="muted">Au-delà de 95 %, si deux puissances nucléaires sont en guerre, l’escalade peut mettre fin à la partie pour tout le monde.</p>`;
@@ -1226,15 +1300,17 @@ export class App {
     };
     if (tab === 'resources') {
       const bought = P.purchased(s);
+      const storedAll = C.storedUnits(s, this.world);
       // Seules les marchandises produites ici : les achats et stocks sans production figurent dans « Besoins et stocks »
       const goods = (Object.keys(cap) as (keyof typeof GOODS)[]).filter((g) => (cap[g] ?? 0) > 1e-6);
       const worth = (g: keyof typeof GOODS) => ((cap[g] ?? 0) + (bought[g] ?? 0) + (s.stock[g] ?? 0)) * unitPriceOf(s, g);
       goods.sort((a, b) => worth(b) - worth(a));
       html += this.needsHtml();
-      html += `<h3>🏭 Production</h3><p class="hint">Ce que vos provinces produisent chaque mois. La part <b class="gold">sous contrat</b> est vendue à prix garanti ; le <b>disponible</b> part sur le marché et peut être proposé aux acheteurs. Touchez une province pour la moderniser. Ce que vous achetez sans le produire apparaît plus haut dans « Besoins et stocks » ; les acheteurs étrangers peuvent quand même vous le demander.</p>`;
+      html += `<h3>🏭 Production</h3><p class="hint">Ce que vos provinces produisent chaque mois. La part <b class="gold">sous contrat</b> est vendue à prix garanti ; le <b>disponible</b> part sur le marché et peut être proposé aux acheteurs. Le <b>surplus</b> (ni vendu sous contrat, ni consommé par la population) part au marché, ou en stock si vous le choisissez : de quoi spéculer ou constituer des réserves, mais chaque mois de stock coûte 1 % de sa valeur (2 % au-delà de 6 mois). Touchez une province pour la moderniser. Ce que vous achetez sans le produire apparaît plus haut dans « Besoins et stocks » ; les acheteurs étrangers peuvent quand même vous le demander.</p>`;
       html += goods.map((g) => {
         const d = GOODS[g];
         const own = cap[g] ?? 0;
+        const storedNow = storedAll[g] ?? 0;
         const buy = bought[g] ?? 0;
         const st = s.stock[g] ?? 0;
         const c = own + buy;
@@ -1253,6 +1329,7 @@ export class App {
             const works = p.works ? ` 🏗️${p.works.months}m` : '';
             return `<button class="chip" data-a="goto" data-p="${pid}">${esc(this.world.provinces[pid].name)} ${'★'.repeat(p.level ?? 0)}${works} · ${qty(output(s, this.world, pid))}</button>`;
           }).join('')}${prov.length > 8 ? `<span class="muted"> +${prov.length - 8}</span>` : ''}</div>
+          <div class="store-pol"><span>Surplus${storedNow > 1e-3 ? ` <b class="c-blue">+${qty(storedNow)}/mois en stock</b>` : ''}</span><span class="seg">${[[0, '🏪 Vendre'], [0.5, '½'], [1, '🏬 Stocker']].map(([v, l]) => `<button class="${(s.storePolicy[g] ?? 0) === v ? 'on' : ''}" data-a="storePol" data-p="${g}:${v}">${l}</button>`).join('')}</span></div>
           <label class="check"><input type="checkbox" data-a="forSale" data-p="${g}" ${selling ? 'checked' : ''}><span>Accepter les offres d’achat étrangères</span></label></div>`;
       }).join('');
     } else if (tab === 'markets') {

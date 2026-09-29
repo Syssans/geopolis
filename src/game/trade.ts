@@ -1,6 +1,7 @@
 import { GOODS, STRAITS, TRADE_NODES, type Good } from '../data/trade';
 import { divertedShare } from './contracts';
 import { embargoes, owned, tradeCount } from './state';
+import { oilPricePush, oilQuota } from './orgs';
 import type { GameState, Id, Pid, World } from './types';
 
 /** Part de la production versée directement au propriétaire ; le reste entre dans le commerce. */
@@ -68,6 +69,7 @@ export function output(s: GameState, w: World, pid: Pid): number {
   const p = s.provinces[pid];
   let u = info.dev * 0.05 * (1 + 0.35 * (p.level ?? 0));
   if (p.works && p.works.kind !== 'upgrade') u *= 0.5; // chantier de reconversion ou de forage
+  if ((p.good ?? info.good) === 'petrole') u *= oilQuota(s, p.owner); // quotas de l'OPEP
   if (p.occupiedBy) u *= 0.3;
   if (p.revolt) u = 0;
   else if (p.unrest > 60) u *= 0.7;
@@ -146,7 +148,7 @@ export function computeTrade(s: GameState, w: World): TradeReport {
 
   const local: Record<string, number> = {};
   for (const n of TRADE_NODES) local[n.id] = 0;
-  const divert = s.contracts?.length ? divertedShare(s, w) : {};
+  const divert = s.contracts?.length || Object.values(s.storePolicy ?? {}).some((p) => p) ? divertedShare(s, w) : {};
   s.provinces.forEach((p, i) => {
     let v = production(s, w, i);
     if (p.owner === s.player) v *= 1 - (divert[p.good ?? w.provinces[i].good] ?? 0);
@@ -248,6 +250,7 @@ export function updatePrices(s: GameState, w: World, rand: () => number) {
       if (st.id === 'bosphore') { bump('cereales', 0.3); bump('petrole', 0.1); }
       if (st.id === 'gibraltar' || st.id === 'danois') { bump('industrie', 0.1); bump('gaz', 0.1); }
     }
+  target.petrole += oilPricePush(s);
   for (const [g, def] of Object.entries(GOODS)) {
     const p = s.prices[g] ?? 1;
     const next = p + (target[g] - p) * 0.15 + (rand() - 0.5) * def.volatility;

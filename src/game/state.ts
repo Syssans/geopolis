@@ -224,6 +224,7 @@ export function baseline(s: GameState, a: Id, b: Id): number {
   let v = na.religion === nb.religion ? 15 : 5 - religiousDistance(na.religion, nb.religion) * 15;
   if (sameBloc(s, a, b)) v += 25;
   if (hasTrade(s, a, b)) v += 8;
+  if (s.orgs?.opep?.members.includes(a) && s.orgs.opep.members.includes(b)) v += 8;
   const d = desecrators(s);
   if (d.get(na.religion)?.has(b)) v -= 20;
   if (d.get(nb.religion)?.has(a)) v -= 20;
