@@ -59,7 +59,10 @@ ul.consequences li { margin: 2px 0; }
 #map text.strait-name.closed { fill: #ff7b72; }
 #map g.markers { pointer-events: none; }
 #map g.marker text { text-anchor: middle; paint-order: stroke; stroke: #0d1117; }
-#map g.marker .m-icon { dominant-baseline: middle; fill: #ffd54a; stroke-width: 0.6; }
+#map g.marker .m-icon { dominant-baseline: middle; fill: #ffd54a; stroke-width: 0.4; }
+#map g.marker .m-dot { fill: #fff; stroke: #0d1117; stroke-width: 0.5; vector-effect: non-scaling-stroke; }
+#map g.marker.own .m-dot { fill: #ffd54a; }
+#map g.marker.lost .m-dot { fill: #8b949e; }
 #map g.marker.own .m-icon { fill: #fff3b0; }
 #map g.marker.lost .m-icon { fill: #8b949e; }
 #map g.marker .m-name { fill: #fff; font-weight: 700; dominant-baseline: hanging; }
@@ -170,7 +173,7 @@ h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 
 .rows { display: flex; flex-direction: column; gap: 4px; }
 .row { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid #30363d80; font-size: 13px; }
-.row span:last-child { font-variant-numeric: tabular-nums; text-align: right; }
+.row span:last-child { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 
 .slider { display: flex; align-items: center; gap: 8px; background: #0d1117; border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
 .slider input { flex: 1; accent-color: var(--gold); }

@@ -1157,6 +1157,17 @@ export class App {
     );
   }
 
+  /** Confiance des partenaires : ce qui ampute les exportations et pourquoi. */
+  private trustHtml(): string {
+    const t = this.me.trust;
+    if (!t) return '';
+    const line = (l: string, v: number, why: string) => `<div class="row"><span>${l} <small class="muted">${why}</small></span><span class="${v > 0 ? 'neg' : 'pos'}">${v > 0 ? `−${Math.round(v * 100)} %` : 'OK'}</span></div>`;
+    return `<h3>🤝 Confiance des partenaires ${t.loss > 0 ? `<span class="neg">−${Math.round(t.loss * 100)} % d’exportations</span>` : '<span class="pos">intacte</span>'}</h3><div class="rows">
+      ${line('⚖️ Stabilité', t.stability, `${Math.round(this.me.stability)}/100 (pénalité sous 50)`)}
+      ${line('🌍 Relations avec vos partenaires', t.relations, `moyenne ${t.avgRel >= 0 ? '+' : '−'}${Math.abs(Math.round(t.avgRel))} (pénalité sous +25)`)}
+      ${line('⚔️ Guerres d’agression', t.aggression, '−8 % par guerre déclarée en cours')}</div>`;
+  }
+
   /** Fiches explicatives des ressources du bandeau. */
   private explain(key: string) {
     const s = this.state;
@@ -1170,8 +1181,10 @@ export class App {
       title = '💰 Trésor';
       html = `<p>L’argent de l’État : <b>${money(me.treasury)}</b>. S’il devient négatif, c’est la faillite : l’armée déserte et la stabilité chute.</p>
         <h3>Chaque mois</h3><div class="rows">
-        ${row('Contrats commerciaux', inc.contracts ?? 0, 'Md$')}${row('Production vendue localement', inc.production, 'Md$')}${row('Commerce (nœuds)', inc.trade, 'Md$')}${row('Péages des détroits', inc.tolls, 'Md$')}${row('Entretien armée et flotte', -inc.upkeep, 'Md$')}${row('Contrats d’achat', -(s.needs?.purchases ?? 0), 'Md$')}${row('Besoins de la population (achats d’urgence, stockage)', -(s.needs?.cost ?? 0), 'Md$')}${row(`Fonctionnement de l’État (${TIERS[me.tier - 1].name.toLowerCase()})`, -(inc.admin ?? 0), 'Md$')}${inc.sanctions ? row('Pertes dues aux sanctions', -inc.sanctions, 'Md$') : ''}${inc.war ? row('Guerre : blocus et lassitude', -inc.war, 'Md$') : ''}
+        ${row('Contrats commerciaux', inc.contracts ?? 0, 'Md$')}${row('Production vendue sur place', inc.production, 'Md$')}${row(`Exportations via ${Object.keys(inc.byNode ?? {}).length > 1 ? 'vos nœuds' : `le nœud ${esc(NODES.get(Object.keys(inc.byNode ?? {})[0] ?? '')?.name ?? 'commercial')}`}`, inc.trade, 'Md$')}${inc.distrust ? row('Défiance des partenaires', -inc.distrust, 'Md$') : ''}${row('Péages des détroits', inc.tolls, 'Md$')}${row('Entretien armée et flotte', -inc.upkeep, 'Md$')}${row('Contrats d’achat', -(s.needs?.purchases ?? 0), 'Md$')}${row('Besoins de la population (achats d’urgence, stockage)', -(s.needs?.cost ?? 0), 'Md$')}${row(`Fonctionnement de l’État (${TIERS[me.tier - 1].name.toLowerCase()})`, -(inc.admin ?? 0), 'Md$')}${inc.sanctions ? row('Pertes dues aux sanctions', -inc.sanctions, 'Md$') : ''}${inc.war ? row('Guerre : blocus et lassitude', -inc.war, 'Md$') : ''}
         <div class="row"><span><b>Solde</b></span><span class="${cls(net)}"><b>${net >= 0 ? '+' : ''}${money(net)}</b></span></div></div>
+        <p class="muted">Un quart de votre production est vendu sur place ; le reste part à l’export par les nœuds commerciaux, où vous en récupérez la part que votre poids (ports, flotte, marchands) vous permet de capter.</p>
+        ${this.trustHtml()}
         <h3>À quoi il sert</h3><p class="muted">Moderniser, reconvertir ou prospecter vos provinces · recruter armée et flotte · acheter des droits de passage · aide aux pays amis.</p>
         <h3>Comment l’augmenter</h3><p class="muted">Signer des contrats (📦 Économie), moderniser les provinces qui produisent les marchandises chères, placer vos marchands, contrôler un détroit.</p>`;
     } else if (key === 'influence') {
@@ -1188,7 +1201,7 @@ export class App {
       html = `<p>La cohésion du pays : <b>${num(me.stability)}/100</b>. Elle revient doucement vers ${num(me.baseStability)} (son niveau naturel).</p>
         <h3>Ce qui la fait baisser</h3><p class="muted">Guerres sans casus belli, lassitude de guerre, insurrections, faillite, crises mal gérées, réformes brutales.</p>
         <h3>Ce qui la fait monter</h3><p class="muted">Appel à l’unité nationale (🔥40), victoires, concessions aux minorités, politique de tolérance.</p>
-        <h3>Effets</h3><p class="muted">Sous 50, les minorités s’agitent davantage ; sous 35, l’armée perd en efficacité et les insurrections se multiplient.</p>`;
+        <h3>Effets</h3><p class="muted">Sous 50, les partenaires commerciaux se détournent (jusqu’à −35 % d’exportations à 0) et les minorités s’agitent davantage ; sous 35, l’armée perd en efficacité et les insurrections se multiplient.</p>`;
     } else if (key === 'sanctions') {
       const sp = me.sanctions;
       title = '🚫 Sanctions internationales';

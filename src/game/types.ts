@@ -83,7 +83,9 @@ export interface Nation {
   missionProgress: number;
   closedStraits: string[];
   /** Dernier bilan mensuel (affichage). */
-  income: { production: number; trade: number; tolls: number; contracts: number; upkeep: number; byNode: Record<string, number>; sanctions?: number; war?: number; admin?: number };
+  income: { production: number; trade: number; tolls: number; contracts: number; upkeep: number; byNode: Record<string, number>; sanctions?: number; war?: number; admin?: number; distrust?: number };
+  /** Confiance des partenaires commerciaux (voir trust.ts). */
+  trust?: { loss: number; stability: number; relations: number; aggression: number; avgRel: number };
   /** Pression des sanctions subies (0 → 0,8) et nations qui les imposent. */
   sanctions?: { p: number; by: Id[] };
 }

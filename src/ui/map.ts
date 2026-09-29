@@ -473,7 +473,8 @@ export class MapView {
     const caps = CAPITALS as Record<string, { name: string; lon: number; lat: number }>;
     const add = (x: number, y: number, icon: string, name: string, cls: string) => {
       const m = el('g', { class: `marker ${cls}`, transform: `translate(${x.toFixed(2)},${y.toFixed(2)})` }, g);
-      el('text', { class: 'm-icon' }, m).textContent = icon;
+      if (icon) el('text', { class: 'm-icon' }, m).textContent = icon;
+      else el('circle', { class: 'm-dot', r: '1' }, m);
       el('text', { class: 'm-name' }, m).textContent = name;
     };
     if (mode === 'political') {
@@ -484,7 +485,7 @@ export class MapView {
         const [x, y] = c ? (this.projection([c.lon, c.lat]) ?? this.centers[p.id]) : this.centers[p.id];
         // Capitale tombée aux mains d'un autre pays : étoile grisée
         const cls = owner !== p.country ? 'lost' : owner === s.player ? 'own' : '';
-        add(x, y, '★', c?.name ?? p.name, `cap ${cls}`);
+        add(x, y, '', c?.name ?? p.name, `cap ${cls}`);
       }
     } else {
       for (const p of this.world.provinces) {
@@ -502,15 +503,17 @@ export class MapView {
   private sizeMarkers() {
     const f = 1 / Math.sqrt(this.k);
     for (const m of this.markerLayer.querySelectorAll<SVGGElement>('g.marker')) {
-      const [icon, name] = m.children as unknown as SVGTextElement[];
-      const big = m.classList.contains('own');
-      // Les capitales sont nombreuses : leurs noms attendent un zoom plus fort que ceux des lieux saints
-      const names = this.k >= (m.classList.contains('cap') ? 4.5 : 2.5);
-      icon.setAttribute('font-size', ((big ? 9 : 7) * f).toFixed(2));
-      name.style.display = names || big ? '' : 'none';
-      name.setAttribute('font-size', (5.5 * f).toFixed(2));
-      name.setAttribute('dy', (8 * f).toFixed(2));
-      name.setAttribute('stroke-width', (1.6 * f).toFixed(2));
+      const [icon, name] = m.children as unknown as SVGElement[];
+      const own = m.classList.contains('own');
+      const cap = m.classList.contains('cap');
+      // Les capitales sont nombreuses : leurs noms n'apparaissent qu'en zoomant franchement
+      const names = this.k >= (cap ? 12 : 4);
+      if (cap) icon.setAttribute('r', ((own ? 2 : 1.4) * f).toFixed(2));
+      else icon.setAttribute('font-size', ((own ? 5.5 : 4.5) * f).toFixed(2));
+      name.style.display = names ? '' : 'none';
+      name.setAttribute('font-size', (4.5 * f).toFixed(2));
+      name.setAttribute('dy', ((cap ? 2.5 : 4) * f).toFixed(2));
+      name.setAttribute('stroke-width', (1.2 * f).toFixed(2));
     }
   }
 

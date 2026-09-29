@@ -4,6 +4,7 @@ import { generateOffers, processContracts, setMarketCapture } from './contracts'
 import { monthlyConvoys } from './convoys';
 import { aiOrgs, monthlyOrgs } from './orgs';
 import { sanctionsPressure } from './sanctions';
+import { tradeTrust } from './trust';
 import { adminCost } from './needs';
 import { consumeNeeds, processPurchases } from './purchases';
 import { contractCrises, marketCrisis, runRival } from './crises';
@@ -55,6 +56,11 @@ export function advanceMonth(s: GameState, w: World) {
       inc.trade *= 1 - p;
       n.stability = clamp(n.stability - 0.8 * p, 0, 100);
     }
+    // Défiance des partenaires : instabilité, mauvaises relations et agressions détournent le commerce
+    const trust = tradeTrust(s, report, n.id);
+    n.trust = trust;
+    const lostTrust = inc.trade * trust.loss;
+    inc.trade -= lostTrust;
     // Guerre : blocus naval de l'ennemi et lassitude de la population
     let lostWar = 0;
     const wars = warsOf(s, n.id);
@@ -69,7 +75,7 @@ export function advanceMonth(s: GameState, w: World) {
       inc.production *= 1 - weary;
     }
     const admin = adminCost(s, n.id);
-    n.income = { ...inc, contracts: fromContracts * (1 - 0.3 * (n.sanctions?.p ?? 0)), upkeep, sanctions: lostSanctions, war: lostWar, admin };
+    n.income = { ...inc, contracts: fromContracts * (1 - 0.3 * (n.sanctions?.p ?? 0)), upkeep, sanctions: lostSanctions, war: lostWar, admin, distrust: lostTrust };
     n.treasury += inc.production + inc.trade + inc.tolls + n.income.contracts - upkeep - admin;
     if (n.treasury < 0) {
       // Faillite : désertions et mécontentement
