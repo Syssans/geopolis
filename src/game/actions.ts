@@ -24,7 +24,8 @@ const fail = (msg: string): ActionResult => ({ ok: false, msg });
 
 export function canPay(s: GameState, id: Id, c: Cost): boolean {
   const n = s.nations[id];
-  return n.treasury >= (c.money ?? 0) && n.influence >= (c.influence ?? 0) && n.fervor >= (c.fervor ?? 0);
+  // Un trésor négatif (faillite) n'empêche que les dépenses d'argent, pas les actions payées en influence ou en ferveur
+  return (!c.money || n.treasury >= c.money) && n.influence >= (c.influence ?? 0) && n.fervor >= (c.fervor ?? 0);
 }
 
 function pay(s: GameState, id: Id, c: Cost) {

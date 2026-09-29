@@ -69,10 +69,8 @@ export function runRival(s: GameState, w: World) {
   if (!rid) return;
   const R = s.nations[rid];
   const me = s.nations[s.player];
-  if (!R.alive) {
-    s.rival = null;
-    return;
-  }
+  // Rival éliminé : il ne nuit plus, mais on le garde en mémoire pour le bilan (+40 au score)
+  if (!R.alive) return;
   s.rivalHostility = clamp(s.rivalHostility + 0.6, 0, 100);
   if (rand(s) > 0.05 + s.rivalHostility / 900) return;
   const reach = inReach(s, w, rid, s.player);
