@@ -79,6 +79,9 @@ ul.consequences li { margin: 2px 0; }
 #map text.label { fill: #fff; font-weight: 700; text-anchor: middle; dominant-baseline: middle; pointer-events: none;
   paint-order: stroke; stroke: #0d1117; stroke-linejoin: round; letter-spacing: .03em; text-rendering: geometricPrecision; }
 
+#map text.label.rel.pos { fill: #7ee787; }
+#map text.label.rel.neg { fill: #ff7b72; }
+
 /* ——— Bandeau ——— */
 .hud { position: absolute; left: 0; right: 0; top: 0; padding: calc(6px + var(--safe-top)) 8px 8px; display: grid; gap: 6px;
   grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'me time' 'res res';

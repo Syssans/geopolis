@@ -15,7 +15,7 @@ export type Religion =
 export type Family = 'chretien' | 'musulman' | 'juif' | 'dharmique' | 'autre';
 
 export const RELIGIONS: Record<Religion, { name: string; adj: string; family: Family; color: string; icon: string }> = {
-  catholique: { name: 'Catholicisme', adj: 'catholique', family: 'chretien', color: '#d9b44a', icon: '✝️' },
+  catholique: { name: 'Catholicisme', adj: 'catholique', family: 'chretien', color: '#f2f2f2', icon: '✝️' },
   protestant: { name: 'Protestantisme', adj: 'protestante', family: 'chretien', color: '#5b8fd6', icon: '✝️' },
   evangelique: { name: 'Évangélisme', adj: 'évangélique', family: 'chretien', color: '#8fc1e8', icon: '✝️' },
   orthodoxe: { name: 'Orthodoxie', adj: 'orthodoxe', family: 'chretien', color: '#a262c9', icon: '☦️' },

@@ -264,7 +264,8 @@ export class MapView {
   }
 
   // ————— Étiquettes des nations —————
-  private labels: { text: SVGTextElement; area: number; len: number }[] = [];
+  private labels: { id: Id; text: SVGTextElement; area: number; len: number; hidden?: boolean }[] = [];
+  private labelSig = '';
 
   private buildLabels(s: GameState) {
     this.labelLayer.innerHTML = '';
@@ -291,8 +292,34 @@ export class MapView {
       const name = s.nations[id].name;
       const t = el('text', { class: 'label', x: String(sw ? sx / sw : cx), y: String(sw ? sy / sw : cy) }, this.labelLayer);
       t.textContent = name;
-      this.labels.push({ text: t, area, len: name.length });
+      this.labels.push({ id, text: t, area, len: name.length });
     }
+    this.labelSig = '';
+    this.updateLabels();
+  }
+
+  /** Politique : noms des pays. Diplomatie : 🌍 et relations avec vous. Autres cartes : rien. */
+  private labelMode(s: GameState, mode: MapMode) {
+    const show = mode === 'political' || mode === 'diplomatic';
+    this.labelLayer.style.display = show ? '' : 'none';
+    if (!show) return;
+    const vals = mode === 'diplomatic' ? this.labels.map((l) => (l.id === s.player ? 'x' : Math.round(rel(s, s.player, l.id)))) : [];
+    const sig = `${mode}|${s.player}|${vals.join(',')}`;
+    if (sig === this.labelSig) return;
+    this.labelSig = sig;
+    this.labels.forEach((l, i) => {
+      if (mode === 'political') {
+        l.text.textContent = s.nations[l.id].name;
+        l.text.setAttribute('class', 'label');
+        l.hidden = false;
+      } else {
+        const v = vals[i];
+        l.hidden = v === 'x';
+        l.text.textContent = v === 'x' ? '' : `🌍 ${Number(v) > 0 ? '+' : Number(v) < 0 ? '−' : ''}${Math.abs(Number(v))}`;
+        l.text.setAttribute('class', `label rel ${Number(v) > 0 ? 'pos' : Number(v) < 0 ? 'neg' : ''}`);
+      }
+      l.len = Math.max(4, l.text.textContent!.length);
+    });
     this.updateLabels();
   }
 
@@ -301,7 +328,7 @@ export class MapView {
     for (const l of this.labels) {
       // Taille à l'écran proportionnelle à l'étendue du pays, plafonnée pour rester lisible
       const screen = Math.min(20, ((Math.sqrt(l.area) * k) / l.len) * 1.5);
-      const visible = screen >= 7;
+      const visible = screen >= 7 && !l.hidden;
       l.text.style.display = visible ? '' : 'none';
       if (visible) {
         l.text.setAttribute('font-size', (screen / k).toFixed(3));
@@ -674,12 +701,12 @@ export class MapView {
       this.borders.setAttribute('d', d);
       this.buildLabels(s);
     }
-    this.labelLayer.style.display = mode === 'trade' ? 'none' : '';
+    this.labelMode(s, mode);
     if (mode === 'trade') this.drawTrade(s, selected !== null ? this.world.provinces[selected].node : null);
     else if (this.tradeLayer.childElementCount) this.tradeLayer.innerHTML = '';
     this.drawMarkers(s, mode);
     this.drawOutline(s, selOwner ?? me, owners);
-    this.drawGoods(s, mode === 'trade' ? null : selOwner);
+    this.drawGoods(s, mode === 'trade' ? (selOwner ?? me) : null);
     this.syncConvoys(s, mode, selConvoy);
   }
 }
