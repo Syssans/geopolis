@@ -59,6 +59,7 @@ npm run build      # build de production dans dist/ (PWA installable)
 | **Diplomatie** | Relations (religion, blocs, commerce, lieux saints + historique), accords commerciaux, embargos, alliances et blocs (OTAN, OTSC…), garanties informelles des grandes puissances. |
 | **Guerre** | Sièges province par province, score de guerre selon le développement occupé, traités à la carte (annexion de provinces précises, satellisation, réparations). Dissuasion et tension nucléaires. |
 | **IA** | Chaque nation place ses marchands, gère armée et flotte, envoie des missionnaires, arme des insurgés coreligionnaires, ferme ses détroits en guerre, proclame des guerres saintes et attaque les voisins faibles. |
+| **Identité visuelle** | L'interface prend les couleurs de la culture jouée : 15 thèmes (latin, anglo-saxon, nordique, slave, arabe, persan, turc, chinois, japonais, coréen, indien, Asie du Sud-Est, africain, latino-américain, israélien) avec leur police, leur palette, un motif traditionnel dans le HUD (seigaïha, frette chinoise, étoile à huit branches, kente…) et une mer teintée. Polices embarquées, jouables hors ligne. |
 
 ## Architecture
 
@@ -78,6 +79,7 @@ src/data/routes.ts            ports et tracés réels des voies commerciales
   war.ts                        guerres, sièges, traités
   ai.ts, events.ts, tick.ts     IA, événements, boucle mensuelle
 src/ui/                       carte SVG (d3-geo + d3-zoom), HUD, fiches, modales
+  themes.ts, fonts.ts           thèmes culturels (palettes, motifs, polices)
 tests/                        commerce, religion, guerre, simulation de 30 ans
 ```
 

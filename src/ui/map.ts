@@ -152,7 +152,7 @@ export class MapView {
     parent.appendChild(this.svg);
 
     this.projection.fitExtent([[4, 4], [W - 4, H - 4]], { type: 'Sphere' });
-    el('path', { d: this.path({ type: 'Sphere' }) ?? '', fill: '#12263a' }, this.root);
+    el('path', { d: this.path({ type: 'Sphere' }) ?? '', class: 'sphere' }, this.root);
     el('path', { d: this.path(geoGraticule10()) ?? '', class: 'graticule' }, this.root);
 
     const obj = topo.objects.provinces as GeometryCollection;
@@ -168,6 +168,10 @@ export class MapView {
     // Les convois bougent à chaque image : dans un SVG à part, leur animation ne force plus à repeindre les ~900 provinces
     this.overlay = el('svg', { id: 'convoy-map', viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'xMidYMid meet' });
     parent.appendChild(this.overlay);
+    // Vignettage aux couleurs du thème culturel (statique : ne coûte rien à l'animation)
+    const vignette = document.createElement('div');
+    vignette.className = 'map-vignette';
+    parent.appendChild(vignette);
     this.overlayRoot = el('g', {}, this.overlay);
     this.convoyLayer = el('g', { class: 'convoys' }, this.overlayRoot);
     this.routeLine = el('path', { class: 'convoy-route' }, this.convoyLayer);

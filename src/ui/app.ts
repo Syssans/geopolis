@@ -32,6 +32,7 @@ import type { Topology } from 'topojson-specification';
 import { cls, colorSigns, esc, iconize, money, num, partitive, pct, pop, signed } from './format';
 import { MapView, type MapMode } from './map';
 import { flagOf } from '../data/flags';
+import { applyTheme, themeOf, THEMES } from './themes';
 import { chartPointer, priceChart, sparkline, type RefLine } from './charts';
 import { clock as clockOf } from '../game/convoys';
 
@@ -273,6 +274,7 @@ export class App {
 
   private showTitle() {
     this.setSpeed(0);
+    applyTheme(THEMES.default);
     const hasSave = !!this.loadSave();
     this.el.title.style.display = '';
     this.el.title.innerHTML = `
@@ -284,6 +286,7 @@ export class App {
   }
 
   private showPicker(filter = '') {
+    applyTheme(THEMES.default);
     this.picking = true;
     this.el.title.style.display = 'none';
     if (!this.s) {
@@ -315,6 +318,7 @@ export class App {
     const s = this.s!;
     const n = s.nations[id];
     this.map.focus(this.homeland(id), 6);
+    applyTheme(themeOf(id)); // aperçu du thème culturel
     const inc = n.income;
     const rival = chooseRival(s, this.world, id);
     const goods = [...new Set(owned(s, id).map((p) => this.world.provinces[p].good))].map((g) => GOODS[g].icon).join(' ');
@@ -676,6 +680,7 @@ export class App {
 
   private renderAll(resetScroll = false) {
     if (!this.s) return;
+    if (!this.picking) applyTheme(themeOf(this.s.player));
     this.map.render(this.s, this.mode, this.view === 'province' ? this.selected : null, this.selConvoy, this.view === 'country' && this.selected !== null ? this.s.provinces[this.selected].owner : null);
     if (this.touching && !resetScroll) {
       this.dirty = true;
