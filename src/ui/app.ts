@@ -1676,7 +1676,8 @@ export class App {
   private customerRow(id: Id, g: keyof typeof GOODS, q: C.SaleQuote): string {
     const s = this.state;
     return `<div class="supplier ${q.ok ? '' : 'off'}"><div>${this.flag(id, true)} <small class="muted">🌍 ${signed(Math.round(rel(s, s.player, id)))}</small><br>
-      <small>${this.gi(g)} ${money(q.unitPrice * (1 + q.bonus))}/${esc(GOODS[g].unit)} <span class="${q.bonus >= 0 ? 'pos' : 'neg'}">${q.bonus >= 0 ? '+' : '−'}${Math.abs(Math.round(q.bonus * 100))} %</span> · jusqu’à ${num(q.max, 2)}/mois</small></div>
+      <small>${this.gi(g)} ${money(q.unitPrice * (1 + q.bonus))}/${esc(GOODS[g].unit)} <span class="${q.bonus >= 0 ? 'pos' : 'neg'}">${q.bonus >= 0 ? '+' : '−'}${Math.abs(Math.round(q.bonus * 100))} %</span> · jusqu’à ${num(q.max, 2)}/mois</small><br>
+      <small class="muted">Consomme ${num(q.need.demand, 2)}, produit ${num(q.need.own, 2)} : il lui manque <b class="${q.need.urgency > 0.5 ? 'neg' : 'c-warn'}">${Math.round(q.need.urgency * 100)} %</b> · vous réserve ${Math.round(q.need.share * 100)} % de ses achats${q.need.fromYou > 0 ? ` · ${num(q.need.fromYou, 2)} déjà fournis par vous` : ''}</small></div>
       <button class="chip" data-a="sForm" data-p="${esc(id)}|${g}" ${q.ok ? '' : 'disabled'}>${q.ok ? 'Proposer' : esc(q.reason ?? '')}</button></div>`;
   }
 
@@ -1684,7 +1685,7 @@ export class App {
     const s = this.state;
     const list = C.customers(s, this.world, g, 8);
     const d = GOODS[g];
-    const html = `<p class="hint">Les pays qui manquent ${esc(partitive(d.name))}. Leur prime dépend de vos relations et du cours (${money(unitPriceOf(s, g))}/${esc(d.unit)}) ; démarcher coûte 🤝 ${C.PITCH_COST}. Vente directe : l’État encaisse ${Math.round(C.contractFactor(s, this.world, g) * 100)} % du cours, contre ${Math.round(C.marketFactor(s, this.world, g) * 100)} % au marché.</p>
+    const html = `<p class="hint">Les pays à qui il manque ${esc(partitive(d.name))}, les plus démunis d’abord. Un client n’achète que ce qu’il ne produit pas, et répartit ses importations entre tous les exportateurs : votre part dépend de votre poids sur ce marché mondial et de vos relations. Plus le manque est criant, plus il paie ; la prime dépend aussi de vos relations et du cours (${money(unitPriceOf(s, g))}/${esc(d.unit)}) ; démarcher coûte 🤝 ${C.PITCH_COST}. Vente directe : l’État encaisse ${Math.round(C.contractFactor(s, this.world, g) * 100)} % du cours, contre ${Math.round(C.marketFactor(s, this.world, g) * 100)} % au marché.</p>
       ${list.length ? list.map((x) => this.customerRow(x.id, g, x.q)).join('') : '<p class="muted">Personne n’en manque pour l’instant.</p>'}`;
     this.modal(`📤 Vendre : ${this.gi(g)} ${esc(d.name)}`, html, [
       { label: 'Retour', a: 'contracts', p: 'offers' },
@@ -1696,7 +1697,7 @@ export class App {
     const s = this.state;
     const sup = C.supply(s, this.world);
     const goods = (Object.keys(sup) as (keyof typeof GOODS)[]).filter((g) => (sup[g] ?? 0) > 0.02);
-    const html = `<p class="hint">Ce que vous pourriez vendre à ${esc(nm(s, id))} chaque mois (jusqu’à une fois et demie sa consommation), en vente directe.</p>
+    const html = `<p class="hint">Ce que vous pourriez vendre à ${esc(nm(s, id))} chaque mois : seulement ce qui lui manque, en vente directe.</p>
       ${goods.length ? goods.map((g) => this.customerRow(id, g, C.saleQuote(s, this.world, id, g))).join('') : '<p class="muted">Vous ne produisez rien à vendre.</p>'}`;
     this.modal(`📤 Vendre à ${flagOf(id)} ${esc(nm(s, id))}`, html, [{ label: 'Fermer', a: 'closeModal' }]);
   }

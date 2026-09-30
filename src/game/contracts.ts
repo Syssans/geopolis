@@ -177,6 +177,68 @@ export function buyerDemand(s: GameState, id: Id, good: Good): number {
   return needsOf(s, id)[good] || devOf(s, id) * 0.002;
 }
 
+export interface BuyerNeed {
+  demand: number; // consommation mensuelle
+  own: number; // sa propre production
+  deficit: number; // ce qui lui manque
+  fromYou: number; // déjà couvert par vos contrats
+  open: number; // ce qu'il accepterait encore de vous acheter
+  urgency: number; // part de sa consommation qui manque (0 → 1)
+  share: number; // part de ses importations qu'il vous réserve
+}
+
+/** Excédents exportables du monde entier par marchandise (production moins consommation), recalculés chaque mois. */
+const surplusCache = new WeakMap<GameState, { key: number; v: Partial<Record<Good, number>> }>();
+export function worldSurplus(s: GameState, w: World): Partial<Record<Good, number>> {
+  const key = s.year * 12 + s.month;
+  const c = surplusCache.get(s);
+  if (c && c.key === key) return c.v;
+  const v: Partial<Record<Good, number>> = {};
+  for (const n of alive(s))
+    for (const [g, q] of Object.entries(capacity(s, w, n.id)) as [Good, number][]) {
+      const extra = q - buyerDemand(s, n.id, g);
+      if (extra > 0) v[g] = (v[g] ?? 0) + extra;
+    }
+  surplusCache.set(s, { key, v });
+  return v;
+}
+
+/**
+ * Part des achats d'un client qu'il réserve au joueur : il répartit ses importations entre tous les exportateurs,
+ * selon leur poids dans les excédents mondiaux, et favorise ceux qu'il apprécie.
+ */
+export function supplierShare(s: GameState, w: World, buyer: Id, good: Good): number {
+  const mine = Math.max(0, (capacity(s, w, s.player)[good] ?? 0) - buyerDemand(s, s.player, good)) + (purchasedUnits(s)[good] ?? 0);
+  const weight = mine / Math.max(worldSurplus(s, w)[good] ?? 0, mine, 1e-6);
+  return Math.min(0.8, Math.max(0.1, 0.15 + weight * 2 + rel(s, s.player, buyer) / 300));
+}
+
+const purchasedUnits = (s: GameState) => {
+  const r: Partial<Record<Good, number>> = {};
+  for (const p of s.purchases ?? []) r[p.good] = (r[p.good] ?? 0) + p.volume;
+  return r;
+};
+
+/**
+ * Besoin réel d'un client : il n'achète que ce qu'il ne produit pas lui-même, et le reste se partage
+ * entre tous les pays exportateurs — votre part dépend de votre poids sur ce marché et de vos relations.
+ */
+export function buyerNeed(s: GameState, w: World, id: Id, good: Good): BuyerNeed {
+  const demand = buyerDemand(s, id, good);
+  const own = capacity(s, w, id)[good] ?? 0;
+  const deficit = Math.max(0, demand - own);
+  const fromYou = s.contracts.filter((c) => c.buyer === id && c.good === good).reduce((a, c) => a + c.volume, 0);
+  const share = supplierShare(s, w, id, good);
+  return { demand, own, deficit, fromYou, open: Math.max(0, deficit * share - fromYou), urgency: demand > 0 ? deficit / demand : 0, share };
+}
+
+/** Prime qu'un client consent : forte s'il manque cruellement de la marchandise, négative s'il peut s'en passer. */
+function needBonus(s: GameState, need: BuyerNeed, buyer: Id, good: Good, noise = 0): number {
+  const market = s.prices[good] ?? 1;
+  const b = -0.1 + need.urgency * 0.18 + rel(s, s.player, buyer) / 500 + (1 - market) * 0.1 + noise;
+  return Math.round(Math.min(0.2, Math.max(-0.1, b)) * 100) / 100;
+}
+
 export function generateOffers(s: GameState, w: World, force = false) {
   if (!force) s.offers = s.offers.filter((o) => --o.expires > 0 && s.nations[o.buyer].alive);
   if (inDefault(s)) return; // défaut de paiement : les acheteurs se détournent
@@ -199,18 +261,18 @@ export function generateOffers(s: GameState, w: World, force = false) {
       !embargoes(s, me, n.id) &&
       !embargoes(s, n.id, me) &&
       !s.offers.some((o) => o.buyer === n.id) &&
-      // Les acheteurs sont ceux qui produisent peu cette marchandise
-      (capacity(s, w, n.id)[good] ?? 0) < devOf(s, n.id) * 0.02,
+      n.treasury >= 0 &&
+      // Seuls achètent ceux à qui la marchandise manque vraiment
+      buyerNeed(s, w, n.id, good).open > 0.05,
   );
   const buyer = pick(s, buyers.sort((a, b) => devOf(s, b.id) - devOf(s, a.id)).slice(0, 25));
   const from = sourceNode(s, w, me, good);
   const to = buyer && homeNode(s, w, buyer.id);
   if (!buyer || !from || !to) return;
-  const market = s.prices[good] ?? 1;
-  // Prime alignée sur le marché : de −8 % (l'acheteur négocie une remise) à +20 % (besoin pressant, bonnes relations)
-  const bonus = Math.round(Math.min(0.2, Math.max(-0.08, -0.04 + rand(s) * 0.14 + rel(s, me, buyer.id) / 600 + (1 - market) * 0.15)) * 100) / 100;
-  // Quantité à la mesure de ce que l'acheteur consomme, pas de toute votre production : une vente pèse autant qu'un achat
-  const volume = Math.round(Math.min(free * 0.5, buyerDemand(s, buyer.id, good) * (0.6 + rand(s) * 0.8)) * 100) / 100;
+  // Prime et quantité selon le besoin réel de l'acheteur
+  const need = buyerNeed(s, w, buyer.id, good);
+  const bonus = needBonus(s, need, buyer.id, good, (rand(s) - 0.5) * 0.08);
+  const volume = Math.round(Math.min(free * 0.5, need.open * (0.6 + rand(s) * 0.4)) * 100) / 100;
   if (volume < 0.02) return;
   const price = Math.round(unitPrice(s, good) * 1000) / 1000;
   s.offers.push({
@@ -282,22 +344,22 @@ export interface SaleQuote {
   max: number; // quantité maximale par mois
   unitPrice: number;
   routes: Route[];
+  need: BuyerNeed;
 }
 
 /** Ce qu'un client accepterait de vous acheter chaque mois, et à quelle prime. */
 export function saleQuote(s: GameState, w: World, buyer: Id, good: Good): SaleQuote {
   const me = s.player;
   const r = rel(s, me, buyer);
-  const market = s.prices[good] ?? 1;
-  const bonus = Math.round(Math.min(0.12, Math.max(-0.08, -0.05 + r / 400 + (1 - market) * 0.12)) * 100) / 100;
-  const already = s.contracts.filter((c) => c.buyer === buyer && c.good === good).reduce((a, c) => a + c.volume, 0);
-  const demand = buyerDemand(s, buyer, good) * 1.5 - already;
+  const need = buyerNeed(s, w, buyer, good);
+  // Démarché, le client consent un peu moins qu'en venant de lui-même
+  const bonus = needBonus(s, need, buyer, good, -0.02);
   const free = (supply(s, w)[good] ?? 0) - (committed(s)[good] ?? 0);
-  const max = Math.max(0, Math.round(Math.min(demand, free) * 100) / 100);
+  const max = Math.max(0, Math.round(Math.min(need.open, free) * 100) / 100);
   const from = sourceNode(s, w, me, good);
   const to = homeNode(s, w, buyer);
   const routes = from && to ? findRoutes(from, to) : [];
-  const base = { bonus, max, unitPrice: Math.round(unitPrice(s, good) * 1000) / 1000, routes };
+  const base = { bonus, max, unitPrice: Math.round(unitPrice(s, good) * 1000) / 1000, routes, need };
   const no = (reason: string) => ({ ...base, ok: false, reason });
   if (buyer === me || !s.nations[buyer]?.alive) return no('Client invalide');
   if (inDefault(s)) return no('Défaut de paiement : personne ne signe avec vous');
@@ -305,8 +367,9 @@ export function saleQuote(s: GameState, w: World, buyer: Id, good: Good): SaleQu
   if (embargoes(s, me, buyer) || embargoes(s, buyer, me)) return no('Embargo');
   if (r < -10) return no('Relations trop froides (< −10)');
   if (s.rival === buyer && r < 20) return no('Votre rival refuse de commercer (relations < 20)');
-  if ((capacity(s, w, buyer)[good] ?? 0) >= buyerDemand(s, buyer, good)) return no('Produit assez pour lui-même');
-  if (demand < 0.02) return no('Déjà servi par vos contrats');
+  if (need.deficit < 0.02) return no('N’en a pas besoin : il en produit assez');
+  if (need.open < 0.05) return no(need.fromYou > 0 ? 'Besoin déjà couvert par vos contrats' : 'Déjà approvisionné par d’autres fournisseurs');
+  if (s.nations[buyer].treasury < 0) return no('N’a pas les moyens (en faillite)');
   if (free < 0.02) return no('Rien de disponible : toute votre production est déjà vendue');
   if (!routes.length) return no('Aucun itinéraire');
   if (s.nations[me].influence < PITCH_COST) return no(`Influence insuffisante (${PITCH_COST})`);
@@ -316,9 +379,9 @@ export function saleQuote(s: GameState, w: World, buyer: Id, good: Good): SaleQu
 /** Clients potentiels d'une marchandise, les plus intéressants d'abord. */
 export function customers(s: GameState, w: World, good: Good, limit = 8): { id: Id; q: SaleQuote }[] {
   return alive(s)
-    .filter((n) => n.id !== s.player && devOf(s, n.id) > 25 && (capacity(s, w, n.id)[good] ?? 0) < buyerDemand(s, n.id, good))
+    .filter((n) => n.id !== s.player && devOf(s, n.id) > 25 && buyerNeed(s, w, n.id, good).deficit >= 0.02)
     .map((n) => ({ id: n.id, q: saleQuote(s, w, n.id, good) }))
-    .sort((a, b) => Number(b.q.ok) - Number(a.q.ok) || b.q.bonus - a.q.bonus || b.q.max - a.q.max)
+    .sort((a, b) => Number(b.q.ok) - Number(a.q.ok) || b.q.need.urgency - a.q.need.urgency || b.q.max - a.q.max)
     .slice(0, limit);
 }
 
