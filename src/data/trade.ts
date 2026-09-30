@@ -129,6 +129,7 @@ export const PROVINCE_GOODS: Record<string, Good> = {
   Tokyo: 'finance', Maharashtra: 'finance', Karnataka: 'puces', 'Tamil Nadu': 'industrie', Punjab: 'cereales',
   Katanga: 'metaux', 'Haut-Katanga': 'metaux', Lualaba: 'metaux', 'Western Australia': 'metaux', Queensland: 'gaz', 'New South Wales': 'finance',
   'São Paulo': 'finance', 'Mato Grosso': 'cereales', 'Rio de Janeiro': 'petrole', Pará: 'metaux', 'Minas Gerais': 'metaux',
+  Scotland: 'petrole', Wales: 'industrie', 'Northern Ireland': 'cereales', Manchester: 'industrie', Birmingham: 'industrie', Cornwall: 'cereales',
   Antofagasta: 'metaux', Atyrau: 'petrole', Mangghystau: 'petrole', Cabinda: 'petrole',
 };
 

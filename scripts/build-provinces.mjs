@@ -85,6 +85,26 @@ const ADMIN_ALIAS = {
   Türkiye: 'Turkey',
 };
 
+/** Découpages imposés : régions historiques respectées (Écosse, pays de Galles, Irlande du Nord), le reste regroupé. */
+const REGION_OVERRIDE = {
+  'United Kingdom': (p) => {
+    if (p.geonunit === 'Northern Ireland') return 'Irlande du Nord';
+    if (p.geonunit === 'Scotland') return 'Écosse';
+    if (p.geonunit === 'Wales') return 'Pays de Galles';
+    return {
+      'Greater London': 'Londres',
+      'South East': 'Sud-Est',
+      East: 'Sud-Est',
+      'South West': 'Sud-Ouest',
+      'West Midlands': 'Midlands',
+      'East Midlands': 'Midlands',
+      'North West': 'Nord de l’Angleterre',
+      'North East': 'Nord de l’Angleterre',
+      'Yorkshire and the Humber': 'Nord de l’Angleterre',
+    }[p.region] ?? p.region;
+  },
+};
+
 const NATIONS = new Map(COUNTRIES.map((c) => [c.atlas, c]));
 const OWNER_OF = (country) => (NATIONS.has(country) ? country : DEPENDENCIES[country]?.owner);
 
@@ -137,8 +157,8 @@ for (const f of admin1.features) {
     country: adminName, // pays « culturel » (Groenland, Porto Rico…)
     owner,
     name: p.name_fr || p.name || p.name_en || '?',
-    names: [p.name, p.name_en, p.name_fr, p.name_alt, p.gn_name, p.woe_name, p.region].filter(Boolean).flatMap((n) => String(n).split('|')),
-    region: p.region || '',
+    names: [p.name, p.name_en, p.name_fr, p.name_alt, p.gn_name, p.woe_name, p.region, REGION_OVERRIDE[adminName] && p.geonunit].filter(Boolean).flatMap((n) => String(n).split('|')),
+    region: REGION_OVERRIDE[adminName]?.(p) ?? (p.region || ''),
     area: geoArea(f) * 6371 * 6371, // km²
     bounds: geoBounds(f),
     cityPop: 0,

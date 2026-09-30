@@ -48,6 +48,13 @@ export const THEMES: Record<string, Theme> = {
     sea: '#0c1730', seaDeep: '#0f2043', graticule: '#ffffff12', label: '#ffffff', labelStroke: '#0b1020',
     pattern: svg(8, 8, "<path d='M0 8L8 0' stroke='#ffffff' stroke-opacity='.06'/><path d='M-1 1L1 -1M7 9L9 7' stroke='#ffffff' stroke-opacity='.06'/>"),
   },
+  // Irlande : vert émeraude, or, écriture onciale, entrelacs celtiques
+  irish: {
+    id: 'irish', name: 'Irlande', font: "'Uncial Antiqua', Georgia, serif", fontUi: "'Libre Baskerville', Georgia, serif", accent: '#3ecf6e', onAccent: '#04160b', highlight: '#e8c56a',
+    bg: '#07170f', hud: '#07170ff2', panel: '#0d2418', btn: '#143321', line: '#245239', muted: '#9dbfa8',
+    sea: '#0a1f1c', seaDeep: '#0c2a26', graticule: '#3ecf6e14', label: '#f1f7ea', labelStroke: '#07170f',
+    pattern: svg(24, 24, "<g fill='none' stroke='C' stroke-opacity='.16' stroke-width='1.2'><circle cx='12' cy='8' r='5'/><circle cx='8.5' cy='14' r='5'/><circle cx='15.5' cy='14' r='5'/></g><circle cx='0' cy='0' r='1.2' fill='C' fill-opacity='.25'/><circle cx='24' cy='24' r='1.2' fill='C' fill-opacity='.25'/>"),
+  },
   // Allemagne, Scandinavie, Pays-Bas : acier, bleu glacier, géométrie sobre
   nordic: {
     id: 'nordic', name: 'Europe du Nord', font: "'Josefin Sans', system-ui, sans-serif", accent: '#8cc8e8', onAccent: '#08131a',
@@ -143,7 +150,7 @@ export const THEMES: Record<string, Theme> = {
 
 const GROUPS: Record<string, Id[]> = {
   latin: ['France', 'Italy', 'Spain', 'Portugal', 'Belgium', 'Luxembourg', 'Switzerland', 'Malta', 'Romania', 'Greece', 'Cyprus', 'Albania'],
-  anglo: ['United States of America', 'United Kingdom', 'Canada', 'Australia', 'New Zealand', 'Ireland', 'Bahamas', 'Jamaica', 'Trinidad and Tobago', 'Guyana', 'Belize', 'Papua New Guinea', 'Fiji', 'Solomon Is.', 'Vanuatu'],
+  anglo: ['United States of America', 'United Kingdom', 'Canada', 'Australia', 'New Zealand', 'Bahamas', 'Jamaica', 'Trinidad and Tobago', 'Guyana', 'Belize', 'Papua New Guinea', 'Fiji', 'Solomon Is.', 'Vanuatu'],
   nordic: ['Germany', 'Austria', 'Netherlands', 'Denmark', 'Sweden', 'Norway', 'Finland', 'Iceland', 'Estonia', 'Latvia', 'Hungary'],
   slavic: ['Russia', 'Ukraine', 'Belarus', 'Poland', 'Czechia', 'Slovakia', 'Serbia', 'Bulgaria', 'Croatia', 'Slovenia', 'Bosnia and Herz.', 'Montenegro', 'Macedonia', 'Moldova', 'Lithuania', 'Georgia', 'Armenia', 'Kosovo', 'Mongolia'],
   arab: ['Saudi Arabia', 'United Arab Emirates', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'Yemen', 'Iraq', 'Syria', 'Jordan', 'Lebanon', 'Palestine', 'Egypt', 'Libya', 'Tunisia', 'Algeria', 'Morocco', 'W. Sahara', 'Mauritania', 'Sudan', 'Djibouti', 'Somalia', 'Somaliland'],
@@ -156,6 +163,7 @@ const GROUPS: Record<string, Id[]> = {
   seasia: ['Vietnam', 'Thailand', 'Laos', 'Cambodia', 'Myanmar', 'Malaysia', 'Indonesia', 'Philippines', 'Brunei', 'Timor-Leste'],
   latam: ['Mexico', 'Cuba', 'Haiti', 'Dominican Rep.', 'Guatemala', 'Honduras', 'El Salvador', 'Nicaragua', 'Costa Rica', 'Panama', 'Brazil', 'Argentina', 'Colombia', 'Chile', 'Peru', 'Venezuela', 'Ecuador', 'Bolivia', 'Paraguay', 'Uruguay', 'Suriname', 'Puerto Rico'],
   israel: ['Israel'],
+  irish: ['Ireland'],
 };
 
 const BY_COUNTRY = new Map<Id, string>(Object.entries(GROUPS).flatMap(([t, ids]) => ids.map((id) => [id, t] as [Id, string])));
@@ -192,7 +200,7 @@ export function applyTheme(t: Theme) {
   set('--label-stroke', t.labelStroke);
   set('--font-display', t.font);
   set('--font-ui', t.fontUi ?? t.font);
-  set('--vignette', t.id === 'default' ? 'transparent' : `${t.highlight ?? t.accent}38`);
+  set('--vignette', t.id === 'default' ? 'transparent' : `${t.accent}38`);
   set('--pattern', t.pattern ? `url("data:image/svg+xml,${encodeURIComponent(t.pattern.replaceAll('C', t.accent))}")` : 'none');
   document.documentElement.dataset.theme = t.id;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t.bg);

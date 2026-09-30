@@ -14,3 +14,4 @@ import '@fontsource/chakra-petch/latin-700.css';
 import '@fontsource/baloo-2/latin-800.css';
 import '@fontsource/fraunces/latin-800.css';
 import '@fontsource/frank-ruhl-libre/latin-800.css';
+import '@fontsource/uncial-antiqua/latin-400.css';

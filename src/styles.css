@@ -105,7 +105,7 @@ ul.consequences li { margin: 2px 0; }
 /* ——— Bandeau ——— */
 .hud { position: absolute; left: 0; right: 0; top: 0; padding: calc(6px + var(--safe-top)) 8px 8px; display: grid; gap: 6px;
   grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'me time' 'res res';
-  align-items: center; background: var(--pattern), var(--hud-bg); border-bottom: 1px solid var(--hl); z-index: 5; }
+  align-items: center; background: var(--pattern), var(--hud-bg); border-bottom: 1px solid var(--gold); z-index: 5; }
 .hud .me { grid-area: me; justify-self: start; max-width: 100%; display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px;
   background: var(--btn); border: 1px solid var(--gold); border-radius: 999px; padding: 4px 10px 4px 6px; cursor: pointer; min-width: 0; color: var(--text); }
 .hud .me:active { background: #30363d; }
@@ -179,7 +179,7 @@ ul.consequences li { margin: 2px 0; }
 
 .tabs { display: flex; gap: 4px; margin: 0 0 10px; position: sticky; top: 0; background: var(--panel-solid); padding: 4px 0; z-index: 1; box-shadow: 0 -6px 0 var(--panel-solid); }
 .tabs button { flex: 1; background: var(--btn); border: 1px solid var(--line); border-radius: 8px; padding: 7px 4px; cursor: pointer; font-size: 13px; }
-.tabs button.on { border-color: var(--hl); color: var(--hl); font-weight: 600; }
+.tabs button.on { border-color: var(--gold); color: var(--gold); font-weight: 600; }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; margin-bottom: 12px; }
 .stat { background: #0d1117; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
@@ -225,8 +225,8 @@ h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .modal footer { padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 6px; }
 .btn { background: var(--btn); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; cursor: pointer; font-weight: 600; text-align: left; }
 .btn small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
-.btn.primary { background: var(--hl); color: #000; border-color: var(--hl); }
-.btn.primary small { color: #000a; }
+.btn.primary { background: var(--gold); color: var(--on-gold); border-color: var(--gold); }
+.btn.primary small { color: var(--on-gold); opacity: .7; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .event-kind { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--hl); }
 
@@ -343,7 +343,7 @@ details.route-pick { background: var(--tile); border: 1px solid var(--line); bor
 details.route-pick summary { cursor: pointer; }
 details.route-pick[open] summary { margin-bottom: 6px; }
 .actions.three { grid-template-columns: 1.3fr 1fr 1fr; }
-.act.primary-act { background: var(--hl); border-color: var(--hl); color: #000; }
+.act.primary-act { background: var(--gold); border-color: var(--gold); color: #000; }
 .act.primary-act .c { color: #000a; }
 button.link { background: none; border: none; padding: 6px 0 0; font-size: 12px; cursor: pointer; color: var(--muted); text-decoration: underline; }
 button.link.danger { color: var(--bad); }
@@ -548,3 +548,4 @@ button.link.danger { color: var(--bad); }
 .uses .use small { flex: 1; font-size: 12px; line-height: 1.2; }
 .uses .use b { font-size: 12px; color: var(--hl); white-space: nowrap; }
 .uses .use b::before { content: '🤝'; margin-right: 2px; }
+.sat-h { margin: 8px 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; }

@@ -1691,7 +1691,25 @@ export class App {
         <small class="muted">Productivité ×${num(t.productivity, 2)} · coût de l’État <b class="neg">−${money(me.income.admin ?? 0)}</b>/mois</small>
         <div class="pbar big"><i style="width:${Math.round(pr.points)}%"></i></div>
         <div class="needtxt"><span>${me.tier < TIERS.length ? `vers « ${next.icon} ${next.name} » : <b class="c-gold">${Math.round(pr.points)} %</b>` : '<b class="c-gold">palier maximal</b>'}</span><span>satisfaction <b class="${sat >= 90 ? 'pos' : sat >= 80 ? 'c-warn' : 'neg'}">${sat} %</b> (${trend >= 0 ? '+' : '−'}${num(Math.abs(trend), 1)}/mois)</span></div>
+        ${this.satisfactionHelp()}
         ${blocked ? `<div class="verdict bad" style="margin:6px 0 0">⛔ Progression bloquée : ${blocked}.</div>` : ''}</div>`);
+  }
+
+  /** Pourquoi la satisfaction bouge : répartition du mois écoulé et règles. */
+  private satisfactionHelp(): string {
+    const s = this.state;
+    const lines = s.needs?.lines ?? {};
+    const urgent = P.emergencyWeight(s);
+    let want = 0, own = 0, stock = 0, market = 0;
+    for (const [g, l] of Object.entries(lines) as [keyof typeof GOODS, NeedLine][]) {
+      const v = unitPriceOf(s, g);
+      want += l.need * v; own += l.own * v; stock += l.stock * v; market += l.market * v;
+    }
+    const pc = (v: number) => `${Math.round((v / (want || 1)) * 100)} %`;
+    const lost = market * (1 - urgent);
+    return `<h4 class="sat-h">Pourquoi la satisfaction varie</h4><p class="hint">La satisfaction mesure la part de la <b>valeur</b> des besoins réellement couverte le mois dernier${want > 0 ? ` : ${pc(own)} par votre production et ${pc(stock)} par vos stocks et contrats d’achat (comptés en entier), ${pc(market)} par des achats d’urgence qui ne comptent qu’à ${Math.round(urgent * 100)} %${lost > 0 ? ` (soit ${pc(lost)} perdus en files d’attente et rationnement)` : ''}` : ' (calculée à la fin du premier mois)'}.<br>
+      Elle baisse quand un besoin se creuse : population qui grandit, nouveau palier plus exigeant, production vendue sous contrat, stock épuisé, cargaison pillée ou bloquée, et quand une marchandise qui vous manque devient chère (elle pèse alors plus lourd). Elle tombe au quart pour les achats d’urgence quand le trésor est négatif.<br>
+      Chaque mois, la progression vers le palier suivant gagne <b class="nosign">(satisfaction − 80) × 0,15</b> point : +3 à 100 %, 0 à 80 %, −3 à 60 %. Sous 80 %, la stabilité baisse aussi.</p>`;
   }
 
   // ——— Besoins, stocks et achats ———
