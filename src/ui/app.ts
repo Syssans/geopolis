@@ -121,6 +121,7 @@ export class App {
       if (t.dataset.c) this.handlers[t.dataset.c]?.(`${t.dataset.p ?? ''}|${t.value}`);
     });
     this.registerHandlers();
+    this.initSheetDrag();
     this.showTitle();
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.s && !this.picking) this.save(true);
@@ -779,6 +780,80 @@ export class App {
     this.el.legend.style.display = this.mode === 'political' ? 'none' : '';
   }
 
+  /**
+   * Fiche en bas d'écran (téléphone) : on la tire vers le bas par sa poignée ou son en-tête (ou depuis le contenu
+   * quand il est remonté tout en haut). Un geste moyen la réduit à son en-tête, un grand geste la ferme ;
+   * depuis l'état réduit, glisser vers le haut ou toucher l'en-tête la rouvre.
+   */
+  private initSheetDrag() {
+    const sheet = this.el.sheet;
+    let y0 = 0;
+    let dy = 0;
+    let dragging = false;
+    let armed = false;
+    const mini = () => sheet.classList.contains('mini');
+    const base = () => (mini() ? sheet.offsetHeight - this.sheetPeek() : 0);
+    sheet.addEventListener('touchstart', (e) => {
+      if (window.innerWidth >= 820 || e.touches.length !== 1) return;
+      const t = e.target as HTMLElement;
+      const body = sheet.querySelector<HTMLElement>('.body');
+      const onHandle = !!t.closest('.grab, .head') && !t.closest('button');
+      const onTopBody = !!body && body.contains(t) && body.scrollTop <= 0 && !t.closest('input, select, .chart');
+      armed = onHandle || onTopBody || mini();
+      y0 = e.touches[0].clientY;
+      dy = 0;
+      dragging = false;
+    }, { passive: true });
+    sheet.addEventListener('touchmove', (e) => {
+      if (!armed) return;
+      const d = e.touches[0].clientY - y0;
+      if (!dragging) {
+        // Le contenu défile normalement vers le haut ; on ne tire la fiche que vers le bas (ou vers le haut si réduite)
+        if (Math.abs(d) < 8) return;
+        if (d < 0 && !mini()) {
+          armed = false;
+          return;
+        }
+        dragging = true;
+        sheet.style.transition = 'none';
+      }
+      e.preventDefault();
+      dy = d;
+      sheet.style.transform = `translateY(${Math.max(0, base() + dy)}px)`;
+    }, { passive: false });
+    const end = () => {
+      if (!dragging) {
+        armed = false;
+        return;
+      }
+      dragging = false;
+      armed = false;
+      sheet.style.transition = '';
+      sheet.style.transform = '';
+      const h = sheet.offsetHeight;
+      if (mini()) {
+        if (dy < -40) sheet.classList.remove('mini');
+        else if (dy > 40) this.handlers.close?.('');
+      } else if (dy > h * 0.55) this.handlers.close?.('');
+      else if (dy > 70) sheet.classList.add('mini');
+    };
+    sheet.addEventListener('touchend', end);
+    sheet.addEventListener('touchcancel', end);
+    // Fiche réduite : toucher l'en-tête la rouvre
+    sheet.addEventListener('click', (e) => {
+      if (mini() && !(e.target as HTMLElement).closest('button')) {
+        sheet.classList.remove('mini');
+        e.stopPropagation();
+      }
+    }, true);
+  }
+
+  /** Hauteur visible de la fiche réduite : poignée et en-tête. */
+  private sheetPeek(): number {
+    const head = this.el.sheet.querySelector<HTMLElement>('.head');
+    return (head?.offsetTop ?? 0) + (head?.offsetHeight ?? 50);
+  }
+
   private renderSheet(resetScroll = false) {
     const sheet = this.el.sheet;
     const s = this.s;
@@ -823,7 +898,9 @@ export class App {
         ? `<div class="tabs icon-tabs sheet-tabs">${tabs.map(([k, l]) => `<button class="${this.tab === k ? 'on' : ''}" data-a="tab" data-p="${k}">${l}</button>`).join('')}</div>`
         : `<button class="backbtn" data-a="country">‹ ${flagOf(n.id)} Menu ${mine ? 'de votre pays' : `du pays : ${esc(n.name)}`}</button>`) + content,
     );
+    if (resetScroll) sheet.classList.remove('mini'); // nouvelle sélection : fiche dépliée
     sheet.classList.add('open');
+    sheet.style.setProperty('--peek', `${this.sheetPeek()}px`);
     b.scrollTop = scroll;
   }
 
