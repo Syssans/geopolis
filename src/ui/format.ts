@@ -97,3 +97,41 @@ export function colorSigns(root: Element) {
     t.replaceWith(frag);
   }
 }
+
+/** Textes explicatifs dépliés par le joueur (conservés d'un rendu à l'autre). */
+const openHints = new Set<string>();
+
+/**
+ * Replie les textes explicatifs (`.hint`) derrière un petit « ? » : posé à côté du titre qui les précède,
+ * ou seul sur sa ligne s'il n'y a pas de titre. Un toucher les déplie, un second les replie.
+ */
+export function hintify(root: Element) {
+  for (const h of root.querySelectorAll<HTMLElement>('.hint:not([data-hk])')) {
+    const key = (h.textContent ?? '').replace(/[\d\s.,+−-]+/g, '').slice(0, 60);
+    h.dataset.hk = key;
+    const open = openHints.has(key);
+    h.classList.toggle('shut', !open);
+    const q = document.createElement('button');
+    q.type = 'button';
+    q.className = `qm ${open ? 'on' : ''}`;
+    q.textContent = '?';
+    q.setAttribute('aria-label', 'Explications');
+    q.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const now = !openHints.has(key);
+      if (now) openHints.add(key);
+      else openHints.delete(key);
+      h.classList.toggle('shut', !now);
+      q.classList.toggle('on', now);
+    });
+    const prev = h.previousElementSibling;
+    if (prev && /^H[1-4]$/.test(prev.tagName) && !prev.querySelector('.qm')) prev.append(q);
+    else {
+      const row = document.createElement('div');
+      row.className = 'qm-row';
+      row.append(q, Object.assign(document.createElement('small'), { textContent: 'Explications' }));
+      row.addEventListener('click', () => q.click());
+      h.before(row);
+    }
+  }
+}

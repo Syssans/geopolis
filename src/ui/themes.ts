@@ -9,7 +9,8 @@ export interface Theme {
   name: string;
   font: string; // police des titres (embarquée, voir fonts.ts)
   fontUi?: string; // police des petits textes (tuiles, noms sur la carte) si celle des titres y est illisible
-  accent: string; // remplace l'or de l'interface
+  accent: string; // remplace l'or de l'interface (boutons, onglets, bandeau)
+  highlight?: string; // valeurs mises en avant si l'accent est rouge (le rouge se lit comme une alerte)
   onAccent: string; // texte sur l'accent
   bg: string;
   hud: string; // fond du bandeau (avec transparence)
@@ -42,7 +43,7 @@ export const THEMES: Record<string, Theme> = {
   },
   // États-Unis, Royaume-Uni, Canada, Australie : marine, rouge, Baskerville, fines rayures
   anglo: {
-    id: 'anglo', name: 'Monde anglo-saxon', font: "'Libre Baskerville', Georgia, serif", accent: '#d9474f', onAccent: '#fff',
+    id: 'anglo', name: 'Monde anglo-saxon', font: "'Libre Baskerville', Georgia, serif", accent: '#d9474f', onAccent: '#fff', highlight: '#e6c877',
     bg: '#0b1020', hud: '#0b1020f2', panel: '#121a30', btn: '#1a2440', line: '#2b3658', muted: '#9ba6c2',
     sea: '#0c1730', seaDeep: '#0f2043', graticule: '#ffffff12', label: '#ffffff', labelStroke: '#0b1020',
     pattern: svg(8, 8, "<path d='M0 8L8 0' stroke='#ffffff' stroke-opacity='.06'/><path d='M-1 1L1 -1M7 9L9 7' stroke='#ffffff' stroke-opacity='.06'/>"),
@@ -77,7 +78,7 @@ export const THEMES: Record<string, Theme> = {
   },
   // Turquie, Caucase turcophone, Asie centrale : rouge ottoman, croissants
   turkic: {
-    id: 'turkic', name: 'Monde turc', font: "'Marcellus SC', Georgia, serif", accent: '#e5484d', onAccent: '#fff',
+    id: 'turkic', name: 'Monde turc', font: "'Marcellus SC', Georgia, serif", accent: '#e5484d', onAccent: '#fff', highlight: '#e8c27a',
     bg: '#120b0e', hud: '#120b0ef2', panel: '#1c1116', btn: '#28171e', line: '#46252f', muted: '#b39aa1',
     sea: '#0e1a28', seaDeep: '#122235', graticule: '#e5484d12', label: '#fff1f1', labelStroke: '#120b0e',
     pattern: svg(26, 26, "<path d='M11 7a6 6 0 1 0 0 12a4.8 4.8 0 1 1 0-12z' fill='C' fill-opacity='.14'/>"),
@@ -91,14 +92,14 @@ export const THEMES: Record<string, Theme> = {
   },
   // Japon : encre sumi, vermillon, vagues seigaiha
   japan: {
-    id: 'japan', name: 'Japon', font: "'Shippori Mincho', 'Hiragino Mincho ProN', serif", accent: '#e0453a', onAccent: '#fff',
+    id: 'japan', name: 'Japon', font: "'Shippori Mincho', 'Hiragino Mincho ProN', serif", accent: '#e0453a', onAccent: '#fff', highlight: '#e8c27a',
     bg: '#0e0e12', hud: '#0e0e12f2', panel: '#17171d', btn: '#212129', line: '#35353f', muted: '#a3a3ad',
     sea: '#0f1826', seaDeep: '#131f33', graticule: '#ffffff0e', label: '#f7f3ea', labelStroke: '#0e0e12',
     pattern: svg(24, 12, "<g fill='none' stroke='C' stroke-opacity='.15'><circle cx='12' cy='12' r='10'/><circle cx='12' cy='12' r='6'/><circle cx='0' cy='0' r='10'/><circle cx='24' cy='0' r='10'/><circle cx='0' cy='0' r='6'/><circle cx='24' cy='0' r='6'/></g>"),
   },
   // Corée : bleu et rouge du taegeuk, papier hanji
   korea: {
-    id: 'korea', name: 'Corée', font: "'Gowun Batang', Georgia, serif", accent: '#e0485a', onAccent: '#fff',
+    id: 'korea', name: 'Corée', font: "'Gowun Batang', Georgia, serif", accent: '#e0485a', onAccent: '#fff', highlight: '#e6c98a',
     bg: '#0a0f1c', hud: '#0a0f1cf2', panel: '#111a2e', btn: '#18233d', line: '#2a3a5e', muted: '#9ba8c6',
     sea: '#0c1830', seaDeep: '#10213f', graticule: '#ffffff10', label: '#ffffff', labelStroke: '#0a0f1c',
     pattern: svg(14, 14, "<circle cx='7' cy='7' r='1.1' fill='#4a78d8' fill-opacity='.35'/><circle cx='0' cy='0' r='1.1' fill='C' fill-opacity='.3'/><circle cx='14' cy='14' r='1.1' fill='C' fill-opacity='.3'/>"),
@@ -175,6 +176,7 @@ export function applyTheme(t: Theme) {
   const set = (k: string, v: string) => r.setProperty(k, v);
   set('--gold', t.accent);
   set('--on-gold', t.onAccent);
+  set('--hl', t.highlight ?? t.accent);
   set('--bg', t.bg);
   set('--hud-bg', t.hud);
   set('--panel-solid', t.panel);
@@ -190,7 +192,7 @@ export function applyTheme(t: Theme) {
   set('--label-stroke', t.labelStroke);
   set('--font-display', t.font);
   set('--font-ui', t.fontUi ?? t.font);
-  set('--vignette', t.id === 'default' ? 'transparent' : `${t.accent}38`);
+  set('--vignette', t.id === 'default' ? 'transparent' : `${t.highlight ?? t.accent}38`);
   set('--pattern', t.pattern ? `url("data:image/svg+xml,${encodeURIComponent(t.pattern.replaceAll('C', t.accent))}")` : 'none');
   document.documentElement.dataset.theme = t.id;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t.bg);

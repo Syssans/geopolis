@@ -282,17 +282,32 @@ export class MapView {
     for (const [id, pids] of byNation) {
       // Nom posé sur le territoire d'origine du pays, pas sur un territoire rattaché (Groenland pour le Danemark…)
       const home = pids.filter((p) => this.world.provinces[p].country === id);
-      const main = (home.length ? home : pids).reduce((a, b) => (this.areas[a] >= this.areas[b] ? a : b));
-      const [cx, cy] = this.centers[main];
-      // Aire de la « masse principale » : provinces proches de la plus grande
-      const area = (home.length ? home : pids).filter((p) => Math.hypot(this.centers[p][0] - cx, this.centers[p][1] - cy) < 80).reduce((a, p) => a + this.areas[p], 0);
-      // Barycentre pondéré de cette masse
+      const pool = home.length ? home : pids;
+      // Nom posé au centre du plus grand bloc de territoire d'un seul tenant (les 48 États plutôt que l'Alaska)
+      const inPool = new Set(pool);
+      const seen = new Set<Pid>();
+      let best: Pid[] = [];
+      let bestArea = -1;
+      for (const start of pool) {
+        if (seen.has(start)) continue;
+        const comp: Pid[] = [];
+        const stack = [start];
+        seen.add(start);
+        while (stack.length) {
+          const p = stack.pop()!;
+          comp.push(p);
+          for (const q of this.world.provinces[p].adj) if (inPool.has(q) && !seen.has(q)) { seen.add(q); stack.push(q); }
+        }
+        const a = comp.reduce((x, p) => x + this.areas[p], 0);
+        if (a > bestArea) { bestArea = a; best = comp; }
+      }
+      const area = bestArea;
       let sx = 0, sy = 0, sw = 0;
-      for (const p of home.length ? home : pids) {
+      for (const p of best) {
         const [x, y] = this.centers[p];
-        if (Math.hypot(x - cx, y - cy) >= 80) continue;
         sx += x * this.areas[p]; sy += y * this.areas[p]; sw += this.areas[p];
       }
+      const [cx, cy] = this.centers[best[0]];
       const name = s.nations[id].name;
       const t = el('text', { class: 'label', x: String(sw ? sx / sw : cx), y: String(sw ? sy / sw : cy) }, this.labelLayer);
       t.textContent = name;
@@ -674,7 +689,7 @@ export class MapView {
           fill = p.revolt ? '#ff3b30' : ramp(p.unrest / 80, ['#2f4a3a', '#b8a642', '#d9622b', '#b3261e']);
           break;
         case 'diplomatic':
-          if (n.id === me) fill = '#d4a017';
+          if (n.id === me) fill = '#ffd54a';
           else if (warBetween(s, me, n.id)) fill = '#c62828';
           else if (sameBloc(s, me, n.id)) fill = '#2f6fdb';
           else fill = ramp((rel(s, me, n.id) + 100) / 200, ['#8e2b2b', '#6b6f76', '#3c8d4f']);
