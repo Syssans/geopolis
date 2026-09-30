@@ -2,6 +2,7 @@ import { GOODS, type Good } from '../data/trade';
 import { rand } from './rng';
 import { alive, log, owned } from './state';
 import { goodOf, output, production, unitPrice } from './trade';
+import { contractFactor, marketFactor } from './contracts';
 import type { GameState, Id, Pid, World } from './types';
 
 export const MAX_LEVEL = 3;
@@ -31,22 +32,38 @@ function baseValue(s: GameState, w: World, pid: Pid) {
   return w.provinces[pid].dev * 0.05 * (1 + 0.35 * (s.provinces[pid].level ?? 0)) * unitPrice(s, goodOf(s, w, pid));
 }
 
+/** Valeur mensuelle brute de la province au niveau 0. */
+function value0(s: GameState, w: World, pid: Pid) {
+  return w.provinces[pid].dev * 0.05 * unitPrice(s, goodOf(s, w, pid));
+}
+
+/** Coût d'une modernisation : 3, 4,5 puis 6 mois de valeur brute (rentable en 2 à 4 ans selon le débouché). */
 export function upgradeCost(s: GameState, w: World, pid: Pid): number {
   const lvl = s.provinces[pid].level ?? 0;
-  return Math.max(1, Math.round(baseValue(s, w, pid) * 10 * (lvl + 1) * 10) / 10);
+  return Math.max(1, Math.round(value0(s, w, pid) * 3 * (1 + 0.5 * lvl) * 10) / 10);
 }
 
 export function convertCost(s: GameState, w: World, pid: Pid): number {
-  return Math.max(1, Math.round(baseValue(s, w, pid) * 12 * 10) / 10);
+  return Math.max(1, Math.round(baseValue(s, w, pid) * 8 * 10) / 10);
 }
 
 export function prospectCost(s: GameState, w: World, pid: Pid): number {
   return Math.max(1, Math.round(baseValue(s, w, pid) * 5 * 10) / 10);
 }
 
-/** Gain mensuel attendu d'une modernisation (au cours actuel). */
-export function upgradeGain(s: GameState, w: World, pid: Pid): number {
-  return w.provinces[pid].dev * 0.05 * 0.35 * unitPrice(s, goodOf(s, w, pid));
+/** Valeur brute ajoutée chaque mois par une modernisation (+35 % de la production de base, au cours actuel). */
+export function upgradeValue(s: GameState, w: World, pid: Pid): number {
+  return value0(s, w, pid) * 0.35;
+}
+
+/**
+ * Gain réel pour le trésor : au marché (coûts de production et intermédiaires déduits) ou en vente directe sous contrat.
+ * Pour une province du joueur seulement.
+ */
+export function upgradeGain(s: GameState, w: World, pid: Pid): { market: number; contract: number } {
+  const g = goodOf(s, w, pid);
+  const v = upgradeValue(s, w, pid);
+  return { market: v * marketFactor(s, w, g), contract: v * contractFactor(s, w, g) };
 }
 
 function check(s: GameState, id: Id, pid: Pid): string | null {

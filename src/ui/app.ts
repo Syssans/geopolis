@@ -3,7 +3,7 @@ import { aiTerms, describeTerms } from '../game/ai';
 import { resolveEvent } from '../game/events';
 import { fervorGain, holySitesOf, missionSpeed, POLICIES, unrestTarget } from '../game/religion';
 import { influenceGain } from '../game/tick';
-import { createGame, SAVE_VERSION } from '../game/setup';
+import { createGame, SAVE_VERSION, START_EMBARGOES } from '../game/setup';
 import {
   MONTHS, alive, dateLabel, devOf, hasTrade, embargoes, inReach, neighbours, nm, owned, popOf, power, powerRank, rel, sameBloc,
   warBetween, warsOf, desecratedHolySites,
@@ -18,7 +18,8 @@ import { LIFT_COST, MAX_PRESSURE, liftChance, negotiateLift } from '../game/sanc
 import { MARGIN, TIERS, tierFromGdp } from '../data/tiers';
 import { COUNTRIES } from '../data/countries';
 import * as E from '../game/economy';
-import { progress, scoreBreakdown, monthlyIncome } from '../game/missions';
+import * as F from '../game/finance';
+import { chooseRival, progress, scoreBreakdown, monthlyIncome } from '../game/missions';
 import { CAMPAIGNS } from '../data/campaign';
 import { computeTrade, homeNode, NODES, output, production, straitClosed, straitOwner, TOLL, unitPrice as unitPriceOf, type TradeReport } from '../game/trade';
 import type { GameState, Id, NeedLine, PeaceTerms, Pid, Policy, War, World } from '../game/types';
@@ -78,6 +79,7 @@ export class App {
   /** Menu ouvert : celui d'un pays (onglets) ou la fiche d'une province. */
   private view: 'country' | 'province' = 'province';
   private pf: { seller: Id; good: keyof typeof GOODS; volume: number; months: number; route: number } | null = null;
+  private sf: { buyer: Id; good: keyof typeof GOODS; volume: number; months: number; route: number } | null = null;
 
   constructor(private root: HTMLElement, private world: World, topo: Topology) {
     this.map = new MapView(root, topo, world);
@@ -244,6 +246,8 @@ export class App {
       s.storePolicy ??= {}; // champs ajoutés depuis
       if (!s.orgs || !Object.keys(s.orgs).length) initOrgs(s);
       s.prosperity ??= { points: 40, satisfaction: 1, months: 0 };
+      // Sanctions historiques (pèsent moins) pour les parties antérieures
+      s.legacyEmbargoes ??= START_EMBARGOES.map(([a, b]) => `${a}>${b}`).filter((k) => s.embargoes.includes(k));
       for (const n of Object.values(s.nations)) {
         if (n.tier) continue;
         const c = COUNTRIES.find((x) => x.atlas === n.id);
@@ -310,7 +314,8 @@ export class App {
     const s = this.s!;
     const n = s.nations[id];
     this.map.focus(this.homeland(id), 6);
-    const inc = computeTrade(s, this.world).income[id];
+    const inc = n.income;
+    const rival = chooseRival(s, this.world, id);
     const goods = [...new Set(owned(s, id).map((p) => this.world.provinces[p].good))].map((g) => GOODS[g].icon).join(' ');
     this.modal(
       `${flagOf(n.id)} ${esc(n.name)}`,
@@ -319,7 +324,9 @@ export class App {
         ${stat('Revenus / mois', money(inc.production + inc.trade + inc.tolls))}${stat('Productions', goods)}
         ${stat('Bloc', n.bloc ? esc(s.blocs[n.bloc].name) : 'Non-aligné')}${stat('Puissance', `#${powerRank(s, id)}${n.nuclear ? ' ☢' : ''}`)}
       </div>
-      <p class="muted">Voisins : ${neighbours(s, this.world, id).map((x) => this.flag(x)).join(' ') || 'aucun'}</p>`,
+      <p class="muted">Voisins : ${neighbours(s, this.world, id).map((x) => this.flag(x)).join(' ') || 'aucun'}</p>
+      ${rival ? `<p>🗡️ Rival désigné : ${this.flag(rival)} <b>${esc(nm(s, rival))}</b></p>` : ''}
+      ${n.sanctions ? `<div class="verdict bad">🚫 <b>Sous sanctions</b> de ${n.sanctions.by.map((x) => this.flag(x)).join(' ')} : commerce <b class="neg">−${Math.round(n.sanctions.p * 100)} %</b> dès le départ (déjà compté dans les revenus). Sanctions anciennes, en partie contournées ; tout nouvel embargo pèsera à plein.</div>` : ''}`,
       [
         { label: `Diriger ${esc(n.name)}`, a: 'play', p: id, primary: true },
         { label: 'Choisir un autre pays', a: 'closeModal' },
@@ -483,6 +490,28 @@ export class App {
       if (r.ok) this.showContracts('active');
       this.renderHud();
     };
+    h.customers = (g) => this.showCustomers(g as keyof typeof GOODS);
+    h.sellTo = (id) => this.showBuyerGoods(id);
+    h.sForm = (v) => {
+      const [buyer, good] = v.split('|');
+      this.sf = { buyer, good: good as keyof typeof GOODS, volume: 0, months: 24, route: 0 };
+      this.showSaleForm();
+    };
+    h.sSet = (v) => {
+      const [k, x] = v.split(':');
+      if (k === 'v') this.sf!.volume = Number(x);
+      if (k === 'm') this.sf!.months = Number(x);
+      if (k === 'r') this.sf!.route = Number(x);
+      this.showSaleForm();
+    };
+    h.sSign = () => {
+      const f = this.sf!;
+      const r = C.proposeSale(this.state, this.world, f.buyer, f.good, f.volume, f.months, f.route);
+      this.toast(r.msg, r.ok ? 'good' : 'bad');
+      this.report = null;
+      if (r.ok) this.showContracts('active');
+      this.renderHud();
+    };
     h.spotBuy = (g) => {
       const r = P.buySpot(this.state, g as keyof typeof GOODS, this.lot(g as keyof typeof GOODS));
       refresh(r);
@@ -565,6 +594,8 @@ export class App {
       disbandFleet: () => A.disband(s(), me(), true),
       nuke: () => A.startNuclearProgram(s(), me()),
       unity: () => A.nationalUnity(s(), me()),
+      donations: () => A.faithfulDonations(s(), me()),
+      radiance: () => A.religiousRadiance(s(), me()),
       appeal: () => A.appealToFaithful(s(), me()),
       recall: () => A.recallMissionary(s(), me()),
       quitBloc: () => A.quitBloc(s(), me()),
@@ -655,7 +686,7 @@ export class App {
     if (!s || this.picking) return;
     const me = s.nations[s.player];
     const inc = me.income;
-    const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (inc.admin ?? 0) - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
+    const net = F.netBalance(this.state);
     if (!this.el.hud.firstChild)
       this.el.hud.innerHTML = `<button class="me" data-a="me"></button>
         <div class="time"><span class="date"></span><div class="speed"></div></div><div class="res"></div>`;
@@ -665,7 +696,7 @@ export class App {
       `<button class="tile ${warn ? 'warn' : ''}" data-a="explain" data-p="${key}"><span class="tl">${icon} ${label}</span><b>${value}</b><small>${delta}</small></button>`;
     patch(
       q('.res'),
-      tile('treasury', '💰', 'Trésor', money(me.treasury), `${net >= 0 ? '+' : '−'}${num(Math.abs(net), Math.abs(net) < 10 ? 1 : 0)} / mois`, me.treasury < 0 || net < 0) +
+      tile('treasury', '💰', me.treasury < 0 ? 'Dette' : 'Trésor', money(me.treasury), `${net >= 0 ? '+' : '−'}${num(Math.abs(net), Math.abs(net) < 10 ? 1 : 0)} / mois`, me.treasury < 0 || net < 0) +
         tile('influence', '🤝', 'Influence', String(Math.floor(me.influence)), `+${influenceGain(s, me.id)} / mois`) +
         tile('fervor', '🔥', 'Ferveur', String(Math.floor(me.fervor)), `+${num(fervorGain(s, this.world, me.id), 1)} / mois`) +
         tile('stability', '⚖️', 'Stabilité', `${num(me.stability)}<small>/100</small>`, me.stability < 35 ? 'Danger !' : me.stability < 50 ? 'Fragile' : 'Solide', me.stability < 35),
@@ -689,6 +720,9 @@ export class App {
           ? `<button class="rivalchip" data-a="gotoNation" data-p="${esc(s.rival)}">🗡️ Rival : ${esc(nm(s, s.rival))}<i style="width:${s.rivalHostility}%"></i></button>`
           : '') +
         `<button class="warchip tierchip" data-a="contracts" data-p="resources">${TIERS[me.tier - 1].icon} ${esc(TIERS[me.tier - 1].name)} <b class="${s.prosperity.satisfaction >= 0.8 ? 'pos' : 'neg'}">${s.prosperity.satisfaction >= 0.8 ? '▲' : '▼'} ${Math.round(s.prosperity.points)} %</b></button>` +
+        (me.treasury < 0 || F.inAusterity(s) || F.inDefault(s)
+          ? `<button class="warchip sanctions" data-a="explain" data-p="treasury">💸 ${F.inDefault(s) ? 'Défaut de paiement' : F.inAusterity(s) ? 'Austérité' : 'Faillite'}${me.income.interest ? ` <b class="neg">−${money(me.income.interest)}/mois</b>` : ''}</button>`
+          : '') +
         (me.sanctions ? `<button class="warchip sanctions" data-a="explain" data-p="sanctions">🚫 Sanctions <b class="neg">−${Math.round(me.sanctions.p * 100)} %</b></button>` : '') +
         (s.contracts.some((c) => c.lastStatus !== 'ok')
           ? `<button class="warchip" data-a="contracts" data-p="active">📦 ${s.contracts.filter((c) => c.lastStatus !== 'ok').length} contrat(s) en difficulté</button>`
@@ -852,7 +886,7 @@ export class App {
     const cant = p.occupiedBy || p.revolt ? 'Province instable' : undefined;
     const base = info.dev * 0.05; // unités au niveau 0 (une reconversion remet le niveau à zéro)
     html += `<div class="actions">
-        ${this.action('upgrade', `⬆️ Moderniser (niveau ${Math.min(lvl + 1, E.MAX_LEVEL)})`, `+${money(gain)}/mois · 💰${money(up)} · ${E.UPGRADE_MONTHS} mois`, { disabled: cant ?? (lvl >= E.MAX_LEVEL ? 'Niveau maximal' : this.me.treasury < up ? `Trésor insuffisant (${money(up)})` : undefined) })}
+        ${this.action('upgrade', `⬆️ Moderniser (niveau ${Math.min(lvl + 1, E.MAX_LEVEL)})`, `💰${money(up)} · ${E.UPGRADE_MONTHS} mois · gain réel +${money(gain.market)}/mois au marché, +${money(gain.contract)} sous contrat (rentable en ${Math.ceil(up / Math.max(gain.contract, 1e-6))}–${Math.ceil(up / Math.max(gain.market, 1e-6))} mois)`, { disabled: cant ?? (lvl >= E.MAX_LEVEL ? 'Niveau maximal' : this.me.treasury < up ? `Trésor insuffisant (${money(up)})` : undefined) })}
         ${deposit ? '' : this.action('prospect', '⛏️ Prospecter', `1 chance sur 3 : pétrole, gaz, métaux… · 💰${money(E.prospectCost(s, w, pid))} · ${E.PROSPECT_MONTHS} mois`, { disabled: cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
       </div>
       <h3>🔄 Changer de production</h3>
@@ -917,7 +951,7 @@ export class App {
     const s = this.state;
     const me = this.me;
     const inc = me.income;
-    const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (inc.admin ?? 0) - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
+    const net = F.netBalance(this.state);
     const report = this.trade();
     const home = homeNode(s, this.world, me.id);
     const nodeName = (id: string) => NODES.get(id)!.name;
@@ -982,6 +1016,8 @@ export class App {
       <h3>Actions</h3><div class="actions">
         ${this.action('unity', 'Appel à l’unité nationale', A.COSTS.unity(), { disabled: me.stability >= 95 ? 'Déjà maximale' : undefined })}
         ${this.action('appeal', 'Appel aux coreligionnaires', A.COSTS.appeal())}
+        ${this.action('donations', 'Collecte des fidèles (≈ 1,5 mois de revenus)', A.COSTS.donations())}
+        ${this.action('radiance', 'Rayonnement religieux (influence +25)', A.COSTS.radiance())}
       </div>
       <h3>Religions du monde</h3>${this.religionShares()}`;
   }
@@ -1100,6 +1136,7 @@ export class App {
         ${trade ? this.action('untrade', 'Rompre l’accord', 'Relations −15') : this.action('trade', 'Accord commercial', A.COSTS.trade(), { disabled: war ? 'En guerre' : emb || embargoes(s, id, me.id) ? 'Embargo' : undefined })}
         ${emb ? this.action('embargo', 'Lever l’embargo', 'Relations +10') : this.action('embargo', 'Décréter un embargo', A.COSTS.embargo(), { disabled: allied ? 'Allié' : undefined })}
         ${this.action('aid', 'Aide financière', A.COSTS.aid(s, me.id), { disabled: war ? 'En guerre' : undefined })}
+        <button class="act" data-a="sellTo" data-p="${esc(id)}"><span class="t">📤 Lui vendre</span><span class="c">contrat de vente direct</span></button>
         <button class="act" data-a="buyFrom" data-p="${esc(id)}"><span class="t">📥 Acheter à ce pays</span><span class="c">contrat d’achat</span></button>
         ${allied ? '' : this.action('alliance', 'Proposer une alliance', A.COSTS.alliance(), { disabled: war ? 'En guerre' : blocInvite })}
         ${!allied && n.bloc && !me.bloc ? this.action('joinBloc', `Rejoindre ${esc(s.blocs[n.bloc].name)}`, A.COSTS.alliance()) : ''}
@@ -1203,11 +1240,13 @@ export class App {
     let title = '';
     let html = '';
     if (key === 'treasury') {
-      const net = inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0) - inc.upkeep - (inc.admin ?? 0) - (this.state.needs ? this.state.needs.cost + this.state.needs.purchases : 0);
+      const net = F.netBalance(this.state);
       title = '💰 Trésor';
-      html = `<p>L’argent de l’État : <b>${money(me.treasury)}</b>. S’il devient négatif, c’est la faillite : l’armée déserte et la stabilité chute.</p>
+      const dm = F.debtMonths(s, me.id);
+      html = `<p>L’argent de l’État : <b class="${cls(me.treasury)}">${money(me.treasury)}</b>. ${me.treasury < 0 ? `<b class="neg">Faillite</b> : la dette représente ${num(dm, 1)} mois de revenus et coûte ${Math.round(F.DEBT_RATE * 100 * 10) / 10} % d’intérêts par mois. L’armée déserte, la stabilité s’effrite, les achats d’urgence ne satisfont presque plus la population et le niveau de vie ne peut plus progresser. Au-delà de ${F.CRISIS_MONTHS} mois de revenus, les créanciers exigent un plan du FMI ou un défaut.` : 'En dessous de zéro, c’est la faillite : intérêts de 1,5 % par mois, désertions, pénuries, niveau de vie bloqué, puis crise de la dette.'}</p>
+        ${F.inAusterity(s) ? '<p class="neg">📉 Plan d’austérité du FMI : coût de l’État −30 %, stabilité −0,4 /mois, niveau de vie gelé.</p>' : ''}${F.inDefault(s) ? '<p class="neg">🚫 Défaut de paiement : ni offre de contrat ni fournisseur tant que les marchés vous boudent.</p>' : ''}
         <h3>Chaque mois</h3><div class="rows">
-        ${row('Contrats commerciaux', inc.contracts ?? 0, 'Md$')}${row('Production vendue sur place', inc.production, 'Md$')}${row(`Exportations via ${Object.keys(inc.byNode ?? {}).length > 1 ? 'vos nœuds' : `le nœud ${esc(NODES.get(Object.keys(inc.byNode ?? {})[0] ?? '')?.name ?? 'commercial')}`}`, inc.trade, 'Md$')}${inc.distrust ? row('Défiance des partenaires', -inc.distrust, 'Md$') : ''}${row('Péages des détroits', inc.tolls, 'Md$')}${row('Entretien armée et flotte', -inc.upkeep, 'Md$')}${row('Contrats d’achat', -(s.needs?.purchases ?? 0), 'Md$')}${row('Besoins de la population (achats d’urgence, stockage)', -(s.needs?.cost ?? 0), 'Md$')}${row(`Fonctionnement de l’État (${TIERS[me.tier - 1].name.toLowerCase()})`, -(inc.admin ?? 0), 'Md$')}${inc.sanctions ? row('Pertes dues aux sanctions', -inc.sanctions, 'Md$') : ''}${inc.war ? row('Guerre : blocus et lassitude', -inc.war, 'Md$') : ''}
+        ${row('Contrats commerciaux', inc.contracts ?? 0, 'Md$')}${row('Production vendue sur place', inc.production, 'Md$')}${row(`Exportations via ${Object.keys(inc.byNode ?? {}).length > 1 ? 'vos nœuds' : `le nœud ${esc(NODES.get(Object.keys(inc.byNode ?? {})[0] ?? '')?.name ?? 'commercial')}`}`, inc.trade, 'Md$')}${inc.distrust ? row('Défiance des partenaires', -inc.distrust, 'Md$') : ''}${row('Péages des détroits', inc.tolls, 'Md$')}${row('Entretien armée et flotte', -inc.upkeep, 'Md$')}${row('Contrats d’achat', -(s.needs?.purchases ?? 0), 'Md$')}${row('Besoins de la population (achats d’urgence, stockage)', -(s.needs?.cost ?? 0), 'Md$')}${row(`Fonctionnement de l’État (${TIERS[me.tier - 1].name.toLowerCase()})`, -(inc.admin ?? 0), 'Md$')}${inc.sanctions ? row('Pertes dues aux sanctions', -inc.sanctions, 'Md$') : ''}${inc.war ? row('Guerre : blocus et lassitude', -inc.war, 'Md$') : ''}${inc.interest ? row('Intérêts de la dette', -inc.interest, 'Md$') : ''}
         <div class="row"><span><b>Solde</b></span><span class="${cls(net)}"><b>${net >= 0 ? '+' : ''}${money(net)}</b></span></div></div>
         <p class="muted">Un quart de votre production est vendu sur place ; le reste part à l’export par les nœuds commerciaux, où vous en récupérez la part que votre poids (ports, flotte, marchands) vous permet de capter.</p>
         ${this.trustHtml()}
@@ -1215,13 +1254,13 @@ export class App {
         <h3>Comment l’augmenter</h3><p class="muted">Signer des contrats (📦 Économie), moderniser les provinces qui produisent les marchandises chères, placer vos marchands, contrôler un détroit.</p>`;
     } else if (key === 'influence') {
       title = '🤝 Influence';
-      html = `<p>Votre capital diplomatique : <b>${Math.floor(me.influence)}</b>, +${influenceGain(s, me.id)} par mois (3 de base, +1 si vous êtes parmi les 10 premiers commerçants, +1 si vous dirigez un bloc).</p>
+      html = `<p>Votre capital diplomatique : <b>${Math.floor(me.influence)}</b>, +${influenceGain(s, me.id)} par mois (4 de base, +1 si vous êtes parmi les 10 premiers commerçants, +1 si vous dirigez un bloc, +1 par tranche de 3 contrats actifs, +2 au plus). Le rayonnement religieux (🔥 60) en rapporte 25.</p>
         <h3>À quoi elle sert</h3><p class="muted">Améliorer les relations (25) · accords commerciaux (30) · embargos (15) · alliances (40) · casus belli (50) · négocier un contrat (10) · fermer un détroit (30) · intégrer une province conquise (30).</p>`;
     } else if (key === 'fervor') {
       title = '🔥 Ferveur';
       html = `<p>L’élan religieux de votre peuple : <b>${Math.floor(me.fervor)}</b>, +${num(fervorGain(s, this.world, me.id), 1)} par mois.</p>
         <div class="rows">${row('Base', 1)}${row('Lieux saints de votre foi (×3)', holySitesOf(s, this.world, me.id).filter((h) => h.ours).length * 3)}${row(`Politique : ${POLICIES[me.policy].name}`, POLICIES[me.policy].fervor)}</div>
-        <h3>À quoi elle sert</h3><p class="muted">Missionnaires (30) · appel à l’unité nationale (+10 stabilité, 40) · appel aux coreligionnaires (50) · armer des insurgés à l’étranger (40) · guerre sainte (60).</p>`;
+        <h3>À quoi elle sert</h3><p class="muted">Missionnaires (30) · appel à l’unité nationale (+10 stabilité, 40) · collecte des fidèles (≈ 1,5 mois de revenus, 50) · rayonnement religieux (+25 influence, 60) · appel aux coreligionnaires (50) · armer des insurgés à l’étranger (40) · guerre sainte (60).</p>`;
     } else if (key === 'stability') {
       title = '⚖️ Stabilité';
       html = `<p>La cohésion du pays : <b>${num(me.stability)}/100</b>. Elle revient doucement vers ${num(me.baseStability)} (son niveau naturel).</p>
@@ -1250,10 +1289,13 @@ export class App {
     const c = CAMPAIGNS[s.player];
     this.modal(
       `${esc(this.me.name)} · 2026-${s.endYear}`,
-      `<p>${esc(c?.intro ?? 'Vingt ans pour faire de votre nation une puissance commerciale et spirituelle.')}</p>
+      `<p>${esc(c?.intro ?? 'Dix ans pour faire de votre nation une puissance commerciale et spirituelle.')}</p>
       ${s.rival ? `<p>🗡️ <b>Votre rival : ${esc(nm(s, s.rival))}</b>. Il cherchera à vous nuire : insurgés, embargos, sabotage de vos contrats, ultimatums.</p>` : ''}
       <p>🎯 <b>${s.missions.length} missions</b> vous rapportent des points. Le bilan final tombe en janvier ${s.endYear}.</p>
-      <p>📦 Des acheteurs vous proposeront des <b>contrats</b> : c'est votre principale source de richesse. Choisissez bien vos itinéraires : détroits, pirates et blocus guettent vos convois.</p>`,
+      <p>📦 Les <b>contrats de vente</b> sont votre premier levier de richesse : en vente directe, l’État garde bien plus qu’en passant par les négociants des nœuds commerciaux. Des acheteurs vous en proposeront, et vous pouvez démarcher vos propres clients (📦 Économie → Offres). Choisissez bien vos itinéraires : détroits, pirates et blocus guettent vos convois.</p>
+      ${this.me.sanctions ? `<p>🚫 Vous êtes <b>sous sanctions</b> : commerce <b class="neg">−${Math.round(this.me.sanctions.p * 100)} %</b>. Améliorez vos relations avec ceux qui les imposent pour les faire lever.</p>` : ''}
+      <p>💸 Gardez un trésor positif : la dette coûte des intérêts, bloque le progrès du niveau de vie et finit en crise de la dette.</p>
+      <p>🛡️ Deux ans de répit : aucun pays ne vous attaquera sans provocation avant ${s.endYear - 8}, et toute agression sera précédée d’un ultimatum.</p>`,
       [
         { label: 'Voir mes objectifs', a: 'objectives', primary: true },
         { label: 'Commencer', a: 'closeModal' },
@@ -1291,7 +1333,7 @@ export class App {
       `Bilan ${s.endYear} · note ${sc.grade}`,
       `<p class="grade grade-${sc.grade}">${sc.grade}</p><p style="text-align:center"><b>${sc.total} points</b> · ${s.missions.filter((m) => m.done).length}/${s.missions.length} missions</p>
       <div class="rows">${sc.lines.map((l) => `<div class="row"><span>${esc(l.label)}</span><span class="${cls(l.value)}">${signed(l.value)}</span></div>`).join('')}</div>
-      <p class="muted" style="font-size:12px">S ≥ 320 · A ≥ 240 · B ≥ 170 · C ≥ 100</p>`,
+      <p class="muted" style="font-size:12px">S ≥ 290 · A ≥ 220 · B ≥ 150 · C ≥ 90</p>`,
       [
         { label: 'Continuer en bac à sable', a: 'sandbox', primary: true },
         { label: 'Nouvelle partie', a: 'quit' },
@@ -1406,7 +1448,11 @@ export class App {
             <span class="val"><b class="c-blue">${money(unitPriceOf(s, x))}</b><small class="${cls(tr)}">${pct(tr, 0)} /an</small></span></button>`;
         }).join('')}</div>`;
     } else if (tab === 'offers') {
-      html += `<p class="hint">Un contrat = livrer une quantité fixe <b>chaque mois</b> à prix garanti. ✅ signable · ❌ production insuffisante.</p>`;
+      html += `<p class="hint">Un contrat = livrer une quantité fixe <b>chaque mois</b> à prix garanti, <b>en vente directe</b> : sans les négociants des nœuds, l’État garde bien plus qu’au marché. C’est votre premier levier de richesse. Au plus ${Math.round(C.CONTRACTABLE * 100)} % de votre production peut être engagée sous contrat : le reste passe par les marchés. ✅ signable · ❌ production insuffisante.</p>`;
+      const sellable = (Object.keys(sup) as (keyof typeof GOODS)[]).filter((g) => (sup[g] ?? 0) - (com[g] ?? 0) > 0.02);
+      html += `<div class="card"><b>📤 Démarcher un client</b> <small class="muted">(🤝 ${C.PITCH_COST} par contrat)</small><div class="pick-row" style="margin-top:6px">${
+        sellable.length ? sellable.map((g) => `<button class="chip" data-a="customers" data-p="${g}">${GOODS[g].icon} ${esc(GOODS[g].name)} · ${num((sup[g] ?? 0) - (com[g] ?? 0), 2)} libre</button>`).join('') : '<span class="muted">Toute votre production est déjà vendue sous contrat.</span>'
+      }</div></div>`;
       html += s.offers.length
         ? s.offers.map((o) => {
             const g = GOODS[o.good];
@@ -1420,17 +1466,18 @@ export class App {
             const left = c - used - o.volume;
             const tooMuch = left < -c * 0.02;
             const blocked = route ? C.blockedStraits(s, this.world, route).length > 0 : true;
-            const market = o.volume * unitPriceOf(s, o.good) * mg; // même quantité vendue au cours du jour, après coûts de production
+            const mf = C.marketFactor(s, this.world, o.good);
+            const market = o.volume * unitPriceOf(s, o.good) * mf; // même quantité vendue au marché, après production et intermédiaires
             const vsMarket = est ? (est.net / Math.max(market, 1e-6) - 1) * 100 : 0;
             const verdict = tooMuch
               ? `<div class="verdict bad">❌ Production insuffisante : il manque <b>${qty(-left)} ${esc(g.unit)}/mois</b>. Modernisez une province, attendez la fin d’un contrat ou achetez-en à l’étranger (📈 Cours).</div>`
               : blocked
                 ? `<div class="verdict warn">⛔ Cet itinéraire passe par un détroit fermé : choisissez-en un autre.</div>`
-                : `<div class="verdict ok">✅ <b>+${money(est!.net)}/mois</b> pendant ${o.months} mois <small>(≈ ${money(est!.net * o.months)} au total · ${pct(vsMarket, 0)} vs vente au cours actuel · l’État encaisse ${Math.round(mg * 100)} % du cours, comme au marché)</small></div>`;
+                : `<div class="verdict ok">✅ <b>+${money(est!.net)}/mois</b> pendant ${o.months} mois <small>(≈ ${money(est!.net * o.months)} au total · ${pct(vsMarket, 0)} vs vente au cours actuel · vente directe : l’État encaisse ${Math.round(mg * 100)} % du cours, contre ${Math.round(mf * 100)} % au marché)</small></div>`;
             return `<div class="card offer"><div class="offer-head">${this.gi(o.good, true)}<div>${this.flag(o.buyer, true)} achète ${esc(partitive(g.name))}<br><small class="muted">Répondre sous ${o.expires} mois</small></div></div>
               ${verdict}
               <div class="stats three">${stat('Chaque mois', `${qty(o.volume)} <small>${esc(g.unit)}</small>`)}${stat('Prix garanti', `${money(o.unitPrice * (1 + o.bonus))} <small class="${o.bonus >= 0 ? 'pos' : 'neg'}">${o.bonus >= 0 ? '+' : '−'}${Math.abs(Math.round(o.bonus * 100))} %</small>`)}${stat('Durée', `${o.months} mois`)}</div>
-              <div class="cap-line"><span>Production${(P.purchased(s)[o.good] ?? 0) > 0 ? ' + achats' : ''}</span><span>${qty(c)} ${esc(g.unit)}/mois</span></div>
+              <div class="cap-line"><span>Vendable sous contrat <small class="muted">(${Math.round(C.CONTRACTABLE * 100)} % de la production${(P.purchased(s)[o.good] ?? 0) > 0 ? ' + achats' : ''})</small></span><span>${qty(c)} ${esc(g.unit)}/mois</span></div>
               ${this.gauge(c, used, o.volume)}
               <div class="cap-legend"><span><i class="k used"></i>déjà vendu <b class="c-gold">${qty(used)}</b></span><span><i class="k add"></i>ce contrat <b class="c-blue">${qty(o.volume)}</b></span><span><i class="k free"></i>reste <b class="${left < 0 ? 'neg' : 'pos'}">${qty(Math.max(0, left))}</b></span></div>
               <details class="route-pick" data-k="o${o.id}"><summary>🚢 Itinéraire : ${route ? this.routeLabel(route) : '—'}${risk > 0 ? ` · <span class="neg">pirates ${Math.round(risk * 100)} %/mois</span>` : ''}</summary>
@@ -1515,7 +1562,7 @@ export class App {
         <p class="hint" style="margin:0 0 6px">${esc(t.desc)} Productivité ×${num(t.productivity, 2)} · coût de l’État <b class="neg">−${money(me.income.admin ?? 0)}</b>/mois.</p>
         <div class="pbar big"><i style="width:${Math.round(pr.points)}%"></i></div>
         <div class="needtxt"><span>${me.tier < TIERS.length ? `vers « ${next.icon} ${next.name} » : <b class="c-gold">${Math.round(pr.points)} %</b>` : '<b class="c-gold">palier maximal</b>'}</span><span>satisfaction <b class="${sat >= 90 ? 'pos' : sat >= 80 ? 'c-warn' : 'neg'}">${sat} %</b> (${trend >= 0 ? '+' : '−'}${num(Math.abs(trend), 1)}/mois)</span></div>
-        <p class="hint" style="margin:6px 0 0">Au-dessus de 80 % de besoins satisfaits, la population progresse ; en dessous, elle régresse et la stabilité baisse. Les achats d’urgence ne comptent qu’aux trois quarts.${next ? ` Au palier suivant, elle réclamera aussi : ${Object.keys(next.adds).map((g) => this.gi(g as keyof typeof GOODS)).join(' ')} — et l’État coûtera ${money(devOf(s, me.id) * next.admin)}/mois.` : ''}</p></div>`;
+        <p class="hint" style="margin:6px 0 0">Au-dessus de 80 % de besoins satisfaits, la population progresse ; en dessous, elle régresse et la stabilité baisse. Les achats d’urgence ne comptent qu’aux trois quarts (au quart s’ils sont payés à crédit).${F.tierBlocked(s) ? ` <b class="neg">Progression bloquée : ${F.tierBlocked(s)}.</b>` : ''}${next ? ` Au palier suivant, elle réclamera aussi : ${Object.keys(next.adds).map((g) => this.gi(g as keyof typeof GOODS)).join(' ')} — et l’État coûtera ${money(devOf(s, me.id) * next.admin)}/mois.` : ''}</p></div>`;
   }
 
   // ——— Besoins, stocks et achats ———
@@ -1589,6 +1636,7 @@ export class App {
     const q = s.stock[g] ?? 0;
     const qty = (v: number) => num(v, v < 10 ? 2 : 1);
     return `<div class="actions" style="margin-top:8px">
+      ${(C.supply(s, this.world)[g] ?? 0) > 0.02 ? `<button class="act" data-a="customers" data-p="${g}"><span class="t">📤 Contrat de vente</span><span class="c">démarcher un client · vente directe</span></button>` : ''}
       <button class="act" data-a="suppliers" data-p="${g}"><span class="t">📥 Contrat d’achat</span><span class="c">prix fixe, livré chaque mois</span></button>
       <button class="act" data-a="spotBuy" data-p="${g}"><span class="t">🛒 Acheter ${qty(lot)} ${esc(GOODS[g].unit)}</span><span class="c">au comptant · −${money(lot * unitPriceOf(s, g) * (1 + P.SPOT_BUY))}</span></button>
       ${q > 1e-3 ? `<button class="act wide" data-a="spotSell" data-p="${g}:1"><span class="t">💰 Vendre mon stock (${qty(q)} ${esc(GOODS[g].unit)})</span><span class="c">+${money(q * unitPriceOf(s, g) * (1 - P.SPOT_SELL))} au cours du jour −${Math.round(P.SPOT_SELL * 100)} %</span></button>` : ''}
@@ -1623,6 +1671,63 @@ export class App {
     const html = `<p class="hint">Ce que ${esc(nm(s, id))} peut vous vendre chaque mois (la moitié de sa production au plus), au cours du jour plus sa marge.</p>
       ${goods.length ? goods.map((g) => this.supplierRow(id, g, P.quote(s, this.world, id, g))).join('') : '<p class="muted">Ce pays ne produit rien d’exportable.</p>'}`;
     this.modal(`📥 Acheter à ${flagOf(id)} ${esc(nm(s, id))}`, html, [{ label: 'Fermer', a: 'closeModal' }]);
+  }
+
+  private customerRow(id: Id, g: keyof typeof GOODS, q: C.SaleQuote): string {
+    const s = this.state;
+    return `<div class="supplier ${q.ok ? '' : 'off'}"><div>${this.flag(id, true)} <small class="muted">🌍 ${signed(Math.round(rel(s, s.player, id)))}</small><br>
+      <small>${this.gi(g)} ${money(q.unitPrice * (1 + q.bonus))}/${esc(GOODS[g].unit)} <span class="${q.bonus >= 0 ? 'pos' : 'neg'}">${q.bonus >= 0 ? '+' : '−'}${Math.abs(Math.round(q.bonus * 100))} %</span> · jusqu’à ${num(q.max, 2)}/mois</small></div>
+      <button class="chip" data-a="sForm" data-p="${esc(id)}|${g}" ${q.ok ? '' : 'disabled'}>${q.ok ? 'Proposer' : esc(q.reason ?? '')}</button></div>`;
+  }
+
+  private showCustomers(g: keyof typeof GOODS) {
+    const s = this.state;
+    const list = C.customers(s, this.world, g, 8);
+    const d = GOODS[g];
+    const html = `<p class="hint">Les pays qui manquent ${esc(partitive(d.name))}. Leur prime dépend de vos relations et du cours (${money(unitPriceOf(s, g))}/${esc(d.unit)}) ; démarcher coûte 🤝 ${C.PITCH_COST}. Vente directe : l’État encaisse ${Math.round(C.contractFactor(s, this.world, g) * 100)} % du cours, contre ${Math.round(C.marketFactor(s, this.world, g) * 100)} % au marché.</p>
+      ${list.length ? list.map((x) => this.customerRow(x.id, g, x.q)).join('') : '<p class="muted">Personne n’en manque pour l’instant.</p>'}`;
+    this.modal(`📤 Vendre : ${this.gi(g)} ${esc(d.name)}`, html, [
+      { label: 'Retour', a: 'contracts', p: 'offers' },
+      { label: 'Fermer', a: 'closeModal' },
+    ]);
+  }
+
+  private showBuyerGoods(id: Id) {
+    const s = this.state;
+    const sup = C.supply(s, this.world);
+    const goods = (Object.keys(sup) as (keyof typeof GOODS)[]).filter((g) => (sup[g] ?? 0) > 0.02);
+    const html = `<p class="hint">Ce que vous pourriez vendre à ${esc(nm(s, id))} chaque mois (jusqu’à une fois et demie sa consommation), en vente directe.</p>
+      ${goods.length ? goods.map((g) => this.customerRow(id, g, C.saleQuote(s, this.world, id, g))).join('') : '<p class="muted">Vous ne produisez rien à vendre.</p>'}`;
+    this.modal(`📤 Vendre à ${flagOf(id)} ${esc(nm(s, id))}`, html, [{ label: 'Fermer', a: 'closeModal' }]);
+  }
+
+  private showSaleForm() {
+    const s = this.state;
+    const f = this.sf!;
+    const g = f.good;
+    const d = GOODS[g];
+    const q = C.saleQuote(s, this.world, f.buyer, g);
+    const qty = (v: number) => num(v, v < 10 ? 2 : 1);
+    const opts: [string, number][] = [];
+    for (const [l, k] of [['¼', 0.25], ['½', 0.5], ['Max', 1]] as [string, number][]) opts.push([`${l} (${qty(q.max * k)})`, Math.round(q.max * k * 100) / 100]);
+    if (!f.volume || f.volume > q.max) f.volume = opts[opts.length - 1][1];
+    const route = q.routes[f.route] ?? q.routes[0];
+    const mg = C.contractFactor(s, this.world, g);
+    const mf = C.marketFactor(s, this.world, g);
+    const est = route ? C.estimate(f.volume, q.bonus, route, q.unitPrice, mg) : null;
+    const market = f.volume * unitPriceOf(s, g) * mf;
+    const risk = route ? C.piracyRisk(route, 0, s) : 0;
+    const html = `<div class="offer-head">${this.gi(g, true)}<div>Vous vendez ${esc(partitive(d.name))} à ${this.flag(f.buyer, true)}<br><small class="muted">Prix verrouillé : ${money(q.unitPrice * (1 + q.bonus))}/${esc(d.unit)} (cours ${money(q.unitPrice)}, prime <span class="${q.bonus >= 0 ? 'pos' : 'neg'}">${q.bonus >= 0 ? '+' : '−'}${Math.abs(Math.round(q.bonus * 100))} %</span>)</small></div></div>
+      <div class="verdict ${q.ok ? 'ok' : 'bad'}">${q.ok && est ? `✅ <b>+${money(est.net)}/mois</b> pendant ${f.months} mois <small>(au marché, la même quantité rapporterait ${money(market)}/mois · vente directe : ${Math.round(mg * 100)} % du cours encaissés contre ${Math.round(mf * 100)} %)</small>` : `❌ ${esc(q.reason ?? '')}`}</div>
+      <h3>Quantité par mois</h3><div class="pick-row">${opts.map(([l, v]) => `<button class="chip ${Math.abs(v - f.volume) < 1e-6 ? 'on' : ''}" data-a="sSet" data-p="v:${v}">${l}</button>`).join('')}</div>
+      <h3>Durée</h3><div class="pick-row">${[12, 24, 36].map((m) => `<button class="chip ${m === f.months ? 'on' : ''}" data-a="sSet" data-p="m:${m}">${m} mois</button>`).join('')}</div>
+      <h3>Itinéraire</h3>${q.routes.map((r, i) => `<label class="check"><input type="radio" name="sf" data-a="sSet" data-p="r:${i}" ${i === f.route ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}
+      ${route ? this.routeSteps(route) : ''}
+      <p class="hint">Les convois partent chaque mois : une cargaison pillée (🏴‍☠️ ${Math.round(risk * 100)} %/mois sans escorte) n’est pas payée. Rompre un contrat coûte 🌍 −20 avec le client.</p>`;
+    this.modal('📤 Contrat de vente', html, [
+      { label: '✍️ Signer', hint: `🤝 −${C.PITCH_COST} · 🌍 +5`, a: 'sSign', primary: true, disabled: !q.ok },
+      { label: 'Retour', a: 'customers', p: g },
+    ]);
   }
 
   private showPurchaseForm() {

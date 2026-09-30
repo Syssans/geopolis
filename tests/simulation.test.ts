@@ -19,6 +19,10 @@ import { RELIGIONS } from '../src/data/religions';
 import { CAMPAIGNS } from '../src/data/campaign';
 import { acceptOffer, capacity, committed, findRoutes } from '../src/game/contracts';
 import * as C from '../src/game/contracts';
+import * as F from '../src/game/finance';
+import { sanctionsPressure } from '../src/game/sanctions';
+import { chooseRival } from '../src/game/missions';
+import { inGrace } from '../src/game/crises';
 import { toggleForSale, upgrade } from '../src/game/economy';
 import { output } from '../src/game/trade';
 import { STRAITS } from '../src/data/trade';
@@ -474,7 +478,7 @@ describe('niveau de vie et coûts', () => {
     s.prosperity.points = 99;
     s.nations.Japan.tier = 3;
     // Tout est fourni par des stocks : besoins satisfaits
-    for (const g of Object.keys(P.needsOf(s, 'Japan'))) s.stock[g as keyof typeof s.stock] = 1000;
+    for (const [g, q] of Object.entries(P.needsOf(s, 'Japan'))) s.stock[g as keyof typeof s.stock] = (q ?? 0) * 3;
     advanceMonth(s, world);
     expect(s.nations.Japan.tier).toBe(4);
     // Plus de stocks et une production qui ne répond à aucun besoin : tout s'achète en urgence
@@ -490,5 +494,69 @@ describe('niveau de vie et coûts', () => {
     const e = C.estimate(1, 0.1, route, 1.6, 0.5);
     expect(e.net).toBeLessThan(1.6); // le brut du baril n'est plus du bénéfice pur
     expect(e.net).toBeCloseTo(1.6 * 1.1 * 0.5, 5);
+  });
+});
+
+describe('finances publiques, contrats et équilibrage', () => {
+  it('la dette coûte des intérêts et bloque le progrès du niveau de vie', () => {
+    const s = createGame(world, 'France', 3);
+    s.nations.France.treasury = -50;
+    s.prosperity.points = 99;
+    const tier = s.nations.France.tier;
+    for (const [g, q] of Object.entries(P.needsOf(s, 'France'))) s.stock[g as keyof typeof s.stock] = (q ?? 0) * 3;
+    advanceMonth(s, world);
+    expect(s.nations.France.income.interest).toBeGreaterThan(0);
+    expect(s.nations.France.income.interest).toBeLessThanOrEqual(50 * F.DEBT_RATE);
+    expect(s.nations.France.tier).toBe(tier);
+    expect(F.tierBlocked(s)).not.toBeNull();
+  });
+
+  it('une dette écrasante déclenche une crise : le plan du FMI la divise par deux', () => {
+    const s = createGame(world, 'Cuba', 3);
+    s.nations.Cuba.treasury = -100;
+    advanceMonth(s, world);
+    const e = s.events.find((x) => x.kind === 'debt');
+    expect(e).toBeTruthy();
+    const before = s.nations.Cuba.treasury;
+    resolveEvent(s, world, e!.uid, 0);
+    expect(s.nations.Cuba.treasury).toBeCloseTo(before / 2, 5);
+    expect(F.inAusterity(s)).toBe(true);
+  });
+
+  it('la vente directe rapporte plus que le marché, surtout aux petits exportateurs', () => {
+    const s = createGame(world, 'Angola', 3);
+    advanceMonth(s, world);
+    const m = C.marketFactor(s, world, 'petrole');
+    const c = C.contractFactor(s, world, 'petrole');
+    expect(c).toBeGreaterThan(m * 1.5);
+    // Au plus 60 % de la production peut être vendue sous contrat
+    expect(C.supply(s, world).petrole).toBeCloseTo((capacity(s, world, 'Angola').petrole ?? 0) * C.CONTRACTABLE, 5);
+  });
+
+  it('on peut démarcher un client et signer un contrat de vente', () => {
+    const s = createGame(world, 'Angola', 3);
+    const list = C.customers(s, world, 'petrole', 8).filter((x) => x.q.ok);
+    expect(list.length).toBeGreaterThan(0);
+    const infl = s.nations.Angola.influence;
+    const r = C.proposeSale(s, world, list[0].id, 'petrole', list[0].q.max, 24);
+    expect(r.ok).toBe(true);
+    expect(s.contracts.length).toBe(1);
+    expect(s.nations.Angola.influence).toBe(infl - C.PITCH_COST);
+  });
+
+  it('les sanctions historiques pèsent au plus 30 % ; les rivaux sont de taille comparable', () => {
+    const s = createGame(world, 'Russia', 3);
+    expect(sanctionsPressure(s).get('Russia')!.p).toBeLessThanOrEqual(0.3);
+    expect(chooseRival(s, world, 'Vietnam')).not.toBe('China');
+  });
+
+  it('période de grâce : aucune IA ne déclare la guerre au joueur les deux premières années', () => {
+    const s = createGame(world, 'Vietnam', 3);
+    expect(inGrace(s)).toBe(true);
+    for (let m = 0; m < 23; m++) {
+      advanceMonth(s, world);
+      s.events = [];
+      expect(s.wars.some((w) => w.defenders.includes('Vietnam'))).toBe(false);
+    }
   });
 });

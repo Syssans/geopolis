@@ -1,7 +1,7 @@
 import { CAMPAIGNS, genericMissions, type Check } from '../data/campaign';
 import { HOLY_SITES } from '../data/religions';
 import { STRAITS } from '../data/trade';
-import { alive, devOf, log, neighbours, nm, owned, power, rel } from './state';
+import { alive, devOf, inReach, log, neighbours, nm, owned, power, rel } from './state';
 import { holySitesOf } from './religion';
 import { monthlyPower, straitOwner } from './trade';
 import type { GameState, Id, MissionState, World } from './types';
@@ -18,13 +18,21 @@ export function faithfulShare(s: GameState, id: Id): number {
   return mine.filter((p) => s.provinces[p].religion === r).length / mine.length;
 }
 
-/** Rival du joueur : celui de sa campagne, sinon le voisin le plus hostile. */
+/**
+ * Rival du joueur : celui de sa campagne, sinon un voisin de taille comparable (ni écrasant ni insignifiant),
+ * le plus hostile d'abord. Une superpuissance voisine n'est pas un rival : c'est une menace.
+ */
 export function chooseRival(s: GameState, w: World, id: Id): Id | null {
   const c = CAMPAIGNS[id];
   if (c && s.nations[c.rival]?.alive) return c.rival;
-  const nb = neighbours(s, w, id).filter((o) => s.nations[o].alive && power(s.nations[o]) > power(s.nations[id]) * 0.4);
-  nb.sort((a, b) => rel(s, id, a) - rel(s, id, b));
-  return nb[0] ?? null;
+  const mine = Math.max(power(s.nations[id]), 0.1);
+  const nb = neighbours(s, w, id).filter((o) => s.nations[o].alive);
+  const ratio = (o: Id) => power(s.nations[o]) / mine;
+  const peers = nb.filter((o) => ratio(o) >= 0.4 && ratio(o) <= 2.5);
+  if (peers.length) return peers.sort((a, b) => rel(s, id, a) - rel(s, id, b))[0];
+  // Aucun voisin de même taille : un pays comparable à portée (côtes, projection), sinon pas de rival
+  const far = alive(s).filter((o) => o.id !== id && !nb.includes(o.id) && ratio(o.id) >= 0.5 && ratio(o.id) <= 2 && inReach(s, w, id, o.id));
+  return far.sort((a, b) => rel(s, id, a.id) - rel(s, id, b.id))[0]?.id ?? null;
 }
 
 export function initCampaign(s: GameState, w: World) {
@@ -42,6 +50,11 @@ export function initCampaign(s: GameState, w: World) {
     else if (mi.check.type === 'faithful' && mi.check.share < 1) mi.check = { ...mi.check, share: 1 };
   }
   s.missions = s.missions.filter((mi) => !progress(s, w, mi).done);
+  // Pas de mission impossible : humilier une superpuissance (ou un rival absent) n'est pas un objectif
+  if (!s.rival || ratioToRival(s) > 2.5) s.missions = s.missions.filter((mi) => mi.check.type !== 'rivalIncome');
+  // Libellés alignés sur l'objectif réel
+  for (const mi of s.missions)
+    if (mi.check.type === 'rivalIncome') mi.desc = `Revenus du rival inférieurs à ${Math.round(mi.check.ratio * 100)} % des vôtres (ou le rival éliminé).`;
 }
 
 function ratioToRival(s: GameState): number {
@@ -149,13 +162,16 @@ export function scoreBreakdown(s: GameState, w: World): { lines: ScoreLine[]; to
   const straits = STRAITS.filter((st) => straitOwner(s, w, st.id) === me).length;
   if (straits) lines.push({ label: `Détroits contrôlés (${straits})`, value: straits * 10 });
   lines.push({ label: `Niveau de vie (palier ${s.nations[me].tier})`, value: (s.nations[me].tier - 3) * 15 });
+  const n = s.nations[me];
+  const months = n.treasury / Math.max(monthlyIncome(s, me), 0.5);
+  lines.push({ label: `Finances publiques (${n.treasury >= 0 ? 'trésor' : 'dette'} de ${Math.round(Math.abs(months))} mois de revenus)`, value: Math.round(Math.max(-60, Math.min(20, months >= 0 ? months * 2 : months * 1.5))) });
   lines.push({ label: `Stabilité (${Math.round(s.nations[me].stability)})`, value: Math.round((s.nations[me].stability - 50) / 3) });
   if (s.rival && s.nations[s.rival]) {
     const r = ratioToRival(s);
     lines.push({ label: `Face au rival ${nm(s, s.rival)}`, value: !s.nations[s.rival].alive ? 40 : r < 0.5 ? 30 : r < 1 ? 15 : r < 1.5 ? 0 : -15 });
   }
   const total = lines.reduce((a, l) => a + l.value, 0);
-  const grade = total >= 270 ? 'S' : total >= 200 ? 'A' : total >= 140 ? 'B' : total >= 85 ? 'C' : 'D';
+  const grade = total >= 290 ? 'S' : total >= 220 ? 'A' : total >= 150 ? 'B' : total >= 90 ? 'C' : 'D';
   return { lines, total, grade };
 }
 

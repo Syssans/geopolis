@@ -1,4 +1,5 @@
 import { decide } from './orgs';
+import { resolveDebt } from './finance';
 import { RELIGIONS, religiousDistance } from '../data/religions';
 import { GOODS } from '../data/trade';
 import { addToBloc } from './actions';
@@ -222,6 +223,8 @@ export function resolveEvent(s: GameState, w: World, uid: number, option: number
   const me = s.nations[s.player];
   const p = e.params;
   switch (e.kind) {
+    case 'debt':
+      return resolveDebt(s, option);
     case 'opec':
       return decide(s, w, ([-1, 0, 1] as const)[option] ?? 0);
     case 'callToArms': {

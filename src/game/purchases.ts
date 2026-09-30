@@ -3,6 +3,7 @@
  * Le joueur peut acheter à l'étranger une quantité mensuelle à prix verrouillé : pour nourrir et chauffer
  * sa population, ou pour revendre (au comptant ou via ses contrats de vente) quand le cours monte.
  */
+import { inDefault, tierBlocked } from './finance';
 import { GOODS, type Good } from '../data/trade';
 import { capacity, blockedStraits, storedUnits, findRoutes, piracyRisk, sourceNode, type Result } from './contracts';
 import { rand } from './rng';
@@ -64,6 +65,7 @@ export function quote(s: GameState, w: World, seller: Id, good: Good): Quote {
   const routes = from && to && from !== to ? findRoutes(from, to) : from && to ? [{ nodes: [from], straits: [], piracy: [] }] : [];
   const base = { unitPrice: price, markup, max, routes };
   if (seller === s.player) return { ...base, ok: false, reason: 'C’est vous' };
+  if (inDefault(s)) return { ...base, ok: false, reason: 'Défaut de paiement : plus personne ne vous fait crédit' };
   if (warBetween(s, s.player, seller)) return { ...base, ok: false, reason: 'En guerre' };
   if (embargoes(s, seller, s.player) || embargoes(s, s.player, seller)) return { ...base, ok: false, reason: 'Embargo' };
   if (r < -30) return { ...base, ok: false, reason: 'Relations trop mauvaises (< −30)' };
@@ -269,15 +271,20 @@ export function storageRate(q: number, monthly: number): number {
 
 /**
  * Satisfaction de la population : part (en valeur) des besoins couverts, les achats d'urgence ne comptant qu'aux trois quarts
- * (files d'attente, rationnement). Elle fait monter ou descendre le niveau de vie.
+ * (files d'attente, rationnement), et au quart seulement quand l'État les paie à crédit (trésor négatif : pénuries).
+ * Elle fait monter ou descendre le niveau de vie.
  */
+/** Poids des achats d'urgence dans la satisfaction : 0,75, ou 0,25 quand ils sont payés à crédit. */
+export const emergencyWeight = (s: GameState) => (s.nations[s.player].treasury < 0 ? 0.25 : 0.75);
+
 export function satisfactionOf(s: GameState, lines: Partial<Record<Good, NeedLine>>): number {
+  const urgent = emergencyWeight(s);
   let want = 0;
   let got = 0;
   for (const [g, l] of Object.entries(lines) as [Good, NeedLine][]) {
     const v = unitPrice(s, g);
     want += l.need * v;
-    got += (l.own + l.stock + 0.75 * l.market) * v;
+    got += (l.own + l.stock + urgent * l.market) * v;
   }
   return want > 0 ? Math.min(1, got / want) : 1;
 }
@@ -289,6 +296,8 @@ function updateProsperity(s: GameState, lines: Partial<Record<Good, NeedLine>>) 
   pr.satisfaction = Math.round(sat * 100) / 100;
   pr.months++;
   pr.points = clamp(pr.points + (sat - 0.8) * 15, 0, 100);
+  // On ne s'enrichit pas à crédit : pas de nouveau palier avec un trésor négatif ou sous plan d'austérité
+  if (tierBlocked(s)) pr.points = Math.min(pr.points, 95);
   if (sat < 0.8) me.stability = clamp(me.stability - (0.8 - sat) * 3, 0, 100);
   if (pr.points >= 100 && me.tier < TIERS.length) {
     me.tier++;

@@ -8,6 +8,7 @@ import { pick, rand, shuffle } from './rng';
 import { alive, atWar, embargoes, hasTrade, inReach, neighbours, owned, power, rel, sameBloc, warsOf } from './state';
 import { STRAITS } from '../data/trade';
 import { homeNode, straitOwner, upstreamOf } from './trade';
+import { mayAttackPlayer } from './crises';
 import { annexable, applyPeace, canDeclareWar, declareWar, enemyLeader, exitWar, guarantors, scoreFor, termsCost } from './war';
 import type { GameState, Id, Nation, PeaceTerms, War, World } from './types';
 
@@ -186,7 +187,7 @@ function war(s: GameState, w: World, n: Nation) {
     return !d.nuclear && me > (n.holyClaims.includes(o.id) ? 1.3 : 1.7) * d.power && canDeclareWar(s, w, n.id, o.id).ok;
   });
   const t = pick(s, targets);
-  if (t) declareWar(s, w, n.id, t.id);
+  if (t && (t.id !== s.player || mayAttackPlayer(s, n.id))) declareWar(s, w, n.id, t.id);
 }
 
 /** Conditions de paix imposées par une IA victorieuse. */

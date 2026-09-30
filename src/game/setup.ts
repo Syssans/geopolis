@@ -11,6 +11,7 @@ import { runMerchantAI } from './ai';
 import { alive, clamp, dateLabel, invalidate, invalidateAlive, pairKey, setRel } from './state';
 import { computeTrade } from './trade';
 import { initCampaign } from './missions';
+import { sanctionsPressure } from './sanctions';
 import type { GameState, Id, Nation, Policy, World } from './types';
 
 export const SAVE_VERSION = 7;
@@ -25,6 +26,16 @@ const TOLERANT = new Set([
   'Switzerland', 'Australia', 'New Zealand', 'Spain', 'Portugal', 'Ireland', 'Uruguay', 'Japan', 'South Korea',
   'Senegal', 'Indonesia', 'Lebanon', 'Albania', 'Bosnia and Herz.', 'Tanzania', 'Ghana', 'Oman', 'Singapore',
 ]);
+
+/** Sanctions historiques en place au 1er janvier 2026 (embargoteur, cible). */
+export const START_EMBARGOES: [Id, Id][] = [
+  ...['United States of America', 'United Kingdom', 'Germany', 'France', 'Japan', 'Canada'].flatMap((from) =>
+    ['Russia', 'Iran', 'North Korea', 'Syria'].map((to) => [from, to] as [Id, Id]),
+  ),
+  // Sanctions américaines historiques
+  ['United States of America', 'Cuba'],
+  ['United States of America', 'Venezuela'],
+];
 
 export function createGame(world: World, player: Id, seed = Date.now()): GameState {
   const s: GameState = {
@@ -129,16 +140,22 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
       for (let j = i + 1; j < members.length; j++) s.trades.push(pairKey(members[i], members[j]));
   }
   for (const [a, b, v] of RELATIONS) if (s.nations[a] && s.nations[b]) setRel(s, a, b, v);
-  for (const from of ['United States of America', 'United Kingdom', 'Germany', 'France', 'Japan', 'Canada'])
-    for (const to of ['Russia', 'Iran', 'North Korea', 'Syria']) s.embargoes.push(`${from}>${to}`);
-  // Sanctions américaines historiques
-  for (const to of ['Cuba', 'Venezuela']) if (s.nations[to]) s.embargoes.push(`United States of America>${to}`);
+  for (const [from, to] of START_EMBARGOES) if (s.nations[from] && s.nations[to]) s.embargoes.push(`${from}>${to}`);
+  s.legacyEmbargoes = [...s.embargoes];
 
   // Marchands, puis forces armées calibrées sur les revenus réels
   runMerchantAI(s, world, true);
   const report = computeTrade(s, world);
+  // Revenus bruts d'abord (ils fixent le poids de chaque pays dans les sanctions), puis effet des sanctions historiques
   for (const n of alive(s)) {
     const inc = report.income[n.id] ?? { production: 0, trade: 0, tolls: 0 };
+    n.income = { production: inc.production, trade: inc.trade, tolls: inc.tolls, contracts: 0, upkeep: 0, byNode: {} };
+  }
+  const pressure = sanctionsPressure(s);
+  for (const n of alive(s)) {
+    const p = pressure.get(n.id)?.p ?? 0;
+    const inc = { production: n.income.production * (1 - 0.6 * p), trade: n.income.trade * (1 - p), tolls: n.income.tolls };
+    if (p > 0.01) n.sanctions = pressure.get(n.id);
     const admin = adminCost(s, n.id);
     const monthly = inc.production + inc.trade + inc.tolls - admin;
     const budget = Math.max(0, monthly) * n.milShare;

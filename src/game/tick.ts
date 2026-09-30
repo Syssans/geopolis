@@ -5,6 +5,7 @@ import { monthlyConvoys } from './convoys';
 import { aiOrgs, monthlyOrgs } from './orgs';
 import { sanctionsPressure } from './sanctions';
 import { tradeTrust } from './trust';
+import { AUSTERITY_CUT, inAusterity, monthlyFinance } from './finance';
 import { adminCost } from './needs';
 import { consumeNeeds, processPurchases } from './purchases';
 import { contractCrises, marketCrisis, runRival } from './crises';
@@ -46,7 +47,7 @@ export function monthEconomy(s: GameState, w: World): MonthContext | null {
   const bought = processPurchases(s, w, escortsLeft);
   const contracts = processContracts(s, w);
   s.needs = consumeNeeds(s, w, contracts.delivered, bought.cost);
-  for (const p of bought.news.pirated) log(s, `🏴‍☠️ Des pirates ont saisi votre cargaison de ${GOODS[p.good].name.toLowerCase()} venue de ${nm(s, p.seller)}.`, 'trade', [s.player]);
+  if (bought.news.pirated.length) log(s, `🏴‍☠️ Pirates : ${bought.news.pirated.length} cargaison(s) achetée(s) saisie(s) ce mois (${[...new Set(bought.news.pirated.map((p) => `${GOODS[p.good].icon} de ${nm(s, p.seller)}`))].join(', ')}).`, 'trade', [s.player]);
   for (const p of bought.news.blocked) if (p.blocked === 1) log(s, `⛔ Votre achat auprès de ${nm(s, p.seller)} est bloqué par un détroit fermé : changez d’itinéraire.`, 'trade', [s.player]);
   const ranked = alive(s)
     .map((n) => ({ id: n.id, v: (report.income[n.id]?.trade ?? 0) + (report.income[n.id]?.tolls ?? 0) }))
@@ -89,15 +90,11 @@ export function monthEconomy(s: GameState, w: World): MonthContext | null {
       inc.tolls *= 1 - blockade;
       inc.production *= 1 - weary;
     }
-    const admin = adminCost(s, n.id);
+    const admin = adminCost(s, n.id) * (n.id === s.player && inAusterity(s) ? 1 - AUSTERITY_CUT : 1);
     n.income = { ...inc, contracts: fromContracts * (1 - 0.3 * (n.sanctions?.p ?? 0)), upkeep, sanctions: lostSanctions, war: lostWar, admin, distrust: lostTrust };
     n.treasury += inc.production + inc.trade + inc.tolls + n.income.contracts - upkeep - admin;
-    if (n.treasury < 0) {
-      // Faillite : désertions et mécontentement
-      n.stability = clamp(n.stability - 0.5, 0, 100);
-      n.army *= 0.98;
-      n.navy *= 0.98;
-    }
+    // Dette : intérêts, faillite, crise de la dette
+    n.income.interest = monthlyFinance(s, n);
 
     n.influence = Math.min(999, n.influence + influenceGain(s, n.id, topTraders));
     n.stability = clamp(n.stability + (n.baseStability - n.stability) * 0.02, 0, 100);
@@ -181,7 +178,7 @@ export function monthPolitics(s: GameState, w: World, ctx: MonthContext) {
   }
 }
 
-/** Influence gagnée chaque mois : 3, +1 parmi les 10 premiers commerçants, +1 meneur de bloc. */
+/** Influence gagnée chaque mois : 4, +1 parmi les 10 premiers commerçants, +1 meneur de bloc, +1 par 3 contrats (joueur, +2 au plus). */
 export function influenceGain(s: GameState, id: string, top?: Set<string>): number {
   const n = s.nations[id];
   if (!top) {
@@ -190,5 +187,6 @@ export function influenceGain(s: GameState, id: string, top?: Set<string>): numb
       .sort((a, b) => b.v - a.v);
     top = new Set(ranked.slice(0, 10).map((x) => x.id));
   }
-  return 3 + (top.has(id) ? 1 : 0) + (n.bloc && s.blocs[n.bloc]?.leader === id ? 1 : 0);
+  const deals = id === s.player ? Math.min(2, Math.floor(s.contracts.length / 3)) : 0;
+  return 4 + (top.has(id) ? 1 : 0) + (n.bloc && s.blocs[n.bloc]?.leader === id ? 1 : 0) + deals;
 }

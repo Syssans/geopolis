@@ -39,6 +39,8 @@ export const COSTS = {
   recruit: (s: GameState, id: Id): Cost => ({ money: Math.round(recruitSize(s.nations[id].army) * 3 * 10) / 10 }),
   fleet: (s: GameState, id: Id): Cost => ({ money: Math.round(recruitSize(s.nations[id].navy) * 6 * 10) / 10 }),
   unity: (): Cost => ({ fervor: 40 }),
+  donations: (): Cost => ({ fervor: 50 }),
+  radiance: (): Cost => ({ fervor: 60 }),
   integrate: (): Cost => ({ influence: 30 }),
   nuke: (s: GameState, id: Id): Cost => ({ influence: 100, money: Math.max(20, devOf(s, id) * 0.3) }),
   missionary: (): Cost => ({ fervor: 30 }),
@@ -101,6 +103,25 @@ export function nationalUnity(s: GameState, id: Id): ActionResult {
   pay(s, id, COSTS.unity());
   n.stability = clamp(n.stability + 10, 0, 100);
   return { ok: true, msg: 'Appel à l’unité nationale : stabilité +10' };
+}
+
+/** Collecte des fidèles (dons, zakat, denier du culte) : la ferveur se convertit en argent. */
+export function faithfulDonations(s: GameState, id: Id): ActionResult {
+  const n = s.nations[id];
+  if (!canPay(s, id, COSTS.donations())) return fail('Ferveur insuffisante');
+  pay(s, id, COSTS.donations());
+  const inc = n.income;
+  const gift = Math.round(Math.max(0.5, inc.production + inc.trade + inc.tolls + (inc.contracts ?? 0)) * 1.5 * 10) / 10;
+  n.treasury += gift;
+  return { ok: true, msg: `Collecte des fidèles : +${gift} Md$` };
+}
+
+/** Rayonnement religieux (pèlerinages, écoles, chaînes religieuses) : la ferveur se convertit en influence. */
+export function religiousRadiance(s: GameState, id: Id): ActionResult {
+  if (!canPay(s, id, COSTS.radiance())) return fail('Ferveur insuffisante');
+  pay(s, id, COSTS.radiance());
+  s.nations[id].influence += 25;
+  return { ok: true, msg: 'Rayonnement religieux : influence +25' };
 }
 
 export function integrate(s: GameState, id: Id, pid: Pid): ActionResult {

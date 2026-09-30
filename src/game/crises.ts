@@ -8,7 +8,7 @@ import { pick, rand } from './rng';
 import { addRel, alive, clamp, embargoes, inReach, log, neighbours, nm, owned, power, rel, sameBloc, warBetween } from './state';
 import { straitOwner } from './trade';
 import { declareWar, guarantors } from './war';
-import type { GameState, PendingEvent, World } from './types';
+import type { GameState, PendingEvent, World, Id } from './types';
 
 const pending = (s: GameState, kind: string, key?: string | number) =>
   s.events.some((e) => e.kind === kind && (key === undefined || e.params.key === key));
@@ -39,10 +39,11 @@ export function contractCrises(s: GameState, w: World, news: ContractNews) {
       params: { key: st, strait: st, owner, cost },
     });
   }
-  // Piraterie : une alerte au plus par an, les autres attaques vont au journal
+  // Piraterie : une alerte au plus par an, les autres attaques sont regroupées en une ligne de journal par mois
+  const quiet: string[] = [];
   for (const c of news.pirated) {
     if (pending(s, 'piracy') || (s.passes['alert:piracy'] ?? 0) > 0) {
-      log(s, `🏴‍☠️ Convoi pour ${nm(s, c.buyer)} arraisonné par des pirates.`, 'trade', [s.player]);
+      quiet.push(nm(s, c.buyer));
       continue;
     }
     s.passes['alert:piracy'] = 12;
@@ -60,6 +61,7 @@ export function contractCrises(s: GameState, w: World, news: ContractNews) {
       params: { key: c.id },
     });
   }
+  if (quiet.length) log(s, `🏴‍☠️ Pirates : ${quiet.length} convoi(s) de vente pillé(s) ce mois (vers ${[...new Set(quiet)].join(', ')}). Une escorte réduit le risque.`, 'trade', [s.player]);
 }
 
 // ————— Le rival —————
@@ -117,7 +119,7 @@ export function runRival(s: GameState, w: World) {
       title: 'Concurrence déloyale',
       text: `${R.name} propose à ${nm(s, c.buyer)} de lui livrer du ${GOODS[c.good].name.toLowerCase()} moins cher que vous.`,
       options: [
-        { label: 'Aligner nos prix', hint: `Prime réduite de ${Math.round(c.bonus * 100)} % à ${Math.round(Math.max(0, c.bonus - 0.12) * 100)} %` },
+        { label: 'Aligner nos prix', hint: `Prix garanti ${pctSigned(c.bonus)} → ${pctSigned(c.bonus - 0.08)} par rapport au cours` },
         { label: 'Faire pression', hint: `Influence −25 : conserver le contrat (réussite selon vos relations avec ${nm(s, c.buyer)})` },
         { label: 'Laisser faire', hint: '60 % de risque de perdre le contrat' },
       ],
@@ -146,20 +148,8 @@ export function runRival(s: GameState, w: World) {
   // Ultimatum ou guerre si le rapport de force le permet
   actions.push(() => {
     if (!reach || warBetween(s, rid, s.player) || pending(s, 'ultimatum') || s.rivalHostility < 50) return false;
-    const allies = guarantors(s, s.player).length + (me.bloc ? s.blocs[me.bloc].members.length - 1 : 0);
     if (me.nuclear || power(R) < power(me) * 1.3) return false;
-    const amount = Math.max(2, Math.round(monthlyIncome(s, s.player) * 4));
-    pushEvent(s, {
-      kind: 'ultimatum',
-      title: `Ultimatum de ${R.name}`,
-      text: `${R.name} masse ses troupes à la frontière et exige un « dédommagement » de ${amount} Md$. Faute de quoi, ce sera la guerre.`,
-      options: [
-        { label: 'Payer', hint: `Trésor −${amount} Md$, stabilité −5` },
-        { label: 'Appeler nos alliés', hint: allies ? `Influence −40 : ${allies} allié(s) potentiel(s) peuvent dissuader ${R.name}` : 'Influence −40 : vous n’avez guère d’alliés…' },
-        { label: 'Refuser', hint: 'Stabilité +5 si vous tenez, mais la guerre est probable' },
-      ],
-      params: { by: rid, amount, allies },
-    });
+    pushUltimatum(s, rid);
     return true;
   });
 
@@ -170,6 +160,45 @@ export function runRival(s: GameState, w: World) {
       s.rivalHostility = Math.max(0, s.rivalHostility - 15);
       return;
     }
+}
+
+/**
+ * Avant toute guerre contre le joueur, l'agresseur pose un ultimatum : payer, appeler ses alliés ou refuser.
+ * Le joueur a ainsi toujours une chance de désamorcer le conflit.
+ */
+export function pushUltimatum(s: GameState, by: Id) {
+  if (pending(s, 'ultimatum')) return;
+  const R = s.nations[by];
+  const me = s.nations[s.player];
+  const allies = guarantors(s, s.player).length + (me.bloc ? s.blocs[me.bloc].members.length - 1 : 0);
+  const amount = Math.max(2, Math.round(monthlyIncome(s, s.player) * 4));
+  (s.ultimatums ??= {})[by] = s.year * 12 + s.month;
+  pushEvent(s, {
+    kind: 'ultimatum',
+    title: `Ultimatum de ${R.name}`,
+    text: `${R.name} masse ses troupes à la frontière et exige un « dédommagement » de ${amount} Md$. Faute de quoi, ce sera la guerre.`,
+    options: [
+      { label: 'Payer', hint: `Trésor −${amount} Md$, stabilité −5` },
+      { label: 'Appeler nos alliés', hint: allies ? `Influence −40 : ${allies} allié(s) potentiel(s) peuvent dissuader ${R.name}` : 'Influence −40 : vous n’avez guère d’alliés…' },
+      { label: 'Refuser', hint: 'Stabilité +5 si vous tenez, mais la guerre est probable' },
+    ],
+    params: { by, amount, allies },
+  });
+}
+
+const pctSigned = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v * 100))} %`;
+
+/** Mois de grâce en début de campagne : aucune guerre ne peut viser le joueur. */
+export const GRACE_MONTHS = 24;
+export const inGrace = (s: GameState) => s.year * 12 + s.month < (s.endYear - 10) * 12 + GRACE_MONTHS;
+
+/** Une IA peut-elle attaquer le joueur maintenant ? Sinon, elle pose d'abord un ultimatum. */
+export function mayAttackPlayer(s: GameState, by: Id): boolean {
+  if (inGrace(s)) return false;
+  const last = s.ultimatums?.[by];
+  if (last !== undefined && s.year * 12 + s.month - last <= 12) return true;
+  pushUltimatum(s, by);
+  return false;
 }
 
 /** Krach sur la principale marchandise du joueur. */
@@ -277,7 +306,7 @@ export function resolveCrisis(s: GameState, w: World, e: PendingEvent, option: n
       const c = s.contracts.find((x) => x.id === p.key);
       if (!c) return 'Le contrat n’existe plus.';
       if (option === 0) {
-        c.bonus = Math.max(0, Math.round((c.bonus - 0.12) * 100) / 100);
+        c.bonus = Math.round((c.bonus - 0.08) * 100) / 100;
         return 'Nous gardons le client, à moindre prix.';
       }
       if (option === 1) {

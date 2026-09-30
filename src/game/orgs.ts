@@ -61,7 +61,7 @@ export function monthlyOrgs(s: GameState, w: World) {
         uid: s.nextUid++,
         kind: 'opec',
         title: '🛢️ Réunion de l’OPEP',
-        text: `Le baril vaut ${Math.round((s.prices.petrole ?? 1) * 100)} % de son prix de référence. Les membres penchent pour : ${LABEL[aiProposal(s)]}. Votre vote pèse selon votre production de pétrole.`,
+        text: `Le baril vaut ${Math.round((s.prices.petrole ?? 1) * 100)} % de son prix de référence. Les membres penchent pour : ${LABEL[aiProposal(s)]}. Votre vote compte double et les membres avec qui vos relations dépassent 40 votent comme vous.`,
         options: [
           { label: 'Réduire la production', hint: 'Quota −10 % : moins de barils, mais un cours plus élevé' },
           { label: 'Maintenir les quotas', hint: 'Aucun changement' },
@@ -79,9 +79,13 @@ export function decide(s: GameState, w: World, playerVote: -1 | 0 | 1 | null): s
   const o = s.orgs!.opep;
   const votes = { '-1': 0, '0': 0, '1': 0 };
   const ai = aiProposal(s);
+  const lobby: Id[] = [];
   for (const m of o.members) {
-    const v = m === s.player && playerVote !== null ? playerVote : rand(s) < 0.85 ? ai : 0;
-    votes[String(v) as '-1' | '0' | '1'] += oilWeight(s, w, m);
+    // Le joueur fait campagne : son vote compte double et ses amis (relations ≥ 40) le suivent
+    const friend = playerVote !== null && m !== s.player && rel(s, s.player, m) >= 40;
+    if (friend) lobby.push(m);
+    const v = m === s.player && playerVote !== null ? playerVote : friend ? playerVote! : rand(s) < 0.85 ? ai : 0;
+    votes[String(v) as '-1' | '0' | '1'] += oilWeight(s, w, m) * (m === s.player ? 2 : 1);
   }
   const choice = Number((Object.entries(votes) as [string, number][]).sort((a, b) => b[1] - a[1])[0][0]) as -1 | 0 | 1;
   const before = o.quota;
@@ -89,7 +93,9 @@ export function decide(s: GameState, w: World, playerVote: -1 | 0 | 1 | null): s
   o.last = o.quota === before ? 'Quotas inchangés' : o.quota < before ? `Production réduite (quota ${Math.round(o.quota * 100)} %)` : `Production relevée (quota ${Math.round(o.quota * 100)} %)`;
   const mine = o.members.includes(s.player) || owned(s, s.player).length > 0;
   if (o.quota !== before) log(s, `🛢️ OPEP : ${LABEL[String(choice) as '-1' | '0' | '1']} — le ${GOODS.petrole.name.toLowerCase()} va ${choice < 0 ? 'grimper' : 'baisser'}.`, 'trade', mine ? [s.player] : []);
-  if (playerVote !== null && playerVote !== choice) return `Votre vote a été mis en minorité : l’OPEP décide de ${LABEL[String(choice) as '-1' | '0' | '1']}.`;
+  const allies = lobby.length ? ` (${lobby.map((m) => nm(s, m)).join(', ')} vous ont suivi)` : '';
+  if (playerVote !== null && playerVote !== choice) return `Votre vote a été mis en minorité${allies} : l’OPEP décide de ${LABEL[String(choice) as '-1' | '0' | '1']}.`;
+  if (playerVote !== null) return `Votre ligne l’emporte${allies} : l’OPEP décide de ${LABEL[String(choice) as '-1' | '0' | '1']}.`;
   return `L’OPEP décide de ${LABEL[String(choice) as '-1' | '0' | '1']}.`;
 }
 

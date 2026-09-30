@@ -4,6 +4,7 @@ import { pick, rand } from './rng';
 import { addRel, alive, devOf, embargoes, log, nm, owned, rel, warBetween } from './state';
 import { computeTrade, goodOf, homeNode, nodeCapture, NODES, output, PRODUCTION_SHARE, straitClosed, straitOwner, TOLL, unitPrice, type TradeReport } from './trade';
 import { needsOf } from './needs';
+import { inDefault } from './finance';
 import { MARGIN, TIERS } from '../data/tiers';
 import type { Contract, ContractOffer, GameState, Id, Route, World } from './types';
 
@@ -89,9 +90,10 @@ export function capacity(s: GameState, w: World, id: Id): Partial<Record<Good, n
   return cap;
 }
 
-/** Ce que le joueur peut s'engager à livrer chaque mois : production, achats sous contrat et stocks (sur un an). */
+/** Ce que le joueur peut s'engager à livrer chaque mois : 60 % de sa production, ses achats sous contrat et ses stocks (sur un an). */
 export function supply(s: GameState, w: World): Partial<Record<Good, number>> {
   const cap = capacity(s, w, s.player);
+  for (const g of Object.keys(cap) as Good[]) cap[g] = cap[g]! * CONTRACTABLE;
   for (const p of s.purchases ?? []) cap[p.good] = (cap[p.good] ?? 0) + p.volume;
   // Les stocks peuvent aussi être revendus sous contrat, étalés sur un an
   for (const [g, q] of Object.entries(s.stock ?? {}) as [Good, number][]) if (q > 1e-3) cap[g] = (cap[g] ?? 0) + q / 12;
@@ -177,7 +179,8 @@ export function buyerDemand(s: GameState, id: Id, good: Good): number {
 
 export function generateOffers(s: GameState, w: World, force = false) {
   if (!force) s.offers = s.offers.filter((o) => --o.expires > 0 && s.nations[o.buyer].alive);
-  if (!force && (s.offers.length >= 3 || rand(s) > 0.25)) return;
+  if (inDefault(s)) return; // défaut de paiement : les acheteurs se détournent
+  if (!force && (s.offers.length >= 4 || rand(s) > 0.4)) return;
   const me = s.player;
   const cap = supply(s, w);
   const com = committed(s);
@@ -264,6 +267,73 @@ export function acceptOffer(s: GameState, w: World, offerId: number, routeIdx: n
   addRel(s, s.player, o.buyer, 8);
   log(s, `Contrat signé avec ${nm(s, o.buyer)} : ${GOODS[o.good].name} pendant ${o.months} mois.`, 'trade', [s.player]);
   return { ok: true, msg: `Contrat signé avec ${nm(s, o.buyer)}` };
+}
+
+// ————— Démarchage : proposer une vente à un pays choisi —————
+
+export const PITCH_COST = 10; // influence
+/** Points de score accordés au plus pour les contrats honorés. */
+export const CONTRACT_POINTS_MAX = 20;
+
+export interface SaleQuote {
+  ok: boolean;
+  reason?: string;
+  bonus: number; // prime que le client accepte
+  max: number; // quantité maximale par mois
+  unitPrice: number;
+  routes: Route[];
+}
+
+/** Ce qu'un client accepterait de vous acheter chaque mois, et à quelle prime. */
+export function saleQuote(s: GameState, w: World, buyer: Id, good: Good): SaleQuote {
+  const me = s.player;
+  const r = rel(s, me, buyer);
+  const market = s.prices[good] ?? 1;
+  const bonus = Math.round(Math.min(0.12, Math.max(-0.08, -0.05 + r / 400 + (1 - market) * 0.12)) * 100) / 100;
+  const already = s.contracts.filter((c) => c.buyer === buyer && c.good === good).reduce((a, c) => a + c.volume, 0);
+  const demand = buyerDemand(s, buyer, good) * 1.5 - already;
+  const free = (supply(s, w)[good] ?? 0) - (committed(s)[good] ?? 0);
+  const max = Math.max(0, Math.round(Math.min(demand, free) * 100) / 100);
+  const from = sourceNode(s, w, me, good);
+  const to = homeNode(s, w, buyer);
+  const routes = from && to ? findRoutes(from, to) : [];
+  const base = { bonus, max, unitPrice: Math.round(unitPrice(s, good) * 1000) / 1000, routes };
+  const no = (reason: string) => ({ ...base, ok: false, reason });
+  if (buyer === me || !s.nations[buyer]?.alive) return no('Client invalide');
+  if (inDefault(s)) return no('Défaut de paiement : personne ne signe avec vous');
+  if (warBetween(s, me, buyer)) return no('En guerre');
+  if (embargoes(s, me, buyer) || embargoes(s, buyer, me)) return no('Embargo');
+  if (r < -10) return no('Relations trop froides (< −10)');
+  if (s.rival === buyer && r < 20) return no('Votre rival refuse de commercer (relations < 20)');
+  if ((capacity(s, w, buyer)[good] ?? 0) >= buyerDemand(s, buyer, good)) return no('Produit assez pour lui-même');
+  if (demand < 0.02) return no('Déjà servi par vos contrats');
+  if (free < 0.02) return no('Rien de disponible : toute votre production est déjà vendue');
+  if (!routes.length) return no('Aucun itinéraire');
+  if (s.nations[me].influence < PITCH_COST) return no(`Influence insuffisante (${PITCH_COST})`);
+  return { ...base, ok: true };
+}
+
+/** Clients potentiels d'une marchandise, les plus intéressants d'abord. */
+export function customers(s: GameState, w: World, good: Good, limit = 8): { id: Id; q: SaleQuote }[] {
+  return alive(s)
+    .filter((n) => n.id !== s.player && devOf(s, n.id) > 25 && (capacity(s, w, n.id)[good] ?? 0) < buyerDemand(s, n.id, good))
+    .map((n) => ({ id: n.id, q: saleQuote(s, w, n.id, good) }))
+    .sort((a, b) => Number(b.q.ok) - Number(a.q.ok) || b.q.bonus - a.q.bonus || b.q.max - a.q.max)
+    .slice(0, limit);
+}
+
+/** Proposer un contrat de vente : coûte de l'influence (démarchage), signé aussitôt si le client est preneur. */
+export function proposeSale(s: GameState, w: World, buyer: Id, good: Good, volume: number, months: number, routeIdx = 0): Result {
+  const q = saleQuote(s, w, buyer, good);
+  if (!q.ok) return { ok: false, msg: q.reason! };
+  volume = Math.round(Math.min(volume, q.max) * 100) / 100;
+  if (volume <= 0) return { ok: false, msg: 'Quantité nulle' };
+  s.nations[s.player].influence -= PITCH_COST;
+  const route = q.routes[routeIdx] ?? q.routes[0];
+  s.contracts.push({ id: s.nextUid++, buyer, good, volume, bonus: q.bonus, unitPrice: q.unitPrice, monthsLeft: months, route, alternatives: q.routes, escort: 0, blocked: 0, lastRevenue: 0, lastStatus: 'ok' });
+  addRel(s, s.player, buyer, 5);
+  log(s, `Contrat de vente signé avec ${nm(s, buyer)} : ${GOODS[good].name} pendant ${months} mois.`, 'trade', [s.player]);
+  return { ok: true, msg: `${nm(s, buyer)} signe : ${volume} ${GOODS[good].unit}/mois, prime ${q.bonus >= 0 ? '+' : '−'}${Math.abs(Math.round(q.bonus * 100))} %` };
 }
 
 export function declineOffer(s: GameState, offerId: number): Result {
@@ -390,10 +460,12 @@ export function processContracts(
     }
     if (--c.monthsLeft <= 0 && s.contracts.includes(c)) {
       s.contracts = s.contracts.filter((x) => x !== c);
-      s.score += 1;
+      // Réputation de partenaire fiable : 1 point par contrat honoré, 20 au plus sur la campagne
+      const pt = s.stats.contractsDone < CONTRACT_POINTS_MAX ? 1 : 0;
+      s.score += pt;
       s.stats.contractsDone++;
       addRel(s, s.player, c.buyer, 5);
-      log(s, `Contrat honoré avec ${buyer.name} (+1 point).`, 'trade', [s.player]);
+      log(s, `Contrat honoré avec ${buyer.name}${pt ? ' (+1 point)' : ''}.`, 'trade', [s.player]);
     }
   }
   return { revenue, news, delivered, spareEscorts: spare };
@@ -432,11 +504,26 @@ export function marketCapture(s: GameState, w: World, good: Good): number {
 }
 
 /**
- * Revenu d'une unité vendue sous contrat, en part du cours : exactement ce que la même unité aurait rapporté
- * au marché (coûts de production déduits, part captée par les négociants des nœuds commerciaux),
- * la prime du contrat faisant la différence.
+ * Vente directe : l'État récupère cette part de la valeur que les négociants des nœuds auraient captée au marché
+ * (le reste couvre courtage, assurance et remises consenties au client).
+ */
+export const DIRECT_SHARE = 0.5;
+/** Part de sa propre production qu'un pays peut engager sous contrat : le reste passe forcément par les marchés. */
+export const CONTRACTABLE = 0.6;
+
+/** Revenu d'une unité produite vendue au marché, en part du cours (coûts de production et intermédiaires déduits). */
+export function marketFactor(s: GameState, w: World, good: Good): number {
+  const tier = s.nations[s.player].tier ?? 3;
+  return MARGIN[good] * TIERS[tier - 1].productivity * marketCapture(s, w, good);
+}
+
+/**
+ * Revenu d'une unité produite vendue sous contrat, en part du cours : le prix est celui du marché (± la prime),
+ * mais la vente directe évite les intermédiaires. C'est pourquoi les contrats sont le premier levier de richesse,
+ * surtout pour les pays qui pèsent peu dans les nœuds commerciaux.
  */
 export function contractFactor(s: GameState, w: World, good: Good): number {
   const tier = s.nations[s.player].tier ?? 3;
-  return MARGIN[good] * TIERS[tier - 1].productivity * marketCapture(s, w, good);
+  const cap = marketCapture(s, w, good);
+  return MARGIN[good] * TIERS[tier - 1].productivity * (cap + (1 - cap) * DIRECT_SHARE);
 }

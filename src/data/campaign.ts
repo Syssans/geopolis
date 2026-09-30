@@ -99,7 +99,7 @@ export const CAMPAIGNS: Record<string, NationCampaign> = {
       m('irn-axis', 'L’axe de la résistance', 'Relations ≥ 60 avec 3 nations chiites.', { type: 'coreligionists', count: 3 }, 20, { fervor: 80 }),
       m('irn-najaf', 'Najaf et Karbala', 'Détenir Najaf et Karbala.', { type: 'holy', site: 'Najaf et Karbala' }, 30),
       m('irn-china', 'Contourner les sanctions', 'Contrat actif avec la Chine.', { type: 'contractWith', nation: 'China' }, 15),
-      m('irn-rich', 'Économie de résistance', 'Atteindre 20 Md$ de revenus mensuels.', { type: 'income', amount: 20 }, 15),
+      m('irn-rich', 'Économie de résistance', 'Atteindre 9 Md$ de revenus mensuels.', { type: 'income', amount: 9 }, 15),
     ],
   },
   Turkey: {
@@ -295,13 +295,15 @@ export const CAMPAIGNS: Record<string, NationCampaign> = {
 };
 
 /** Missions communes à toutes les nations (les seuils sont adaptés à la taille du pays au départ). */
+const round1 = (v: number) => Math.max(0.5, Math.round(v * 10) / 10);
+const fmt1 = (v: number) => String(round1(v)).replace('.', ',');
+
 export function genericMissions(income0: number, faithful0: number): MissionDef[] {
-  const r = (v: number) => Math.max(1, Math.round(v));
   return [
     m('gen-c2', 'Premiers contrats', 'Faire tourner 2 contrats en même temps.', { type: 'contracts', count: 2 }, 10, { influence: 30 }),
     m('gen-done3', 'Partenaire fiable', 'Honorer 3 contrats jusqu’au bout.', { type: 'contractsDone', count: 3 }, 15),
-    m('gen-inc', 'Prospérité', `Atteindre ${r(income0 * 1.5)} Md$ de revenus mensuels.`, { type: 'income', amount: r(income0 * 1.5 * 10) / 10 }, 20),
-    m('gen-inc2', 'Âge d’or', `Atteindre ${r(income0 * 1.9)} Md$ de revenus mensuels.`, { type: 'income', amount: r(income0 * 1.9 * 10) / 10 }, 25),
+    m('gen-inc', 'Prospérité', `Atteindre ${fmt1(income0 * 1.5)} Md$ de revenus mensuels.`, { type: 'income', amount: round1(income0 * 1.5) }, 20),
+    m('gen-inc2', 'Âge d’or', `Atteindre ${fmt1(income0 * 1.9)} Md$ de revenus mensuels.`, { type: 'income', amount: round1(income0 * 1.9) }, 25),
     m('gen-faith', 'Unité de la foi', `${Math.round(Math.min(1, faithful0 + 0.1) * 100)} % de provinces de la religion d’État.`, { type: 'faithful', share: Math.min(1, faithful0 + 0.1) }, 15, { fervor: 50 }),
     m('gen-rival', 'Humilier le rival', 'Revenus du rival inférieurs à 70 % des vôtres.', { type: 'rivalIncome', ratio: 0.7 }, 25),
     m('gen-stab', 'Paix civile', 'Stabilité ≥ 75.', { type: 'stability', value: 75 }, 10),
