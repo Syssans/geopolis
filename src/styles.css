@@ -29,6 +29,9 @@ button { font: inherit; color: inherit; }
 #map path.prov.sel-nation { filter: brightness(1.18); }
 #map path.nation-outline { fill: none; stroke: #fff; stroke-width: 1.6; vector-effect: non-scaling-stroke; pointer-events: none; stroke-linejoin: round; }
 #map path.nation-outline.mine { stroke: var(--gold); }
+/* Carte des religions : le catholicisme est blanc, le contour doit trancher */
+#map.mode-religion path.nation-outline:not(.mine) { stroke: #0d1117; stroke-width: 2.6; filter: drop-shadow(0 0 1.5px #fff); }
+#map.mode-religion path.borders { stroke-width: 1.4; }
 #map g.prov-goods { pointer-events: none; }
 #map g.prov-goods text { text-anchor: middle; dominant-baseline: middle; }
 #map g.prov-goods .pg-level { fill: var(--gold); paint-order: stroke; stroke: #0d1117; stroke-width: 0.5; font-weight: 700; }
@@ -94,7 +97,7 @@ ul.consequences li { margin: 2px 0; }
 .hud .me span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hud .me .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--gold); flex: none; }
 .hud .time { grid-area: time; }
-.hud .res { grid-area: res; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.hud .res { grid-area: res; display: grid; grid-template-columns: repeat(4, 1fr) 0.8fr; gap: 6px; }
 @media (min-width: 820px) {
   .hud { grid-template-columns: auto 1fr auto; grid-template-areas: 'me res time'; }
   .hud .res { max-width: 640px; justify-self: center; width: 100%; }
@@ -461,4 +464,22 @@ button.link.danger { color: var(--bad); }
 .tier-card .rung.on { opacity: 1; filter: none; transform: scale(1.35); }
 .tier-card .ladder .sep { flex: 1; height: 2px; background: #30363d; margin: 0 4px; }
 .pbar.big { height: 10px; border-radius: 5px; }
-.warchip.tierchip { border-color: var(--gold); }
+.objdrop { background: #161b22ee; border: 1px solid #d4a01766; border-radius: 8px; overflow: hidden; }
+.objchip { background: none; border: 0; color: var(--text); font-size: 13px; padding: 6px 10px; width: 100%; text-align: left; cursor: pointer; }
+.objchip .chev { float: right; font-style: normal; color: var(--gold); }
+.obj-list { display: flex; flex-direction: column; max-height: 42vh; overflow-y: auto; border-top: 1px solid var(--line); }
+.obj-item { background: none; border: 0; border-bottom: 1px solid #30363d80; color: var(--text); text-align: left; padding: 6px 10px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; }
+.obj-item .obj-t { font-size: 13px; }
+.obj-item .obj-t b { float: right; font-size: 12px; }
+.obj-item small { font-size: 11px; }
+.obj-item.done { opacity: .55; }
+.obj-bar { height: 4px; background: #30363d; border-radius: 2px; overflow: hidden; }
+.obj-bar i { display: block; height: 100%; background: var(--gold); }
+.obj-item.done .obj-bar i { background: var(--good); }
+.tier-tile .tl { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 480px) {
+  .hud .res { gap: 4px; }
+  .tile { padding: 4px 5px; min-width: 0; }
+  .tile .tl, .tile > small { font-size: 10px; }
+  .tile b { font-size: 13px; }
+}

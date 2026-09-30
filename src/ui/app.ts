@@ -490,6 +490,10 @@ export class App {
       if (r.ok) this.showContracts('active');
       this.renderHud();
     };
+    h.objToggle = () => {
+      this.objOpen = !this.objOpen;
+      this.renderHud();
+    };
     h.customers = (g) => this.showCustomers(g as keyof typeof GOODS);
     h.sellTo = (id) => this.showBuyerGoods(id);
     h.sForm = (v) => {
@@ -681,6 +685,34 @@ export class App {
     this.renderEvents();
   }
 
+  /** Tuile du niveau de vie : emoji du palier, satisfaction et progression vers le palier suivant. */
+  private tierTile(): string {
+    const s = this.state;
+    const me = this.me;
+    const t = TIERS[me.tier - 1];
+    const sat = Math.round(s.prosperity.satisfaction * 100);
+    const up = s.prosperity.satisfaction >= 0.8;
+    const blocked = F.tierBlocked(s);
+    return `<button class="tile tier-tile ${sat < 80 ? 'warn' : ''}" data-a="contracts" data-p="resources" title="${esc(t.name)}"><span class="tl">${t.icon} Palier ${me.tier}</span><b class="${sat >= 90 ? 'pos' : sat >= 80 ? 'c-warn' : 'neg'}">${sat} %</b><small class="${blocked ? 'neg' : up ? '' : 'neg'}">${blocked ? '⛔ bloqué' : me.tier >= TIERS.length ? 'maximal' : `${up ? '▲' : '▼'} ${Math.round(s.prosperity.points)} %`}</small></button>`;
+  }
+
+  private objOpen = false;
+
+  /** Objectifs de campagne en menu déroulant, sous la barre du rival. */
+  private objectivesDrop(): string {
+    const s = this.state;
+    const done = s.missions.filter((m) => m.done).length;
+    const sc = scoreBreakdown(s, this.world);
+    const list = this.objOpen
+      ? `<div class="obj-list">${[...s.missions].sort((a, b) => Number(a.done) - Number(b.done)).map((m) => {
+          const p = progress(s, this.world, m);
+          return `<button class="obj-item ${m.done ? 'done' : ''}" data-a="objectives"><span class="obj-t">${m.done ? '✅' : '🎯'} ${esc(m.title)} <b class="pos">+${m.reward.score}</b></span>
+            <span class="obj-bar"><i style="width:${Math.round((m.done ? 1 : p.ratio) * 100)}%"></i></span><small class="muted">${esc(m.done ? 'Accomplie' : p.label)}</small></button>`;
+        }).join('')}</div>`
+      : '';
+    return `<div class="objdrop ${this.objOpen ? 'open' : ''}"><button class="objchip" data-a="objToggle">🎯 Objectifs <b>${done}/${s.missions.length}</b> · score <b class="c-gold">${sc.total} (${sc.grade})</b> <i class="chev">${this.objOpen ? '▴' : '▾'}</i></button>${list}</div>`;
+  }
+
   private renderHud() {
     const s = this.s;
     if (!s || this.picking) return;
@@ -699,7 +731,8 @@ export class App {
       tile('treasury', '💰', me.treasury < 0 ? 'Dette' : 'Trésor', money(me.treasury), `${net >= 0 ? '+' : '−'}${num(Math.abs(net), Math.abs(net) < 10 ? 1 : 0)} / mois`, me.treasury < 0 || net < 0) +
         tile('influence', '🤝', 'Influence', String(Math.floor(me.influence)), `+${influenceGain(s, me.id)} / mois`) +
         tile('fervor', '🔥', 'Ferveur', String(Math.floor(me.fervor)), `+${num(fervorGain(s, this.world, me.id), 1)} / mois`) +
-        tile('stability', '⚖️', 'Stabilité', `${num(me.stability)}<small>/100</small>`, me.stability < 35 ? 'Danger !' : me.stability < 50 ? 'Fragile' : 'Solide', me.stability < 35),
+        tile('stability', '⚖️', 'Stabilité', `${num(me.stability)}<small>/100</small>`, me.stability < 35 ? 'Danger !' : me.stability < 50 ? 'Fragile' : 'Solide', me.stability < 35) +
+        this.tierTile(),
     );
     patch(q('.date'), dateLabel(s));
     patch(
@@ -719,7 +752,7 @@ export class App {
         (s.rival && s.nations[s.rival].alive
           ? `<button class="rivalchip" data-a="gotoNation" data-p="${esc(s.rival)}">🗡️ Rival : ${esc(nm(s, s.rival))}<i style="width:${s.rivalHostility}%"></i></button>`
           : '') +
-        `<button class="warchip tierchip" data-a="contracts" data-p="resources">${TIERS[me.tier - 1].icon} ${esc(TIERS[me.tier - 1].name)} <b class="${s.prosperity.satisfaction >= 0.8 ? 'pos' : 'neg'}">${s.prosperity.satisfaction >= 0.8 ? '▲' : '▼'} ${Math.round(s.prosperity.points)} %</b></button>` +
+        this.objectivesDrop() +
         (me.treasury < 0 || F.inAusterity(s) || F.inDefault(s)
           ? `<button class="warchip sanctions" data-a="explain" data-p="treasury">💸 ${F.inDefault(s) ? 'Défaut de paiement' : F.inAusterity(s) ? 'Austérité' : 'Faillite'}${me.income.interest ? ` <b class="neg">−${money(me.income.interest)}/mois</b>` : ''}</button>`
           : '') +

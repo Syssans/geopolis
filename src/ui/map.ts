@@ -6,7 +6,7 @@ import { feature } from 'topojson-client';
 import type { Feature, Geometry } from 'geojson';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 import CAPITALS from '../data/capitals.json';
-import { RELIGIONS } from '../data/religions';
+import { HOLY_SITES, RELIGIONS } from '../data/religions';
 import { GOODS, STRAITS, TRADE_NODES } from '../data/trade';
 import { EXTRA_LANES, LAND, lane, laneKey, PORTS, routePath, type LonLat } from '../data/routes';
 import { clock } from '../game/convoys';
@@ -536,11 +536,13 @@ export class MapView {
       }
     } else {
       for (const p of this.world.provinces) {
-        if (!p.holy?.length) continue;
-        const [x, y] = this.centers[p.id];
-        const rels = [...new Set(p.holy.flatMap((h) => h.religions))];
-        const icons = [...new Set(rels.map((r) => RELIGIONS[r].icon))].join('');
-        add(x, y, icons, p.holy.map((h) => h.name).join(' · '), s.provinces[p.id].owner === s.player ? 'own' : '');
+        for (const h of p.holy ?? []) {
+          // Position réelle du site (le centre d'une province peut tomber loin, voire en mer)
+          const site = HOLY_SITES.find((x) => x.name === h.name);
+          const [x, y] = (site && this.projection([site.lon, site.lat])) || this.centers[p.id];
+          const icons = [...new Set(h.religions.map((r) => RELIGIONS[r].icon))].join('');
+          add(x, y, icons, h.name, s.provinces[p.id].owner === s.player ? 'own' : '');
+        }
       }
     }
     this.sizeMarkers();
@@ -702,6 +704,7 @@ export class MapView {
       this.buildLabels(s);
     }
     this.labelMode(s, mode);
+    this.svg.setAttribute('class', `mode-${mode}`);
     if (mode === 'trade') this.drawTrade(s, selected !== null ? this.world.provinces[selected].node : null);
     else if (this.tradeLayer.childElementCount) this.tradeLayer.innerHTML = '';
     this.drawMarkers(s, mode);

@@ -15,7 +15,7 @@ export type Religion =
 export type Family = 'chretien' | 'musulman' | 'juif' | 'dharmique' | 'autre';
 
 export const RELIGIONS: Record<Religion, { name: string; adj: string; family: Family; color: string; icon: string }> = {
-  catholique: { name: 'Catholicisme', adj: 'catholique', family: 'chretien', color: '#f2f2f2', icon: '✝️' },
+  catholique: { name: 'Catholicisme', adj: 'catholique', family: 'chretien', color: '#ece5d3', icon: '✝️' },
   protestant: { name: 'Protestantisme', adj: 'protestante', family: 'chretien', color: '#5b8fd6', icon: '✝️' },
   evangelique: { name: 'Évangélisme', adj: 'évangélique', family: 'chretien', color: '#8fc1e8', icon: '✝️' },
   orthodoxe: { name: 'Orthodoxie', adj: 'orthodoxe', family: 'chretien', color: '#a262c9', icon: '☦️' },
@@ -184,21 +184,22 @@ export const REGIONAL_RELIGION: Record<string, Record<string, Religion>> = {
 };
 
 /** Lieux saints : province (nom admin-1) → confessions qui la vénèrent. */
-export const HOLY_SITES: { country: string; province: string[]; name: string; religions: Religion[] }[] = [
-  { country: 'Israel', province: ['Jerusalem', 'Jerusalem District'], name: 'Jérusalem', religions: ['juif', 'catholique', 'orthodoxe', 'protestant', 'evangelique', 'sunnite'] },
-  { country: 'Saudi Arabia', province: ['Makkah', 'Mecca'], name: 'La Mecque', religions: ['sunnite', 'chiite'] },
-  { country: 'Saudi Arabia', province: ['Al Madinah', 'Medina'], name: 'Médine', religions: ['sunnite'] },
-  { country: 'Iraq', province: ['An-Najaf', 'Najaf', 'Karbala\''], name: 'Najaf et Karbala', religions: ['chiite'] },
-  { country: 'Iran', province: ['Qom', 'Razavi Khorasan'], name: 'Qom et Mashhad', religions: ['chiite'] },
-  { country: 'Italy', province: ['Lazio'], name: 'Rome', religions: ['catholique'] },
-  { country: 'Turkey', province: ['Istanbul'], name: 'Constantinople', religions: ['orthodoxe'] },
-  { country: 'Russia', province: ['City of Moscow', 'Moscow City', 'Moskva'], name: 'Moscou, « troisième Rome »', religions: ['orthodoxe'] },
-  { country: 'Ukraine', province: ['Kiev City', 'Kyiv City', 'Kiev'], name: 'Kiev', religions: ['orthodoxe'] },
-  { country: 'Germany', province: ['Sachsen-Anhalt'], name: 'Wittenberg', religions: ['protestant', 'evangelique'] },
-  { country: 'United States of America', province: ['Texas'], name: 'La « Bible Belt »', religions: ['evangelique'] },
-  { country: 'India', province: ['Uttar Pradesh'], name: 'Varanasi et Ayodhya', religions: ['hindou'] },
-  { country: 'India', province: ['Bihar'], name: 'Bodh-Gaya', religions: ['bouddhiste'] },
-  { country: 'China', province: ['Xizang', 'Tibet'], name: 'Lhassa', religions: ['bouddhiste'] },
-  { country: 'Japan', province: ['Kyoto', 'Kyōto'], name: 'Kyoto', religions: ['bouddhiste'] },
-  { country: 'Nepal', province: ['Lumbini', 'Western'], name: 'Lumbini', religions: ['bouddhiste'] },
+/** Lieux saints, avec la position réelle du site (les centres de province peuvent tomber loin, voire en mer). */
+export const HOLY_SITES: { country: string; province: string[]; name: string; lon: number; lat: number; religions: Religion[] }[] = [
+  { country: 'Israel', province: ['Jerusalem', 'Jerusalem District'], name: 'Jérusalem', lon: 35.23, lat: 31.78, religions: ['juif', 'catholique', 'orthodoxe', 'protestant', 'evangelique', 'sunnite'] },
+  { country: 'Saudi Arabia', province: ['Makkah', 'Mecca'], name: 'La Mecque', lon: 39.83, lat: 21.42, religions: ['sunnite', 'chiite'] },
+  { country: 'Saudi Arabia', province: ['Al Madinah', 'Medina'], name: 'Médine', lon: 39.61, lat: 24.47, religions: ['sunnite'] },
+  { country: 'Iraq', province: ['An-Najaf', 'Najaf', 'Karbala\''], name: 'Najaf et Karbala', lon: 44.33, lat: 32.0, religions: ['chiite'] },
+  { country: 'Iran', province: ['Qom', 'Razavi Khorasan'], name: 'Qom et Mashhad', lon: 50.88, lat: 34.64, religions: ['chiite'] },
+  { country: 'Italy', province: ['Lazio'], name: 'Rome', lon: 12.48, lat: 41.9, religions: ['catholique'] },
+  { country: 'Turkey', province: ['Istanbul'], name: 'Constantinople', lon: 28.98, lat: 41.01, religions: ['orthodoxe'] },
+  { country: 'Russia', province: ['City of Moscow', 'Moscow City', 'Moskva'], name: 'Moscou, « troisième Rome »', lon: 37.62, lat: 55.75, religions: ['orthodoxe'] },
+  { country: 'Ukraine', province: ['Kiev City', 'Kyiv City', 'Kiev'], name: 'Kiev', lon: 30.52, lat: 50.45, religions: ['orthodoxe'] },
+  { country: 'Germany', province: ['Sachsen-Anhalt'], name: 'Wittenberg', lon: 12.65, lat: 51.87, religions: ['protestant', 'evangelique'] },
+  { country: 'United States of America', province: ['Texas'], name: 'La « Bible Belt »', lon: -97.1, lat: 32.8, religions: ['evangelique'] },
+  { country: 'India', province: ['Uttar Pradesh'], name: 'Varanasi et Ayodhya', lon: 82.99, lat: 25.32, religions: ['hindou'] },
+  { country: 'India', province: ['Bihar'], name: 'Bodh-Gaya', lon: 84.99, lat: 24.7, religions: ['bouddhiste'] },
+  { country: 'China', province: ['Xizang', 'Tibet'], name: 'Lhassa', lon: 91.13, lat: 29.65, religions: ['bouddhiste'] },
+  { country: 'Japan', province: ['Kyoto', 'Kyōto'], name: 'Kyoto', lon: 135.77, lat: 35.01, religions: ['bouddhiste'] },
+  { country: 'Nepal', province: ['Lumbini', 'Western'], name: 'Lumbini', lon: 83.28, lat: 27.47, religions: ['bouddhiste'] },
 ];
