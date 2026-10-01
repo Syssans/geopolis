@@ -32,6 +32,7 @@ import type { Topology } from 'topojson-specification';
 import { cls, colorSigns, esc, hintify, iconize, money, num, partitive, pct, pop, signed } from './format';
 import { MapView, type MapMode } from './map';
 import { flagOf } from '../data/flags';
+import { TUTORIAL } from './tutorial';
 import { applyTheme, themeOf, THEMES } from './themes';
 import { chartPointer, priceChart, sparkline, type RefLine } from './charts';
 import { clock as clockOf } from '../game/convoys';
@@ -364,6 +365,18 @@ export class App {
       if (sv) this.start(sv);
     };
     h.help = () => this.showHelp();
+    h.tut = (p) => this.showHelp(Number(p));
+    h.tutToc = () => this.showTutToc();
+    h.tutEnd = () => {
+      this.tutPage = 0;
+      this.closeModal();
+    };
+    h.tutGo = () => {
+      const go = TUTORIAL[this.tutPage].go;
+      if (!go) return;
+      this.closeModal();
+      this.handlers[go.a]?.(go.p ?? '');
+    };
     h.filter = (v) => this.showPicker(v);
     h.pick = (id) => this.confirmPick(id);
     h.play = (id) => {
@@ -1436,6 +1449,7 @@ export class App {
       <p>🛡️ Deux ans de répit : aucun pays ne vous attaquera sans provocation avant ${s.endYear - 8}, et toute agression sera précédée d’un ultimatum.</p>`,
       [
         { label: 'Voir mes objectifs', a: 'objectives', primary: true },
+        { label: '📖 Tutoriel', hint: '5 minutes pour tout comprendre', a: 'help' },
         { label: 'Commencer', a: 'closeModal' },
       ],
     );
@@ -1912,21 +1926,30 @@ export class App {
     ]);
   }
 
-  private showHelp() {
-    this.modal(
-      'Comment jouer',
-      `<p>Vous dirigez une nation à partir de janvier 2026. Le temps s'écoule mois par mois : <b>▶</b> lance ou met en pause, <b>›››</b> règle la vitesse. Touchez une province pour agir.</p>
-      <p><b>But</b> 🎯 : une campagne de 10 ans (2026-2036). Remplissez vos missions, battez votre rival et soignez votre rang : un bilan noté de S à D tombe à la fin.</p>
-      <p><b>Contrats</b> 📦 : des acheteurs vous proposent d'acheter votre production à prix fixe avec une prime. Choisissez l'itinéraire de vos convois (détroits à péage, zones de piraterie), escortez-les avec votre flotte, contournez les blocus. C'est votre principale source de richesse.</p>
-      <p><b>Niveau de vie</b> 🏙️ : votre population passe de la subsistance à l'économie du savoir. Chaque palier la rend plus productive mais réclame de nouveaux biens (pétrole, gaz, puces, services…) et fait grimper le coût de l'État. Satisfaites plus de 80 % de ses besoins pour progresser ; en dessous, elle régresse et la stabilité baisse. Rien n'est gratuit : chaque marchandise a un coût de production.</p>
-      <p><b>Trois ressources</b> : 💰 le trésor (contrats + production + commerce − entretien des forces), 🤝 l'influence (diplomatie) et 🔥 la ferveur (religion).</p>
-      <p><b>Commerce</b> : chaque province produit une marchandise dont la valeur entre dans un <b>nœud commercial</b>. La richesse coule d'amont en aval vers trois grands pôles : Manche, New York et Shanghai. Vous touchez une part de chaque zone où vous êtes présent (ports, flotte), surtout dans votre zone d'attache ; vos marchands travaillent seuls pour y attirer la richesse. Votre flotte renforce votre poids dans les nœuds côtiers.</p>
-      <p><b>Détroits</b> ⚓ : Ormuz, Suez, Malacca, Panama, Bosphore… leur propriétaire touche un péage et peut les fermer — le commerce en aval s'effondre et les prix s'envolent.</p>
-      <p><b>Religion</b> : chaque province a sa confession. Les minorités s'agitent, surtout sous une politique de prosélytisme, et peuvent se soulever — d'autant plus si une puissance voisine arme les insurgés. Envoyez des missionnaires pour les convertir, ou choisissez la tolérance.</p>
-      <p><b>Lieux saints</b> ⭐ : Jérusalem, La Mecque, Rome, Qom… les détenir rapporte de la ferveur ; les laisser à une autre religion vous fâche avec tous ses fidèles et ouvre la <b>guerre sainte</b>.</p>
-      <p><b>Guerre</b> : l'armée prend les provinces ennemies une à une. Le score de guerre dépend des provinces occupées ; il permet d'annexer des provinces précises, de satelliser ou d'exiger des réparations. Une puissance nucléaire ne capitule jamais.</p>`,
-      [{ label: 'Compris', a: 'closeModal', primary: true }],
-    );
+  private tutPage = 0;
+
+  /** Tutoriel en chapitres : navigation précédent/suivant, sommaire, raccourci vers l'écran concerné. */
+  private showHelp(page = this.tutPage) {
+    this.tutPage = Math.max(0, Math.min(TUTORIAL.length - 1, page));
+    const c = TUTORIAL[this.tutPage];
+    const n = TUTORIAL.length;
+    const inGame = !!this.s && !this.picking;
+    const dots = TUTORIAL.map((x, i) => `<button class="tut-dot ${i === this.tutPage ? 'on' : i < this.tutPage ? 'done' : ''}" data-a="tut" data-p="${i}" aria-label="${esc(x.title)}"></button>`).join('');
+    const html = `<div class="tut-dots">${dots}</div>
+      <div class="tut-body">${c.body}</div>
+      ${c.go && inGame ? `<button class="act wide tut-go" data-a="tutGo"><span class="t">${c.go.label}</span><span class="c">ouvre l’écran dans votre partie</span></button>` : ''}`;
+    const buttons: Parameters<App['modal']>[2] = [];
+    if (this.tutPage < n - 1) buttons.push({ label: `Suivant › ${TUTORIAL[this.tutPage + 1].icon}`, hint: esc(TUTORIAL[this.tutPage + 1].title), a: 'tut', p: String(this.tutPage + 1), primary: true });
+    else buttons.push({ label: 'Terminer', a: 'tutEnd', primary: true });
+    if (this.tutPage > 0) buttons.push({ label: '‹ Précédent', a: 'tut', p: String(this.tutPage - 1) });
+    buttons.push({ label: '📑 Sommaire', a: 'tutToc' });
+    this.modal(`${c.icon} ${esc(c.title)} <small class="tut-count">${this.tutPage + 1}/${n}</small>`, html, buttons);
+    this.el.overlay.querySelector('.content')?.scrollTo(0, 0);
+  }
+
+  private showTutToc() {
+    const html = `<div class="tut-toc">${TUTORIAL.map((c, i) => `<button class="tut-toc-row ${i === this.tutPage ? 'on' : ''}" data-a="tut" data-p="${i}"><span>${c.icon}</span><b>${i + 1}. ${esc(c.title)}</b><i>›</i></button>`).join('')}</div>`;
+    this.modal('📖 Comment jouer', html, [{ label: 'Fermer', a: 'closeModal', primary: true }]);
   }
 
   private showMenu() {

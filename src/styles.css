@@ -550,3 +550,31 @@ button.link.danger { color: var(--bad); }
 .uses .use b::before { content: '🤝'; margin-right: 2px; }
 .sat-h { margin: 8px 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; }
 .buy-from { display: block; margin: -4px 0 6px; }
+
+/* ——— Tutoriel ——— */
+.tut-count { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 6px; font-family: system-ui, sans-serif; }
+.tut-dots { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 12px; }
+.tut-dot { width: 14px; height: 6px; border-radius: 3px; border: none; padding: 0; background: var(--line); cursor: pointer; }
+.tut-dot.done { background: color-mix(in srgb, var(--gold) 45%, var(--line)); }
+.tut-dot.on { background: var(--gold); width: 26px; }
+.tut-body p { margin: 0 0 10px; line-height: 1.5; }
+.tut-keys { display: grid; gap: 4px; margin: 0 0 10px; }
+.tut-keys > div { display: grid; grid-template-columns: minmax(96px, 34%) 1fr; gap: 8px; align-items: baseline; background: var(--btn); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 13px; }
+.tut-keys b { font-weight: 600; }
+.tut-keys > div > span { color: var(--muted); line-height: 1.35; }
+.tut-steps { margin: 0 0 10px; padding-left: 0; list-style: none; counter-reset: st; }
+.tut-steps li { counter-increment: st; position: relative; padding: 4px 0 6px 32px; line-height: 1.45; font-size: 13.5px; }
+.tut-steps li::before { content: counter(st); position: absolute; left: 0; top: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--gold); color: var(--on-gold);
+  font: 700 12px/22px system-ui, sans-serif; text-align: center; }
+.tut-tip { background: color-mix(in srgb, var(--blue) 12%, transparent); border: 1px solid color-mix(in srgb, var(--blue) 40%, transparent); border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.45; margin: 0 0 10px; }
+.tut-ladder { text-align: center; font-size: 13px; background: var(--btn); border-radius: 8px; padding: 8px; }
+.tut-go { margin-top: 4px; }
+.tut-toc { display: grid; gap: 5px; }
+.tut-toc-row { display: flex; align-items: center; gap: 10px; text-align: left; background: var(--btn); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; cursor: pointer; color: var(--text); }
+.tut-toc-row span { font-size: 18px; }
+.tut-toc-row b { flex: 1; font-weight: 500; font-size: 14px; }
+.tut-toc-row i { font-style: normal; color: var(--muted); }
+.tut-toc-row.on { border-color: var(--gold); }
+.modal footer:has([data-a=tutToc]) { flex-direction: row; flex-wrap: wrap; }
+.modal footer:has([data-a=tutToc]) .btn { flex: 1; }
+.modal footer:has([data-a=tutToc]) .btn.primary { flex-basis: 100%; }
