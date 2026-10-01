@@ -1930,6 +1930,8 @@ export class App {
 
   /** Tutoriel en chapitres : navigation précédent/suivant, sommaire, raccourci vers l'écran concerné. */
   private showHelp(page = this.tutPage) {
+    const prev = this.el.overlay.querySelector('.modal.tut') ? this.tutPage : null;
+    const fromToc = !!this.el.overlay.querySelector('.modal.tut .tut-toc');
     this.tutPage = Math.max(0, Math.min(TUTORIAL.length - 1, page));
     const c = TUTORIAL[this.tutPage];
     const n = TUTORIAL.length;
@@ -1945,11 +1947,33 @@ export class App {
     buttons.push({ label: '📑 Sommaire', a: 'tutToc' });
     this.modal(`${c.icon} ${esc(c.title)} <small class="tut-count">${this.tutPage + 1}/${n}</small>`, html, buttons);
     this.el.overlay.querySelector('.content')?.scrollTo(0, 0);
+    // Même taille de fenêtre d'une page à l'autre ; le contenu glisse dans le sens de la lecture
+    const anim = fromToc ? 'tut-fade' : prev === null ? 'tut-open' : this.tutPage > prev ? 'tut-next' : this.tutPage < prev ? 'tut-prev' : '';
+    this.tutModal(anim);
+  }
+
+  /** Habille la fenêtre du tutoriel : taille fixe, animation d'entrée, balayage gauche/droite. */
+  private tutModal(anim: string) {
+    const m = this.el.overlay.querySelector<HTMLElement>('.modal');
+    if (!m) return;
+    m.classList.add('tut');
+    if (anim) m.classList.add(anim);
+    let x0 = 0, y0 = 0;
+    m.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+    m.addEventListener('touchend', (e) => {
+      if (!m.querySelector('.tut-body')) return;
+      const dx = e.changedTouches[0].clientX - x0;
+      const dy = e.changedTouches[0].clientY - y0;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) this.showHelp(this.tutPage + (dx < 0 ? 1 : -1));
+    });
   }
 
   private showTutToc() {
     const html = `<div class="tut-toc">${TUTORIAL.map((c, i) => `<button class="tut-toc-row ${i === this.tutPage ? 'on' : ''}" data-a="tut" data-p="${i}"><span>${c.icon}</span><b>${i + 1}. ${esc(c.title)}</b><i>›</i></button>`).join('')}</div>`;
+    const fromTut = !!this.el.overlay.querySelector('.modal.tut');
     this.modal('📖 Comment jouer', html, [{ label: 'Fermer', a: 'closeModal', primary: true }]);
+    this.tutModal(fromTut ? 'tut-fade' : 'tut-open');
+    this.el.overlay.querySelector('.tut-toc-row.on')?.scrollIntoView({ block: 'center' });
   }
 
   private showMenu() {

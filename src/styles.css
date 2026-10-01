@@ -578,3 +578,23 @@ button.link.danger { color: var(--bad); }
 .modal footer:has([data-a=tutToc]) { flex-direction: row; flex-wrap: wrap; }
 .modal footer:has([data-a=tutToc]) .btn { flex: 1; }
 .modal footer:has([data-a=tutToc]) .btn.primary { flex-basis: 100%; }
+
+/* Tutoriel : fenêtre de taille fixe, pages qui glissent */
+.modal.tut { height: min(720px, 88%); }
+.modal.tut .content { flex: 1; overflow-x: hidden; }
+.modal.tut-open { animation: tutOpen .28s cubic-bezier(.2, .8, .2, 1); }
+.modal.tut-next header h2, .modal.tut-next .tut-body, .modal.tut-next .tut-go { animation: tutNext .32s cubic-bezier(.2, .8, .2, 1) both; }
+.modal.tut-prev header h2, .modal.tut-prev .tut-body, .modal.tut-prev .tut-go { animation: tutPrev .32s cubic-bezier(.2, .8, .2, 1) both; }
+.modal.tut-next .tut-body > *, .modal.tut-prev .tut-body > * { animation: tutRise .4s ease-out both; }
+.modal.tut-next .tut-body > :nth-child(2), .modal.tut-prev .tut-body > :nth-child(2) { animation-delay: .05s; }
+.modal.tut-next .tut-body > :nth-child(3), .modal.tut-prev .tut-body > :nth-child(3) { animation-delay: .1s; }
+.modal.tut-next .tut-body > :nth-child(n+4), .modal.tut-prev .tut-body > :nth-child(n+4) { animation-delay: .15s; }
+.modal.tut-fade .content, .modal.tut-fade header h2 { animation: tutFade .25s ease-out both; }
+.tut-dot.on { animation: tutDot .35s ease-out; }
+@keyframes tutOpen { from { opacity: 0; transform: translateY(14px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes tutNext { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+@keyframes tutPrev { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
+@keyframes tutRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes tutFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tutDot { from { width: 14px; } to { width: 26px; } }
+@media (prefers-reduced-motion: reduce) { .modal.tut, .modal.tut * { animation: none !important; } }
