@@ -262,7 +262,7 @@ h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 
 .toasts { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(120px + var(--safe-bottom)); z-index: 60; pointer-events: none; display: flex;
   flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(92%, 420px); }
-.toast { background: var(--btn)f2; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 13px; animation: fade 4s forwards; width: 100%; }
+.toast { background: var(--panel-solid); box-shadow: 0 6px 18px #000c; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 13px; animation: fade 4s forwards; width: 100%; }
 .toast.bad { border-color: var(--bad); }
 .toast.good { border-color: var(--good); }
 @keyframes fade { 0% { opacity: 0; transform: translateY(6px); } 8% { opacity: 1; transform: none; } 85% { opacity: 1; } 100% { opacity: 0; } }
@@ -471,7 +471,7 @@ button.link.danger { color: var(--bad); }
 .hud:has(.toggle.paused) .date { color: var(--bad); }
 .toast.clickable { pointer-events: auto; cursor: pointer; display: flex; align-items: center; gap: 8px; }
 .toast.clickable .go { margin-left: auto; color: var(--hl); font-size: 20px; font-weight: 700; }
-.toast.clickable:active { background: #30363d; }
+.toast.clickable:active { background: var(--btn); }
 .backbtn { display: block; width: 100%; text-align: left; background: var(--btn); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; margin: 0 0 10px; font-size: 13px; color: var(--hl); cursor: pointer; }
 .store-pol { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0 2px; }
 .store-pol .seg button { font-size: 12px; padding: 5px 8px; white-space: nowrap; }
@@ -549,3 +549,4 @@ button.link.danger { color: var(--bad); }
 .uses .use b { font-size: 12px; color: var(--hl); white-space: nowrap; }
 .uses .use b::before { content: '🤝'; margin-right: 2px; }
 .sat-h { margin: 8px 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; }
+.buy-from { display: block; margin: -4px 0 6px; }

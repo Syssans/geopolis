@@ -94,6 +94,15 @@ export class App {
       this.el[k] = d;
     }
     root.addEventListener('click', (e) => {
+      // Toucher à côté : ferme la fenêtre (sauf décision obligatoire) et le menu des objectifs
+      if (e.target === this.el.overlay && !this.modalSticky) {
+        this.closeModal();
+        return;
+      }
+      if (this.objOpen && !(e.target as HTMLElement).closest('.objdrop')) {
+        this.objOpen = false;
+        this.renderHud();
+      }
       const t = (e.target as HTMLElement).closest<HTMLElement>('[data-a]');
       if (!t || (t as HTMLButtonElement).disabled) return;
       e.stopPropagation();
@@ -703,6 +712,7 @@ export class App {
   }
 
   private objOpen = false;
+  private modalSticky = false;
 
   /** Objectifs de campagne en menu déroulant, sous la barre du rival. */
   private objectivesDrop(): string {
@@ -1290,6 +1300,8 @@ export class App {
 
   private modal(title: string, html: string, buttons: { label: string; hint?: string; a: string; p?: string; primary?: boolean; disabled?: boolean }[]) {
     const o = this.el.overlay;
+    // Une crise ou une fin de partie exige une réponse : pas de fermeture en touchant à côté
+    this.modalSticky = buttons.some((x) => x.a === 'event' || x.a === 'sandbox') || buttons.every((x) => x.a === 'quit');
     o.style.display = '';
     this.root.classList.add('modal-open');
     o.innerHTML = `<div class="modal" role="dialog"><header><h2>${title}</h2></header><div class="content">${html}</div>
@@ -1517,12 +1529,12 @@ export class App {
     if (tab === 'resources') {
       const bought = P.purchased(s);
       const storedAll = C.storedUnits(s, this.world);
-      // Seules les marchandises produites ici : les achats et stocks sans production figurent dans « Besoins et stocks »
-      const goods = (Object.keys(cap) as (keyof typeof GOODS)[]).filter((g) => (cap[g] ?? 0) > 1e-6);
+      // Marchandises produites ou achetées sous contrat
+      const goods = [...new Set([...Object.keys(cap), ...Object.keys(bought)] as (keyof typeof GOODS)[])].filter((g) => (cap[g] ?? 0) + (bought[g] ?? 0) > 1e-6);
       const worth = (g: keyof typeof GOODS) => ((cap[g] ?? 0) + (bought[g] ?? 0) + (s.stock[g] ?? 0)) * unitPriceOf(s, g);
       goods.sort((a, b) => worth(b) - worth(a));
       html += this.needsHtml();
-      html += `<section class="chap chap-prod"><h3 class="chap-h">🏭 Production et stocks</h3><p class="hint">Ce que vos provinces produisent chaque mois. La part <b class="gold">sous contrat</b> est vendue à prix garanti ; le <b>disponible</b> part sur le marché et peut être proposé aux acheteurs. Le <b>surplus</b> (ni vendu sous contrat, ni consommé par la population) part au marché, ou en stock si vous le choisissez : de quoi spéculer ou constituer des réserves, mais chaque mois de stock coûte 1 % de sa valeur (2 % au-delà de 6 mois). Touchez une province pour la moderniser. Ce que vous achetez sans le produire apparaît plus haut dans « Besoins et stocks » ; les acheteurs étrangers peuvent quand même vous le demander.</p>`;
+      html += `<section class="chap chap-prod"><h3 class="chap-h">🏭 Production, achats et stocks</h3><p class="hint">Ce que vos provinces produisent chaque mois. La part <b class="gold">sous contrat</b> est vendue à prix garanti ; le <b>disponible</b> part sur le marché et peut être proposé aux acheteurs. Le <b>surplus</b> (ni vendu sous contrat, ni consommé par la population) part au marché, ou en stock si vous le choisissez : de quoi spéculer ou constituer des réserves, mais chaque mois de stock coûte 1 % de sa valeur (2 % au-delà de 6 mois). Touchez une province pour la moderniser. Les marchandises achetées sous contrat y figurent aussi : vous pouvez les revendre ou les stocker.</p>`;
       html += goods.map((g) => {
         const d = GOODS[g];
         const own = cap[g] ?? 0;
@@ -1535,6 +1547,7 @@ export class App {
         const prov = E.producers(s, this.world, s.player, g);
         const selling = !s.notForSale.includes(g);
         return `<div class="card"><div class="mh"><b>${this.gi(g)} ${d.name}</b><small class="${cls(tr)}">${tr > 0.5 ? '▲' : tr < -0.5 ? '▼' : '▬'} ${money(unitPriceOf(s, g))}/${esc(d.unit)}</small></div>
+          ${buy > 0 ? `<small class="muted buy-from">📥 Acheté à ${[...new Set(s.purchases.filter((p) => p.good === g).map((p) => p.seller))].map((id) => this.flag(id)).join(' ')}</small>` : ''}
           ${c > 0 ? `<div class="stats four">${stat('Production', `${qty(own)}<small>/mois</small>`)}${stat('Achats', `${qty(buy)}<small>/mois</small>`)}${stat('Vendu', `<span class="c-mine">${qty(used)}</span><small>/mois</small>`)}${stat('Libre', `<span class="${c - used < 0 ? 'neg' : 'pos'}">${qty(c - used)}</span><small>/mois</small>`)}</div>
           ${this.gauge(c, used)}` : ''}
           <div class="stock-line"><span>🏬 Stock : <b>${qty(st)}</b> ${esc(d.unit)}${st > 1e-3 ? ` <small class="muted">≈ ${money(st * unitPriceOf(s, g))}</small>` : ''}</span>
@@ -1685,7 +1698,7 @@ export class App {
     const trend = (pr.satisfaction - 0.8) * 15;
     const ladder = TIERS.map((x, i) => `<span class="rung ${i + 1 === me.tier ? 'on' : i + 1 < me.tier ? 'done' : ''}" title="${esc(x.name)}">${x.icon}</span>`).join('<i class="sep"></i>');
     const blocked = F.tierBlocked(s);
-    return chap('tier', '🏙️ Niveau de vie', `<p class="hint">${esc(t.desc)} Au-dessus de 80 % de besoins satisfaits, la population progresse ; en dessous, elle régresse et la stabilité baisse. Les achats d’urgence ne comptent qu’aux trois quarts (au quart s’ils sont payés à crédit).${next ? ` Au palier suivant, elle réclamera aussi : ${Object.keys(next.adds).map((g) => this.gi(g as keyof typeof GOODS)).join(' ')} — et l’État coûtera ${money(devOf(s, me.id) * next.admin)}/mois.` : ''}</p>
+    return chap('tier', '🏙️ Niveau de vie', `<p class="hint">${esc(t.desc)} ${next ? ` Au palier suivant, elle réclamera aussi : ${Object.keys(next.adds).map((g) => this.gi(g as keyof typeof GOODS)).join(' ')} — et l’État coûtera ${money(devOf(s, me.id) * next.admin)}/mois.` : ''}</p>
       <div class="card tier-card"><div class="ladder">${ladder}</div>
         <div class="mh"><b>${t.icon} ${t.name}</b><small>palier ${me.tier}/${TIERS.length}</small></div>
         <small class="muted">Productivité ×${num(t.productivity, 2)} · coût de l’État <b class="neg">−${money(me.income.admin ?? 0)}</b>/mois</small>
@@ -1697,19 +1710,10 @@ export class App {
 
   /** Pourquoi la satisfaction bouge : répartition du mois écoulé et règles. */
   private satisfactionHelp(): string {
-    const s = this.state;
-    const lines = s.needs?.lines ?? {};
-    const urgent = P.emergencyWeight(s);
-    let want = 0, own = 0, stock = 0, market = 0;
-    for (const [g, l] of Object.entries(lines) as [keyof typeof GOODS, NeedLine][]) {
-      const v = unitPriceOf(s, g);
-      want += l.need * v; own += l.own * v; stock += l.stock * v; market += l.market * v;
-    }
-    const pc = (v: number) => `${Math.round((v / (want || 1)) * 100)} %`;
-    const lost = market * (1 - urgent);
-    return `<h4 class="sat-h">Pourquoi la satisfaction varie</h4><p class="hint">La satisfaction mesure la part de la <b>valeur</b> des besoins réellement couverte le mois dernier${want > 0 ? ` : ${pc(own)} par votre production et ${pc(stock)} par vos stocks et contrats d’achat (comptés en entier), ${pc(market)} par des achats d’urgence qui ne comptent qu’à ${Math.round(urgent * 100)} %${lost > 0 ? ` (soit ${pc(lost)} perdus en files d’attente et rationnement)` : ''}` : ' (calculée à la fin du premier mois)'}.<br>
-      Elle baisse quand un besoin se creuse : population qui grandit, nouveau palier plus exigeant, production vendue sous contrat, stock épuisé, cargaison pillée ou bloquée, et quand une marchandise qui vous manque devient chère (elle pèse alors plus lourd). Elle tombe au quart pour les achats d’urgence quand le trésor est négatif.<br>
-      Chaque mois, la progression vers le palier suivant gagne <b class="nosign">(satisfaction − 80) × 0,15</b> point : +3 à 100 %, 0 à 80 %, −3 à 60 %. Sous 80 %, la stabilité baisse aussi.</p>`;
+    return `<h4 class="sat-h">Comment marche la satisfaction</h4><p class="hint">C’est la part des besoins de votre population qui est couverte.<br>
+      ✅ Votre production, vos stocks et vos contrats d’achat comptent en entier.<br>
+      ⚠️ Les achats d’urgence ne comptent qu’aux trois quarts (au quart si le trésor est négatif).<br>
+      Au-dessus de 80 %, le niveau de vie progresse ; en dessous, il recule et la stabilité baisse. Pour la remonter : signez des contrats d’achat pour ce qui vous manque.</p>`;
   }
 
   // ——— Besoins, stocks et achats ———
