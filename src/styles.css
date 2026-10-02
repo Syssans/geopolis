@@ -675,3 +675,6 @@ i.v.down { background: #d9622b; } i.v.up { background: #2f6fdb; } i.v.eq { backg
 .solde.down { background: #3a1616; border: 1px solid #8e2b2b; } .solde.down b { color: var(--bad); }
 .tut-link { display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 10px; background: none; border: 1px dashed var(--line); border-radius: 10px; padding: 9px 12px; color: var(--text); cursor: pointer; font-size: 13px; text-align: left; }
 .tut-link i { margin-left: auto; font-style: normal; color: var(--gold); font-size: 16px; }
+.market-line { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); margin: 6px 0 2px; }
+.market-line b { font-size: 13px; white-space: nowrap; } .market-line b small { font-weight: 400; color: var(--muted); }
+.bigstat small.neg { color: var(--bad); }

@@ -14,6 +14,7 @@ export const CHANGELOG: { version: string; date: string; items: string[] }[] = [
       'Menu déroulant des cartes ; convois sur la seule carte du commerce',
       'Réunion de l’OPEP en table ronde avec prévision des votes et des conséquences',
       'Corps d’armée et flottes en nombres entiers',
+      'Refonte de l’économie : marchandises physiques, marché avec commission et invendus, nœuds à commission, satisfaction plus exigeante',
     ],
   },
   { version: '0.10.1', date: '1er octobre 2026', items: ['Tutoriel complet', 'Thème irlandais, Royaume-Uni redécoupé'] },

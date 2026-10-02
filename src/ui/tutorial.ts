@@ -73,8 +73,8 @@ export const TUTORIAL: TutChapter[] = [
     body: `<p>Chaque mois, votre trésor évolue :</p>
       ${keys([
         ['+ Contrats', 'vos ventes directes à prix garanti (le levier n°1)'],
-        ['+ Production', 'un quart vendu sur place'],
-        ['+ Commerce', 'votre part des nœuds commerciaux où vous êtes présent'],
+        ['+ Marché', 'le surplus que vos contrats et votre population n’utilisent pas, moins 30 % de commission ; une partie reste invendue'],
+        ['+ Commissions', 'un petit courtage sur le commerce des nœuds où vous pesez'],
         ['+ Péages', 'si vous tenez un détroit'],
         ['− Armée et flotte', 'leur entretien'],
         ['− État', 'son coût augmente avec le niveau de vie'],
@@ -156,7 +156,7 @@ export const TUTORIAL: TutChapter[] = [
   {
     icon: '⚓',
     title: 'Commerce mondial et détroits',
-    body: `<p>La valeur des marchandises circule de <b>nœud</b> en nœud vers trois grands pôles : la Manche, New York et Shanghai. Vous touchez une part de chaque nœud où vous pesez (ports, flotte, marchands).</p>
+    body: `<p>Les exportations du monde circulent de <b>nœud</b> en nœud vers trois grands pôles : la Manche, New York et Shanghai. Ceux qui pèsent dans un nœud (ports, flotte, marchands) y prélèvent une commission de 12 % : un complément, pas une rente. Vos vraies recettes viennent de ce que vous <b>vendez</b> : contrats d’abord, marché ensuite.</p>
       <p>Les <b>détroits</b> (Ormuz, Suez, Malacca, Panama, Bosphore, Gibraltar…) rapportent un péage à leur propriétaire, qui peut les <b>fermer</b> (🤝 30) : le commerce en aval s’effondre et les cours s’envolent.</p>
       <p>Vos partenaires commerciaux se détournent si votre <b>stabilité</b> tombe sous 50, si vos <b>relations</b> avec eux sont mauvaises ou si vous menez des <b>guerres d’agression</b> : vos exportations fondent.</p>
       ${tip('Le bilan 💰 détaille la « confiance des partenaires » et ce qui vous coûte.')}`,

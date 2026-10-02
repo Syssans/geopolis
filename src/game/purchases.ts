@@ -270,12 +270,12 @@ export function storageRate(q: number, monthly: number): number {
 }
 
 /**
- * Satisfaction de la population : part (en valeur) des besoins couverts, les achats d'urgence ne comptant qu'aux trois quarts
- * (files d'attente, rationnement), et au quart seulement quand l'État les paie à crédit (trésor négatif : pénuries).
+ * Satisfaction de la population : part (en valeur) des besoins couverts, les achats d'urgence ne comptant qu'à 60 %
+ * (files d'attente, rationnement), et à 20 % seulement quand l'État les paie à crédit (trésor négatif : pénuries).
  * Elle fait monter ou descendre le niveau de vie.
  */
-/** Poids des achats d'urgence dans la satisfaction : 0,75, ou 0,25 quand ils sont payés à crédit. */
-export const emergencyWeight = (s: GameState) => (s.nations[s.player].treasury < 0 ? 0.25 : 0.75);
+/** Poids des achats d'urgence dans la satisfaction : 0,6 (files d'attente, rationnement), 0,2 quand ils sont payés à crédit. */
+export const emergencyWeight = (s: GameState) => (s.nations[s.player].treasury < 0 ? 0.2 : 0.6);
 
 export function satisfactionOf(s: GameState, lines: Partial<Record<Good, NeedLine>>): number {
   const urgent = emergencyWeight(s);
@@ -295,7 +295,8 @@ function updateProsperity(s: GameState, lines: Partial<Record<Good, NeedLine>>) 
   const sat = satisfactionOf(s, lines);
   pr.satisfaction = Math.round(sat * 100) / 100;
   pr.months++;
-  pr.points = clamp(pr.points + (sat - 0.8) * 15, 0, 100);
+  // On progresse vite quand tout va bien, on recule plus lentement : un pays négligé décline, il ne s'effondre pas
+  pr.points = clamp(pr.points + (sat - 0.8) * (sat >= 0.8 ? 15 : 8), 0, 100);
   // On ne s'enrichit pas à crédit : pas de nouveau palier avec un trésor négatif ou sous plan d'austérité
   if (tierBlocked(s)) pr.points = Math.min(pr.points, 95);
   if (sat < 0.8) me.stability = clamp(me.stability - (0.8 - sat) * 3, 0, 100);

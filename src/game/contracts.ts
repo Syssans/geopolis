@@ -2,7 +2,7 @@ import { GOODS, STRAITS, TRADE_NODES, type Good } from '../data/trade';
 import { EXTRA_LANES } from '../data/routes';
 import { pick, rand } from './rng';
 import { addRel, alive, devOf, embargoes, log, nm, owned, rel, warBetween } from './state';
-import { computeTrade, goodOf, homeNode, nodeCapture, NODES, output, PRODUCTION_SHARE, straitClosed, straitOwner, TOLL, unitPrice, type TradeReport } from './trade';
+import { absorption, COMMISSION, goodOf, homeNode, NODES, output, straitClosed, straitOwner, TOLL, unitPrice, type TradeReport } from './trade';
 import { needsOf } from './needs';
 import { inDefault } from './finance';
 import { MARGIN, TIERS } from '../data/tiers';
@@ -537,56 +537,26 @@ export function processContracts(
 export const nodeName = (id: string) => NODES.get(id)?.name ?? id;
 export const straitName = (id: string) => STRAITS.find((x) => x.id === id)?.name ?? id;
 
-/** Ce que rapporte au joueur, en part du cours, une unité de chaque marchandise vendue au marché. */
-const captureCache = new WeakMap<GameState, { key: number; v: Partial<Record<Good, number>> }>();
+/** Conservé pour l'interface du moteur : le marché n'a plus besoin du bilan des nœuds. */
+export function setMarketCapture(_s: GameState, _w: World, _report: TradeReport) {}
 
-/** À appeler avec le bilan commercial du mois (tick) ; recalculé sinon à la demande. */
-export function setMarketCapture(s: GameState, w: World, report: TradeReport) {
-  const cap = nodeCapture(report, s.player);
-  const sum: Partial<Record<Good, [number, number]>> = {};
-  for (const pid of owned(s, s.player)) {
-    const g = goodOf(s, w, pid);
-    const v = output(s, w, pid) || 1e-6;
-    const loss = PRODUCTION_SHARE + (1 - PRODUCTION_SHARE) * (cap[w.provinces[pid].node] ?? 0);
-    const e = (sum[g] ??= [0, 0]);
-    e[0] += loss * v;
-    e[1] += v;
-  }
-  const res: Partial<Record<Good, number>> = {};
-  for (const [g, [a, b]] of Object.entries(sum) as [Good, [number, number]][]) res[g] = a / b;
-  captureCache.set(s, { key: s.year * 12 + s.month, v: res });
-}
-
-export function marketCapture(s: GameState, w: World, good: Good): number {
-  let c = captureCache.get(s);
-  if (!c || c.key !== s.year * 12 + s.month) {
-    setMarketCapture(s, w, computeTrade(s, w));
-    c = captureCache.get(s)!;
-  }
-  return c.v[good] ?? 0.5;
-}
-
-/**
- * Vente directe : l'État récupère cette part de la valeur que les négociants des nœuds auraient captée au marché
- * (le reste couvre courtage, assurance et remises consenties au client).
- */
-export const DIRECT_SHARE = 0.5;
 /** Part de sa propre production qu'un pays peut engager sous contrat : le reste passe forcément par les marchés. */
 export const CONTRACTABLE = 0.6;
 
-/** Revenu d'une unité produite vendue au marché, en part du cours (coûts de production et intermédiaires déduits). */
+/**
+ * Revenu d'une unité produite vendue au marché, en part du cours : coûts de production, commission des négociants,
+ * et seulement la part que le marché absorbe (le reste est invendu).
+ */
 export function marketFactor(s: GameState, w: World, good: Good): number {
   const tier = s.nations[s.player].tier ?? 3;
-  return MARGIN[good] * TIERS[tier - 1].productivity * marketCapture(s, w, good);
+  return MARGIN[good] * TIERS[tier - 1].productivity * (1 - COMMISSION) * absorption(s, good);
 }
 
 /**
- * Revenu d'une unité produite vendue sous contrat, en part du cours : le prix est celui du marché (± la prime),
- * mais la vente directe évite les intermédiaires. C'est pourquoi les contrats sont le premier levier de richesse,
- * surtout pour les pays qui pèsent peu dans les nœuds commerciaux.
+ * Revenu d'une unité produite vendue sous contrat, en part du cours : vente directe, volume garanti, sans intermédiaire.
+ * C'est le premier levier de richesse.
  */
-export function contractFactor(s: GameState, w: World, good: Good): number {
+export function contractFactor(s: GameState, _w: World, good: Good): number {
   const tier = s.nations[s.player].tier ?? 3;
-  const cap = marketCapture(s, w, good);
-  return MARGIN[good] * TIERS[tier - 1].productivity * (cap + (1 - cap) * DIRECT_SHARE);
+  return MARGIN[good] * TIERS[tier - 1].productivity;
 }

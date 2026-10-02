@@ -21,7 +21,7 @@ import * as E from '../game/economy';
 import * as F from '../game/finance';
 import { chooseRival, progress, scoreBreakdown, monthlyIncome } from '../game/missions';
 import { CAMPAIGNS } from '../data/campaign';
-import { computeTrade, homeNode, NODES, output, production, straitClosed, straitOwner, TOLL, unitPrice as unitPriceOf, type TradeReport } from '../game/trade';
+import { computeTrade, homeNode, NODES, output, playerMarket, production, straitClosed, straitOwner, TOLL, unitPrice as unitPriceOf, type TradeReport } from '../game/trade';
 import type { GameState, Id, NeedLine, PeaceTerms, Pid, Policy, War, World } from '../game/types';
 import {
   aiAcceptsPeace, annexable, applyPeace, canDeclareWar, enemyLeader, isLeader, scoreFor, termsCost,
@@ -1027,7 +1027,7 @@ export class App {
     const value = production(s, w, pid);
     const stars = `${'★'.repeat(lvl)}${'☆'.repeat(E.MAX_LEVEL - lvl)}`;
     let html = `<div class="prod-card"><div class="prod-head">${this.gi(current, true)}<div><small class="muted">Cette province produit</small><br><b>${g.name}</b> <span class="stars" title="Niveau ${lvl}/${E.MAX_LEVEL}">${stars}</span></div>
-      <div class="prod-val"><b class="pos">+${money(value)}</b><small>/mois · ${num(units, 2)} ${esc(g.unit)}</small></div></div>`;
+      <div class="prod-val"><b>${num(units, 2)} ${esc(g.unit)}</b><small>/mois · valeur au cours ≈ ${money(value)}</small></div></div>`;
     if (p.works) {
       const what = p.works.kind === 'upgrade' ? `Modernisation vers le niveau ${lvl + 1}` : p.works.kind === 'convert' ? `Reconversion vers ${GOODS[p.works.good!].icon} ${GOODS[p.works.good!].name}` : 'Forage de prospection ⛏️';
       return html + `<div class="verdict">🏗️ ${what} : encore <b>${p.works.months} mois</b>.</div></div>`;
@@ -1450,7 +1450,7 @@ export class App {
     let title = '';
     let html = '';
     // Présentation commune (modèle de la fiche Influence) : gros chiffre, sources, dépenses en cases
-    const big = (v: string, sub: string, c = '') => `<div class="bigstat"><b class="${c}">${v}</b><small class="${c ? '' : 'pos'}">${sub}</small></div>`;
+    const big = (v: string, sub: string, c = '', subC = c ? '' : 'pos') => `<div class="bigstat"><b class="${c}">${v}</b><small class="${subC}">${sub}</small></div>`;
     const line = (l: string, v: number, why = '', fmt: (x: number) => string = (x) => num(x, 1)) =>
       `<div class="row ${Math.abs(v) < 1e-3 ? 'off' : ''}"><span>${l}${why ? ` <small class="muted nosign">${why}</small>` : ''}</span>${Math.abs(v) < 1e-3 ? '<b class="muted nosign">—</b>' : `<b class="${v > 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}${fmt(Math.abs(v))}</b>`}</div>`;
     // Coût chiffré à droite ; indication textuelle (« fiche », « onglet Foi »…) en petit sous le libellé
@@ -1469,12 +1469,12 @@ export class App {
       title = '💰 Trésor';
       const dm = F.debtMonths(s, me.id);
       const nodeName = Object.keys(inc.byNode ?? {}).length > 1 ? 'vos nœuds' : `le nœud ${esc(NODES.get(Object.keys(inc.byNode ?? {})[0] ?? '')?.name ?? 'commercial')}`;
-      html = big(money(me.treasury), `${net >= 0 ? '+' : '−'}${money(Math.abs(net))} par mois`, me.treasury < 0 ? 'neg' : '')
+      html = big(money(me.treasury), `${net >= 0 ? '+' : '−'}${money(Math.abs(net))} par mois`, me.treasury < 0 ? 'neg' : '', net >= 0 ? 'pos' : 'neg')
         + (me.treasury < 0 ? `<div class="verdict bad">💸 <b>Faillite</b> : dette de ${num(dm, 1)} mois de revenus, intérêts de ${Math.round(F.DEBT_RATE * 1000) / 10} % par mois. Au-delà de ${F.CRISIS_MONTHS} mois, crise de la dette.</div>` : '')
         + (F.inAusterity(s) ? '<div class="verdict bad">📉 Austérité du FMI : coût de l’État −30 %, stabilité −0,4 /mois, niveau de vie gelé.</div>' : '')
         + (F.inDefault(s) ? '<div class="verdict bad">🚫 Défaut de paiement : ni offre de contrat ni fournisseur.</div>' : '')
         + `<h3>Recettes</h3><div class="rows">
-        ${line('📦 Contrats de vente', inc.contracts ?? 0, '', md)}${line('🏭 Production vendue sur place', inc.production, '', md)}${line('⚓ Exportations', inc.trade, `via ${nodeName}`, md)}${line('🚧 Péages des détroits', inc.tolls, '', md)}</div>
+        ${line('📦 Contrats de vente', inc.contracts ?? 0, '', md)}${line('🏪 Ventes au marché', inc.production, 'surplus vendu, commission des négociants déduite', md)}${line('⚓ Commissions commerciales', inc.trade, `courtage sur ${nodeName}`, md)}${line('🚧 Péages des détroits', inc.tolls, '', md)}</div>
         <h3>Dépenses</h3><div class="rows">
         ${line('🏛️ Fonctionnement de l’État', -(inc.admin ?? 0), TIERS[me.tier - 1].name.toLowerCase(), md)}${line('⚔️ Armée et flotte', -inc.upkeep, `${Math.round(me.army)} corps · ${Math.round(me.navy)} flottes`, md)}${line('📥 Contrats d’achat', -(s.needs?.purchases ?? 0), '', md)}${line('🍞 Achats d’urgence et stockage', -(s.needs?.cost ?? 0), '', md)}${inc.distrust ? line('🤝 Défiance des partenaires', -inc.distrust, '', md) : ''}${inc.sanctions ? line('🚫 Sanctions', -inc.sanctions, '', md) : ''}${inc.war ? line('🔥 Guerre : blocus et lassitude', -inc.war, '', md) : ''}${inc.interest ? line('💸 Intérêts de la dette', -inc.interest, '', md) : ''}
         </div><div class="solde ${net >= 0 ? 'up' : 'down'}"><span>Solde du mois</span><b>${net >= 0 ? '+' : '−'}${money(Math.abs(net))}</b></div>
@@ -1642,10 +1642,11 @@ export class App {
       const storedAll = C.storedUnits(s, this.world);
       // Marchandises produites ou achetées sous contrat
       const goods = [...new Set([...Object.keys(cap), ...Object.keys(bought)] as (keyof typeof GOODS)[])].filter((g) => (cap[g] ?? 0) + (bought[g] ?? 0) > 1e-6);
+      const market = playerMarket(s, this.world);
       const worth = (g: keyof typeof GOODS) => ((cap[g] ?? 0) + (bought[g] ?? 0) + (s.stock[g] ?? 0)) * unitPriceOf(s, g);
       goods.sort((a, b) => worth(b) - worth(a));
       html += this.needsHtml();
-      html += `<section class="chap chap-prod"><h3 class="chap-h">🏭 Production, achats et stocks</h3><p class="hint">Ce que vos provinces produisent chaque mois. La part <b class="gold">sous contrat</b> est vendue à prix garanti ; le <b>disponible</b> part sur le marché et peut être proposé aux acheteurs. Le <b>surplus</b> (ni vendu sous contrat, ni consommé par la population) part au marché, ou en stock si vous le choisissez : de quoi spéculer ou constituer des réserves, mais chaque mois de stock coûte 1 % de sa valeur (2 % au-delà de 6 mois). Touchez une province pour la moderniser. Les marchandises achetées sous contrat y figurent aussi : vous pouvez les revendre ou les stocker.</p>`;
+      html += `<section class="chap chap-prod"><h3 class="chap-h">🏭 Production, achats et stocks</h3><p class="hint">Vos provinces produisent des <b>marchandises</b>, pas de l’argent. Chaque mois, elles servent d’abord vos <b class="gold">contrats de vente</b> (payés au prix convenu, sans intermédiaire), puis votre <b>population</b>, puis vos <b>stocks</b> si vous le choisissez ; seul le <b>reste</b> part au marché. Là, les négociants prennent 30 % et le marché n’absorbe qu’une partie du surplus (davantage quand le cours est haut) : l’invendu est perdu. Stocker coûte 1 % de la valeur par mois (2 % au-delà de 6 mois). Touchez une province pour la moderniser.</p>`;
       html += goods.map((g) => {
         const d = GOODS[g];
         const own = cap[g] ?? 0;
@@ -1657,10 +1658,12 @@ export class App {
         const tr = trendOf(g, 1);
         const prov = E.producers(s, this.world, s.player, g);
         const selling = !s.notForSale.includes(g);
+        const mk = market[g];
         return `<div class="card"><div class="mh"><b>${this.gi(g)} ${d.name}</b><small class="${cls(tr)}">${tr > 0.5 ? '▲' : tr < -0.5 ? '▼' : '▬'} ${money(unitPriceOf(s, g))}/${esc(d.unit)}</small></div>
           ${buy > 0 ? `<small class="muted buy-from">📥 Acheté à ${[...new Set(s.purchases.filter((p) => p.good === g).map((p) => p.seller))].map((id) => this.flag(id)).join(' ')}</small>` : ''}
-          ${c > 0 ? `<div class="stats four">${stat('Production', `${qty(own)}<small>/mois</small>`)}${stat('Achats', `${qty(buy)}<small>/mois</small>`)}${stat('Vendu', `<span class="c-mine">${qty(used)}</span><small>/mois</small>`)}${stat('Libre', `<span class="${c - used < 0 ? 'neg' : 'pos'}">${qty(c - used)}</span><small>/mois</small>`)}</div>
+          ${c > 0 ? `<div class="stats four">${stat('Production', `${qty(own)}<small>/mois</small>`)}${stat('Achats', `${qty(buy)}<small>/mois</small>`)}${stat('Sous contrat', `<span class="c-mine">${qty(used)}</span><small>/mois</small>`)}${stat('Libre', `<span class="${c - used < 0 ? 'neg' : 'pos'}">${qty(c - used)}</span><small>/mois</small>`)}</div>
           ${this.gauge(c, used)}` : ''}
+          ${mk ? `<div class="market-line"><span>🏪 Marché : <b>${qty(mk.sold)}</b> vendus${mk.unsold > 1e-3 ? ` · <span class="neg">${qty(mk.unsold)} invendus</span>` : ''}${mk.consumed > 1e-3 ? ` · ${qty(mk.consumed)} consommés par la population` : ''}</span><b class="${mk.revenue > 0 ? 'pos' : 'muted'}">${mk.revenue > 0 ? `+${money(mk.revenue)}` : '—'}<small>/mois</small></b></div>` : ''}
           <div class="stock-line"><span>🏬 Stock : <b>${qty(st)}</b> ${esc(d.unit)}${st > 1e-3 ? ` <small class="muted">≈ ${money(st * unitPriceOf(s, g))}</small>` : ''}</span>
             ${st > 1e-3 ? `<span class="seg"><button data-a="spotSell" data-p="${g}:0.5">Vendre ½</button><button data-a="spotSell" data-p="${g}:1">Vendre tout</button></span>` : ''}</div>
           ${st > 1e-3 && (s.needs?.lines[g]?.need ?? 0) > 0 ? `<small class="muted">Votre population en puise ${qty(Math.max(0, (s.needs!.lines[g]!.need) - Math.max(0, own - used)))} ${esc(d.unit)}/mois si la production ne suffit pas.</small>` : ''}
@@ -1823,7 +1826,7 @@ export class App {
   private satisfactionHelp(): string {
     return `<h4 class="sat-h">Comment marche la satisfaction</h4><p class="hint">C’est la part des besoins de votre population qui est couverte.<br>
       ✅ Votre production, vos stocks et vos contrats d’achat comptent en entier.<br>
-      ⚠️ Les achats d’urgence ne comptent qu’aux trois quarts (au quart si le trésor est négatif).<br>
+      ⚠️ Les achats d’urgence ne comptent qu’à 60 % (20 % si le trésor est négatif).<br>
       Au-dessus de 80 %, le niveau de vie progresse ; en dessous, il recule et la stabilité baisse. Pour la remonter : signez des contrats d’achat pour ce qui vous manque.</p>`;
   }
 

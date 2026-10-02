@@ -1,12 +1,24 @@
 import { GOODS, STRAITS, TRADE_NODES, type Good } from '../data/trade';
-import { divertedShare } from './contracts';
+import { needsOf } from './needs';
 import { embargoes, owned, tradeCount } from './state';
 import { oilPricePush, oilQuota } from './orgs';
 import { MARGIN, TIERS } from '../data/tiers';
 import type { GameState, Id, Pid, World } from './types';
 
-/** Part de la production versée directement au propriétaire ; le reste entre dans le commerce. */
-export const PRODUCTION_SHARE = 0.25;
+/**
+ * Économie des marchandises (refonte 0.10.2) : une province produit des unités, pas des dollars.
+ * Le joueur les consomme d'abord (sa population), livre ses contrats, stocke s'il le veut,
+ * et seul le surplus part au marché, où il n'est absorbé qu'en partie et où les négociants prennent leur commission.
+ * Les nœuds commerciaux ne versent plus de rente : ceux qui y pèsent prélèvent une commission sur ce qui y transite.
+ */
+/** Commission des négociants sur une vente au marché. */
+export const COMMISSION = 0.3;
+/** Part de la valeur transitant par un nœud prélevée par ceux qui y pèsent (courtage, droits de passage). */
+export const TRANSIT = 0.12;
+/** Pays gérés par l'IA : part de la valeur produite qui devient revenu de l'État (marché intérieur et exportations). */
+export const AI_NET = 0.5;
+/** Pays gérés par l'IA : part de leur production qui part à l'export et transite par les nœuds. */
+const AI_EXPORT = 0.6;
 /** Part d'un flux captée par le propriétaire d'un détroit au passage. */
 export const TOLL = 0.05;
 const TRANSFER_BONUS = 1.05;
@@ -85,6 +97,50 @@ export function production(s: GameState, w: World, pid: Pid): number {
   return output(s, w, pid) * unitPrice(s, g) * MARGIN[g] * TIERS[tier - 1].productivity;
 }
 
+/** Part du surplus que le marché mondial absorbe ce mois : davantage quand la marchandise est rare (cours élevé). */
+export function absorption(s: GameState, g: Good): number {
+  const p = s.prices[g] ?? 1;
+  return Math.min(0.95, Math.max(0.4, 0.7 + 0.5 * (p - 1)));
+}
+
+export interface MarketLine {
+  produced: number;
+  consumed: number; // par la population
+  committed: number; // promis aux contrats de vente
+  stored: number; // mis en stock (politique de stockage)
+  surplus: number; // reste, proposé au marché
+  sold: number; // effectivement vendu
+  unsold: number; // invendu, perdu
+  revenue: number; // recette nette de l'État
+}
+
+/** Destination de la production du joueur ce mois-ci, marchandise par marchandise. */
+export function playerMarket(s: GameState, w: World): Partial<Record<Good, MarketLine>> {
+  const me = s.player;
+  const cap: Partial<Record<Good, number>> = {};
+  for (const pid of owned(s, me)) {
+    const g = goodOf(s, w, pid);
+    cap[g] = (cap[g] ?? 0) + output(s, w, pid);
+  }
+  const com: Partial<Record<Good, number>> = {};
+  for (const k of s.contracts ?? []) com[k.good] = (com[k.good] ?? 0) + k.volume;
+  const need = needsOf(s, me);
+  const pol = s.storePolicy ?? {};
+  const tier = s.nations[me].tier ?? 3;
+  const res: Partial<Record<Good, MarketLine>> = {};
+  for (const [g, produced] of Object.entries(cap) as [Good, number][]) {
+    const committed = Math.min(produced, com[g] ?? 0);
+    const consumed = Math.min(produced - committed, need[g] ?? 0);
+    const free = produced - committed - consumed;
+    const stored = free * (pol[g] ?? 0);
+    const surplus = free - stored;
+    const sold = surplus * absorption(s, g);
+    const revenue = sold * unitPrice(s, g) * MARGIN[g] * TIERS[tier - 1].productivity * (1 - COMMISSION);
+    res[g] = { produced, consumed, committed, stored, surplus, sold, unsold: surplus - sold, revenue };
+  }
+  return res;
+}
+
 export interface NodeReport {
   local: number;
   incoming: number;
@@ -152,12 +208,18 @@ export function computeTrade(s: GameState, w: World): TradeReport {
 
   const local: Record<string, number> = {};
   for (const n of TRADE_NODES) local[n.id] = 0;
-  const divert = s.contracts?.length || Object.values(s.storePolicy ?? {}).some((p) => p) ? divertedShare(s, w) : {};
+  // Joueur : seul ce qui est réellement vendu au marché part dans le commerce mondial
+  const market = playerMarket(s, w);
+  inc(s.player).production = Object.values(market).reduce((a, l) => a + l!.revenue, 0);
   s.provinces.forEach((p, i) => {
-    let v = production(s, w, i);
-    if (p.owner === s.player) v *= 1 - (divert[p.good ?? w.provinces[i].good] ?? 0);
-    inc(p.owner).production += v * PRODUCTION_SHARE;
-    local[w.provinces[i].node] += v * (1 - PRODUCTION_SHARE);
+    const v = production(s, w, i);
+    if (p.owner === s.player) {
+      const l = market[goodOf(s, w, i)];
+      local[w.provinces[i].node] += l && l.produced > 0 ? v * (l.sold / l.produced) : 0;
+    } else {
+      inc(p.owner).production += v * AI_NET;
+      local[w.provinces[i].node] += v * AI_EXPORT;
+    }
   });
   const incoming: Record<string, number> = {};
   for (const id of NODE_ORDER) incoming[id] = 0;
@@ -178,9 +240,10 @@ export function computeTrade(s: GameState, w: World): TradeReport {
       spread(id, value, {});
       continue;
     }
+    // Commission prélevée par ceux qui pèsent ici ; le reste continue vers l'aval
     let collectedShare = 0;
     for (const c of collectors) {
-      const share = power[c] / total;
+      const share = (power[c] / total) * TRANSIT;
       collectedShare += share;
       const got = value * share;
       report.collected[c] = got;
@@ -208,11 +271,11 @@ export function computeTrade(s: GameState, w: World): TradeReport {
       });
       const rep = nodes[from];
       if (!open.length) {
-        // Détroit fermé : la moitié de la valeur est perdue, l'autre reste aux collecteurs locaux
+        // Détroit fermé : la valeur est perdue, les négociants locaux n'en tirent que leur commission
         const cs = rep.collectors.length ? rep.collectors : [];
         const tot = cs.reduce((a, c) => a + (rep.power[c] ?? 0), 0);
         for (const c of cs) {
-          const got = (amount * 0.5 * (rep.power[c] ?? 0)) / (tot || 1);
+          const got = (amount * TRANSIT * (rep.power[c] ?? 0)) / (tot || 1);
           rep.collected[c] = (rep.collected[c] ?? 0) + got;
           inc(c).trade += got;
           inc(c).byNode[from] = (inc(c).byNode[from] ?? 0) + got;
