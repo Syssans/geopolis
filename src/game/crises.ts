@@ -119,7 +119,7 @@ export function runRival(s: GameState, w: World) {
       title: 'Concurrence déloyale',
       text: `${R.name} propose à ${nm(s, c.buyer)} de lui livrer du ${GOODS[c.good].name.toLowerCase()} moins cher que vous.`,
       options: [
-        { label: 'Aligner nos prix', hint: `Prix garanti ${pctSigned(c.bonus)} → ${pctSigned(c.bonus - 0.08)} par rapport au cours` },
+        { label: 'Aligner nos prix', hint: `Prix garanti ${pctSigned(c.bonus)} → ${pctSigned(c.bonus - 0.08)} par rapport au prix du marché` },
         { label: 'Faire pression', hint: `Influence −25 : conserver le contrat (réussite selon vos relations avec ${nm(s, c.buyer)})` },
         { label: 'Laisser faire', hint: '60 % de risque de perdre le contrat' },
       ],
@@ -215,7 +215,7 @@ export function marketCrisis(s: GameState, w: World) {
   pushEvent(s, {
     kind: 'crash',
     title: `Krach : ${GOODS[good as keyof typeof GOODS].name}`,
-    text: `Les cours de votre principale exportation s’effondrent (${Math.round((s.prices[good] - 1) * 100)} %). Vos revenus vont chuter.`,
+    text: `Les prix de votre principale exportation s’effondrent (${Math.round((s.prices[good] - 1) * 100)} %). Vos revenus vont chuter.`,
     options: [
       { label: 'Soutenir les producteurs', hint: 'Trésor −3 mois de revenus, stabilité +5' },
       { label: 'Chercher de nouveaux clients', hint: 'Influence −20 : deux offres de contrat arrivent aussitôt' },

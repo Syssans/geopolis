@@ -91,7 +91,7 @@ export const TUTORIAL: TutChapter[] = [
       ${steps([
         'Ouvrez <b>📦 Économie → ✉️ Offres</b> : des pays demandent votre production.',
         '<b>✍️ Signer</b> accepte ; <b>💬 Négocier</b> tente +5 % de prime (🤝 10, peut échouer) ; <b>✖ Décliner</b> est sans effet.',
-        'Pas d’offre ? Dans <b>📦 Ressources</b> ou <b>📈 Cours</b>, touchez <b>📤 Contrat de vente</b> pour démarcher un client (🤝 10).',
+        'Pas d’offre ? Dans <b>📦 Ressources</b> ou <b>📈 Marché</b>, touchez <b>📤 Contrat de vente</b> pour démarcher un client (🤝 10).',
       ])}
       <p>Un pays n’achète que ce qui lui <b>manque</b> : plus son besoin est urgent, plus il paie. Vous ne pouvez engager qu’environ 60 % de votre production.</p>
       ${tip('Un contrat honoré rapporte aussi des points de score et de bonnes relations. Le rompre coûte 🌍 −20 avec le client.')}`,
@@ -157,7 +157,7 @@ export const TUTORIAL: TutChapter[] = [
     icon: '⚓',
     title: 'Commerce mondial et détroits',
     body: `<p>Les exportations du monde circulent de <b>nœud</b> en nœud vers trois grands pôles : la Manche, New York et Shanghai. Ceux qui pèsent dans un nœud (ports, flotte, marchands) y prélèvent une commission de 12 % : un complément, pas une rente. Vos vraies recettes viennent de ce que vous <b>vendez</b> : contrats d’abord, marché ensuite.</p>
-      <p>Les <b>détroits</b> (Ormuz, Suez, Malacca, Panama, Bosphore, Gibraltar…) rapportent un péage à leur propriétaire, qui peut les <b>fermer</b> (🤝 30) : le commerce en aval s’effondre et les cours s’envolent.</p>
+      <p>Les <b>détroits</b> (Ormuz, Suez, Malacca, Panama, Bosphore, Gibraltar…) rapportent un péage à leur propriétaire, qui peut les <b>fermer</b> (🤝 30) : le commerce en aval s’effondre et les prix du marché s’envolent.</p>
       <p>Vos partenaires commerciaux se détournent si votre <b>stabilité</b> tombe sous 50, si vos <b>relations</b> avec eux sont mauvaises ou si vous menez des <b>guerres d’agression</b> : vos exportations fondent.</p>
       ${tip('Le bilan 💰 détaille la « confiance des partenaires » et ce qui vous coûte.')}`,
   },

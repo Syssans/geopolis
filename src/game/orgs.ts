@@ -67,9 +67,9 @@ export function monthlyOrgs(s: GameState, w: World) {
         title: '🛢️ Réunion de l’OPEP',
         text: `Le baril vaut ${Math.round((s.prices.petrole ?? 1) * 100)} % de son prix de référence. Les membres penchent pour : ${LABEL[aiProposal(s)]}. Votre vote compte double et les membres avec qui vos relations dépassent 40 votent comme vous.`,
         options: [
-          { label: 'Réduire la production', hint: 'Quota −10 % : moins de barils, mais un cours plus élevé' },
+          { label: 'Réduire la production', hint: 'Quota −10 % : moins de barils, mais un prix plus élevé' },
           { label: 'Maintenir les quotas', hint: 'Aucun changement' },
-          { label: 'Augmenter la production', hint: 'Quota +10 % : plus de barils, cours en baisse' },
+          { label: 'Augmenter la production', hint: 'Quota +10 % : plus de barils, prix en baisse' },
         ],
         params: {},
       });

@@ -139,7 +139,7 @@ export function buySpot(s: GameState, good: Good, qty: number): Result {
   return { ok: true, msg: `Achat de ${fmt(qty)} ${GOODS[good].unit} : −${fmt(cost)} Md$` };
 }
 
-/** Vente au comptant d'une partie des stocks, au cours du jour − 3 %. */
+/** Vente au comptant d'une partie des stocks, au prix du marché − 3 %. */
 export function sellSpot(s: GameState, good: Good, qty: number): Result {
   qty = Math.min(qty, s.stock[good] ?? 0);
   if (qty <= 0) return { ok: false, msg: 'Stock vide' };

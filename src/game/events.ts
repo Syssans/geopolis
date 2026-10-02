@@ -82,7 +82,7 @@ const RANDOM_EVENTS: RandomEvent[] = [
   {
     kind: 'oilshock',
     title: 'Choc pétrolier',
-    text: () => 'Les cours du pétrole et du gaz s’envolent après une série d’attaques contre des installations du Golfe.',
+    text: () => 'Les prix du pétrole et du gaz s’envolent après une série d’attaques contre des installations du Golfe.',
     params: (s) => {
       s.prices.petrole = Math.min(3, (s.prices.petrole ?? 1) + 0.6);
       s.prices.gaz = Math.min(3, (s.prices.gaz ?? 1) + 0.4);
