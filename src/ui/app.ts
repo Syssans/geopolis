@@ -1085,7 +1085,7 @@ export class App {
         r.p.revolt ? '<span class="neg">🔥 révolte</span>' : r.p.unrest > 50 ? '<span class="neg">😠</span>' : '',
         r.p.occupiedBy ? '<span class="neg">occupée</span>' : '',
       ].filter(Boolean).join(' · ');
-      return `<div class="prow" data-a="goto" data-p="${r.pid}"><span class="pg">${this.gi(r.good)}</span><span class="pn">${esc(r.info.name)}<small>${tags}</small></span><span class="pv"><b class="pos">+${money(r.value)}</b><small>${num(r.units, 2)} ${esc(GOODS[r.good].unit)}</small></span></div>`;
+      return `<div class="prow" data-a="goto" data-p="${r.pid}"><span class="pg">${this.gi(r.good)}</span><span class="pn">${esc(r.info.name)}<small>${tags}</small></span><span class="pv"><b>${num(r.units, 2)} ${esc(GOODS[r.good].unit)}</b><small>≈ ${money(r.value)} au cours</small></span></div>`;
     };
     let list = '';
     if (sortBy === 'good') {
@@ -1093,12 +1093,15 @@ export class App {
       for (const r of rows) groups.set(r.good, [...(groups.get(r.good) ?? []), r]);
       list = [...groups.entries()]
         .sort((a, b) => b[1].reduce((x, r) => x + r.value, 0) - a[1].reduce((x, r) => x + r.value, 0))
-        .map(([g, rs]) => `<div class="pgroup">${this.gi(g as keyof typeof GOODS)} <b>${GOODS[g as keyof typeof GOODS].name}</b> <small>${rs.length} province(s) · <b class="pos">+${money(rs.reduce((x, r) => x + r.value, 0))}</b>/mois</small></div>${rs.map(line).join('')}`)
+        .map(([g, rs]) => `<div class="pgroup">${this.gi(g as keyof typeof GOODS)} <b>${GOODS[g as keyof typeof GOODS].name}</b> <small>${rs.length} province(s) · <b>${num(rs.reduce((x, r) => x + r.units, 0), 2)} ${esc(GOODS[g as keyof typeof GOODS].unit)}</b>/mois</small></div>${rs.map(line).join('')}`)
         .join('');
     } else list = rows.map(line).join('');
-    return `<div class="stats three">${stat('Provinces', String(rows.length))}${stat('Production', `<span class="pos">+${money(total)}</span><small>/mois</small>`)}${stat('Chantiers', String(works))}</div>
-      <p class="hint">${mine ? 'Touchez une province pour la <b>moderniser</b> ou <b>changer sa production</b>. ★ = niveau de modernisation.' : 'Les provinces de ce pays et ce qu’elles produisent. Touchez-en une pour voir sa fiche.'}</p>
-      <div class="seg sortseg">${[['value', 'Rendement'], ['good', 'Marchandise'], ['name', 'Nom']].map(([k, l]) => `<button class="${sortBy === k ? 'on' : ''}" data-a="provSort" data-p="${k}">${l}</button>`).join('')}</div>
+    const inc = me.income;
+    const real = mine ? (inc.production ?? 0) + (inc.contracts ?? 0) : 0;
+    return `<div class="stats three">${stat('Provinces', String(rows.length))}${stat('Valeur produite', `${money(total)}<small> au cours</small>`)}${stat('Chantiers', String(works))}</div>
+      ${mine ? `<div class="real-income" data-a="explain" data-p="treasury"><span>💰 Recettes réelles du mois</span><b class="pos">+${money(real)}</b><small>contrats ${money(inc.contracts ?? 0)} · marché ${money(inc.production ?? 0)} ›</small></div>` : ''}
+      <p class="hint">${mine ? 'Vos provinces produisent des <b>marchandises</b>, chiffrées ici en quantités ; la valeur au cours n’est qu’un repère. Elle ne devient de l’argent qu’une fois vendue : contrats d’abord, marché ensuite (voir 📦 Économie). Touchez une province pour la <b>moderniser</b> ou <b>changer sa production</b>. ★ = niveau de modernisation.' : 'Les provinces de ce pays et ce qu’elles produisent. Touchez-en une pour voir sa fiche.'}</p>
+      <div class="seg sortseg">${[['value', 'Valeur'], ['good', 'Marchandise'], ['name', 'Nom']].map(([k, l]) => `<button class="${sortBy === k ? 'on' : ''}" data-a="provSort" data-p="${k}">${l}</button>`).join('')}</div>
       <div class="plist">${list}</div>`;
   }
 
