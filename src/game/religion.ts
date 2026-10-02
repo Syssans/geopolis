@@ -1,4 +1,4 @@
-import { RELIGIONS, religiousDistance } from '../data/religions';
+import { holyHolders, RELIGIONS, religiousDistance } from '../data/religions';
 import { rand } from './rng';
 import { addRel, alive, clamp, invalidate, invalidateAlive, log, nm, power } from './state';
 import type { GameState, Id, Pid, Policy, World } from './types';
@@ -38,8 +38,9 @@ export function holySitesOf(s: GameState, w: World, id: Id) {
   const res: { pid: Pid; name: string; ours: boolean }[] = [];
   const rel = s.nations[id].religion;
   for (const info of holyProvinces(w))
-    if (s.provinces[info.id].owner === id)
-      for (const h of info.holy!) res.push({ pid: info.id, name: h.name, ours: h.religions.includes(rel) });
+    for (const h of info.holy!)
+      if (holyHolders(h.name, s.provinces[info.id].owner, (x) => !!s.nations[x]?.alive).includes(id))
+        res.push({ pid: info.id, name: h.name, ours: h.religions.includes(rel) });
   return res;
 }
 

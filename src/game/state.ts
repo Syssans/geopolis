@@ -1,4 +1,4 @@
-import { religiousDistance } from '../data/religions';
+import { holyHolders, religiousDistance } from '../data/religions';
 import type { GameState, Id, LogKind, Nation, Pid, War, World } from './types';
 
 export const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
@@ -216,11 +216,12 @@ function desecrators(s: GameState): Map<string, Set<Id>> {
     ix.desecrators = new Map();
     for (const info of worldRef!.provinces)
       for (const h of info.holy ?? []) {
-        const owner = s.provinces[info.id].owner;
+        const holders = holyHolders(h.name, s.provinces[info.id].owner, (id) => !!s.nations[id]?.alive);
         for (const r of h.religions)
-          if (s.nations[owner].religion !== r) {
+          // Un site partagé n'offense pas une religion tant qu'un de ses co-détenteurs la pratique
+          if (!holders.some((o) => s.nations[o].religion === r)) {
             if (!ix.desecrators.has(r)) ix.desecrators.set(r, new Set());
-            ix.desecrators.get(r)!.add(owner);
+            for (const o of holders) ix.desecrators.get(r)!.add(o);
           }
       }
   }
@@ -248,7 +249,8 @@ export function desecratedHolySites(s: GameState, w: World, religion: string): {
     for (const h of info.holy ?? [])
       if (h.religions.includes(religion as never)) {
         const owner = s.provinces[info.id].owner;
-        if (s.nations[owner].religion !== religion) res.push({ pid: info.id, name: h.name, owner });
+        const holders = holyHolders(h.name, owner, (id) => !!s.nations[id]?.alive);
+        if (!holders.some((o) => s.nations[o].religion === religion)) res.push({ pid: info.id, name: h.name, owner });
       }
   return res;
 }

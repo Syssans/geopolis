@@ -185,8 +185,9 @@ export const REGIONAL_RELIGION: Record<string, Record<string, Religion>> = {
 
 /** Lieux saints : province (nom admin-1) → confessions qui la vénèrent. */
 /** Lieux saints, avec la position réelle du site (les centres de province peuvent tomber loin, voire en mer). */
-export const HOLY_SITES: { country: string; province: string[]; name: string; lon: number; lat: number; religions: Religion[] }[] = [
-  { country: 'Israel', province: ['Jerusalem', 'Jerusalem District'], name: 'Jérusalem', lon: 35.23, lat: 31.78, religions: ['juif', 'catholique', 'orthodoxe', 'protestant', 'evangelique', 'sunnite'] },
+/** `shared` : lieu saint détenu conjointement (Jérusalem : Israël et Palestine), tant que les deux pays existent. */
+export const HOLY_SITES: { country: string; province: string[]; name: string; lon: number; lat: number; religions: Religion[]; shared?: string[] }[] = [
+  { country: 'Israel', province: ['Jerusalem', 'Jerusalem District'], name: 'Jérusalem', lon: 35.23, lat: 31.78, religions: ['juif', 'catholique', 'orthodoxe', 'protestant', 'evangelique', 'sunnite'], shared: ['Israel', 'Palestine'] },
   { country: 'Saudi Arabia', province: ['Makkah', 'Mecca'], name: 'La Mecque', lon: 39.83, lat: 21.42, religions: ['sunnite', 'chiite'] },
   { country: 'Saudi Arabia', province: ['Al Madinah', 'Medina'], name: 'Médine', lon: 39.61, lat: 24.47, religions: ['sunnite'] },
   { country: 'Iraq', province: ['An-Najaf', 'Najaf', 'Karbala\''], name: 'Najaf et Karbala', lon: 44.33, lat: 32.0, religions: ['chiite'] },
@@ -203,3 +204,15 @@ export const HOLY_SITES: { country: string; province: string[]; name: string; lo
   { country: 'Japan', province: ['Kyoto', 'Kyōto'], name: 'Kyoto', lon: 135.77, lat: 35.01, religions: ['bouddhiste'] },
   { country: 'Nepal', province: ['Lumbini', 'Western'], name: 'Lumbini', lon: 83.28, lat: 27.47, religions: ['bouddhiste'] },
 ];
+
+const SHARED = new Map(HOLY_SITES.filter((h) => h.shared).map((h) => [h.name, h.shared!]));
+
+/**
+ * Détenteurs d'un lieu saint : le maître de la province, plus ses co-détenteurs encore en vie
+ * si le site est partagé et que la province est restée à l'un d'eux.
+ */
+export function holyHolders(name: string, owner: string, alive: (id: string) => boolean): string[] {
+  const shared = SHARED.get(name);
+  if (!shared || !shared.includes(owner)) return [owner];
+  return shared.filter((id) => id === owner || alive(id));
+}

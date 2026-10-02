@@ -188,6 +188,13 @@ for (const pl of places.features) {
   if (p.featurecla === 'Admin-0 capital' || p.adm0cap === 1) u.capital = true;
 }
 
+// Capitales imposées (province admin-1) : Tel Aviv pour Israël, la Cisjordanie (Jérusalem) pour la Palestine
+const CAPITAL_PROVINCE = { Israel: ['Tel Aviv'], Palestine: ['West Bank'] };
+for (const u of units) {
+  const want = CAPITAL_PROVINCE[u.country];
+  if (want) u.capital = u.names.some((n) => want.includes(n));
+}
+
 // ——— Regroupement ———
 const topo = topology({ units: { type: 'FeatureCollection', features: units.map((u) => u.feature) } }, 1e5);
 const geoms = topo.objects.units.geometries;

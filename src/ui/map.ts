@@ -6,7 +6,7 @@ import { feature } from 'topojson-client';
 import type { Feature, Geometry } from 'geojson';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 import CAPITALS from '../data/capitals.json';
-import { HOLY_SITES, RELIGIONS } from '../data/religions';
+import { HOLY_SITES, holyHolders, RELIGIONS } from '../data/religions';
 import { GOODS, STRAITS, TRADE_NODES } from '../data/trade';
 import { EXTRA_LANES, LAND, lane, laneKey, PORTS, routePath, type LonLat } from '../data/routes';
 import { clock } from '../game/convoys';
@@ -601,7 +601,7 @@ export class MapView {
           const site = HOLY_SITES.find((x) => x.name === h.name);
           const [x, y] = (site && this.projection([site.lon, site.lat])) || this.centers[p.id];
           const icons = [...new Set(h.religions.map((r) => FAITH_OF[r]))].slice(0, 4);
-          add(x, y, icons, h.name, s.provinces[p.id].owner === s.player ? 'own' : '');
+          add(x, y, icons, h.name, holyHolders(h.name, s.provinces[p.id].owner, (id) => !!s.nations[id]?.alive).includes(s.player) ? 'own' : '');
         }
       }
     }

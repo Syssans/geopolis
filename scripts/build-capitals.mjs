@@ -38,6 +38,8 @@ const MANUAL = {
   Kosovo: { name: 'Pristina', lon: 21.17, lat: 42.67 },
   Palestine: { name: 'Ramallah', lon: 35.2, lat: 31.9 },
   'W. Sahara': { name: 'Laâyoune', lon: -13.2, lat: 27.15 },
+  Israel: { name: 'Tel Aviv', lon: 34.78, lat: 32.08 },
+  Palestine: { name: 'Jérusalem', lon: 35.23, lat: 31.78 },
 };
 
 const out = {};

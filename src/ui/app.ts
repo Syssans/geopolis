@@ -26,14 +26,14 @@ import type { GameState, Id, NeedLine, PeaceTerms, Pid, Policy, War, World } fro
 import {
   aiAcceptsPeace, annexable, applyPeace, canDeclareWar, enemyLeader, isLeader, scoreFor, termsCost,
 } from '../game/war';
-import { RELIGIONS, type Religion } from '../data/religions';
+import { holyHolders, RELIGIONS, type Religion } from '../data/religions';
 import { GOODS, STRAITS, TRADE_NODES } from '../data/trade';
 import type { Topology } from 'topojson-specification';
 import { cls, colorSigns, esc, hintify, iconize, money, num, partitive, pct, pop, signed } from './format';
 import { MapView, type MapMode } from './map';
 import { flagOf } from '../data/flags';
 import { TUTORIAL } from './tutorial';
-import { CHANGELOG, VERSION } from '../version';
+import { VERSION } from '../version';
 import { applyTheme, themeOf, THEMES } from './themes';
 import { chartPointer, priceChart, sparkline, type RefLine } from './charts';
 import { clock as clockOf } from '../game/convoys';
@@ -299,7 +299,7 @@ export class App {
     this.el.title.innerHTML = `
       <h1>GEOPOLIS</h1>
       <p>Commerce, foi et puissance · 2026</p>
-      <button class="version" data-a="news">v${VERSION} · nouveautés</button>
+      <small class="version">v${VERSION}</small>
       ${hasSave ? `<button class="btn primary" data-a="continue">Continuer la partie</button>` : ''}
       <button class="btn ${hasSave ? '' : 'primary'}" data-a="newgame">Nouvelle partie</button>
       <button class="btn" data-a="help">Comment jouer</button>`;
@@ -375,7 +375,6 @@ export class App {
       if (sv) this.start(sv);
     };
     h.help = () => this.showHelp();
-    h.news = () => this.showNews();
     h.tut = (p) => this.showHelp(Number(p));
     h.tutToc = () => this.showTutToc();
     h.tutEnd = () => {
@@ -1998,18 +1997,13 @@ export class App {
 
   private showMenu() {
     this.setSpeed(0);
-    this.modal('Menu', `<p class="muted">La partie est sauvegardée automatiquement chaque année.</p><button class="version" data-a="news">Geopolis v${VERSION} · nouveautés</button>`, [
+    this.modal('Menu', `<p class="muted">La partie est sauvegardée automatiquement chaque année.</p><small class="version">Geopolis v${VERSION}</small>`, [
       { label: 'Reprendre', a: 'closeModal', primary: true },
       { label: 'Classements', a: 'ledger' },
       { label: 'Sauvegarder', a: 'save' },
       { label: 'Comment jouer', a: 'help' },
       { label: 'Quitter vers le menu', a: 'quit' },
     ]);
-  }
-
-  private showNews() {
-    const html = CHANGELOG.map((v, i) => `<div class="news ${i ? '' : 'latest'}"><div class="mh"><b>v${v.version}</b><small>${v.date}</small></div><ul>${v.items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
-    this.modal('🆕 Nouveautés', html, [{ label: 'Fermer', a: 'closeModal', primary: true }]);
   }
 
   /** Fiche d'un convoi : origine, destination, cargaison, itinéraire ; interception possible. */
@@ -2081,7 +2075,7 @@ export class App {
     } else if (tab === 'faith') {
       html += this.religionShares();
       const holy = this.world.provinces.filter((p) => p.holy);
-      html += `<h3>Lieux saints</h3><div class="rows">${holy.flatMap((p) => p.holy!.map((h) => `<div class="row" data-a="goto" data-p="${p.id}" style="cursor:pointer"><span>⭐ ${esc(h.name)} ${h.religions.map((x) => RELIGIONS[x].icon).join('')}</span><span>${esc(nm(s, s.provinces[p.id].owner))}</span></div>`)).join('')}</div>`;
+      html += `<h3>Lieux saints</h3><div class="rows">${holy.flatMap((p) => p.holy!.map((h) => `<div class="row" data-a="goto" data-p="${p.id}" style="cursor:pointer"><span>⭐ ${esc(h.name)} ${h.religions.map((x) => RELIGIONS[x].icon).join('')}</span><span>${holyHolders(h.name, s.provinces[p.id].owner, (id) => !!s.nations[id]?.alive).map((id) => esc(nm(s, id))).join(' et ')}</span></div>`)).join('')}</div>`;
     } else if (tab === 'wars') {
       html += s.wars.length
         ? s.wars.map((w) => `<div class="row"><span>${esc(w.name)}<br><small class="muted">${w.attackers.map((x) => this.flag(x)).join(' ')} ⚔ ${w.defenders.map((x) => this.flag(x)).join(' ')}</small></span><span class="${cls(w.score)}">${signed(w.score)}</span></div>`).join('')
