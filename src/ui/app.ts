@@ -1044,15 +1044,16 @@ export class App {
         ${this.action('prospect', '⛏️ Prospecter', `<b class="cost">💰 ${money(E.prospectCost(s, w, pid))}</b> · ${E.PROSPECT_MONTHS} mois · 1 chance sur 3 : pétrole, gaz, métaux…`, { disabled: deposit ? 'Gisement déjà exploité' : cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
       </div>
       <h3>🔄 Changer de production</h3>
-      <p class="hint">Pendant les ${E.CONVERT_MONTHS} mois de chantier, la province produit deux fois moins ; ensuite son niveau de modernisation repart à zéro. Les valeurs ci-dessous sont estimées au cours du jour, au niveau 0.</p>
+      <p class="hint">Pendant les ${E.CONVERT_MONTHS} mois de chantier, la province produit deux fois moins ; ensuite son niveau de modernisation repart à zéro. Chaque ligne donne la valeur au cours de la nouvelle production (au niveau 0), puis l’écart avec ce que la province produit aujourd’hui. Comme partout, cette valeur ne devient de l’argent qu’une fois vendue.</p>
       <div class="conv-cost ${this.me.treasury < conv ? 'short' : ''}"><div><small>Coût</small><b>💰 ${money(conv)}</b></div><div><small>Durée</small><b>🏗️ ${E.CONVERT_MONTHS} mois</b></div><div><small>Ensuite</small><b>${lvl ? `★ ${lvl} → 0` : 'niveau 0'}</b></div></div>
       ${this.me.treasury < conv ? `<div class="verdict bad">Trésor insuffisant : il manque ${money(conv - this.me.treasury)}.</div>` : ''}
       <div class="conv-list">${targets.map((c) => {
         const locked = info.dev < c.minDev;
         const ok = !locked && !cant && this.me.treasury >= conv;
-        const v = base * unitPriceOf(s, c.good);
+        // Même base que la valeur actuelle (« Cette province produit ») : cours × marge × productivité, au niveau 0
+        const v = base * unitPriceOf(s, c.good) * MARGIN[c.good] * TIERS[this.me.tier - 1].productivity;
         const delta = v - value;
-        return `<button class="conv" data-a="convert" data-p="${c.good}" ${ok ? '' : 'disabled'}><span class="ic">${GOODS[c.good].icon}</span><span class="nm">${GOODS[c.good].name}${locked ? `<small>🔒 dév. ${c.minDev} requis</small>` : ''}</span><span class="vl">${money(v)}<small>/mois</small><b class="${cls(delta)}">${delta >= 0 ? '+' : '−'}${money(Math.abs(delta))}</b></span></button>`;
+        return `<button class="conv" data-a="convert" data-p="${c.good}" ${ok ? '' : 'disabled'}><span class="ic">${GOODS[c.good].icon}</span><span class="nm">${GOODS[c.good].name}${locked ? `<small>🔒 dév. ${c.minDev} requis</small>` : ''}</span><span class="vl">≈ ${money(v)}<small>/mois</small><b class="${cls(delta)}">${delta >= 0 ? '+' : '−'}${money(Math.abs(delta))}<small> vs aujourd’hui</small></b></span></button>`;
       }).join('')}</div></div>`;
     return html;
   }
