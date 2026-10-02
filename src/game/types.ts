@@ -64,9 +64,10 @@ export interface Nation {
   fervor: number;
   stability: number;
   baseStability: number;
-  army: number; // divisions
-  navy: number; // flottes
-  upkeepRate: number; // coût mensuel d'une division (main-d'œuvre locale)
+  army: number; // corps d'armée (toujours entier)
+  navy: number; // flottes (toujours entier)
+  attrition?: { army: number; navy: number }; // pertes fractionnaires en attente : une unité n'est perdue qu'entière
+  upkeepRate: number; // coût mensuel d'un corps d'armée (main-d'œuvre locale)
   milShare: number; // part du revenu que l'IA consacre à ses forces
   aggression: number;
   tier: number; // niveau de vie (1 à 5)
@@ -236,6 +237,7 @@ export interface Org {
   quota: number; // multiplicateur de production de pétrole des membres (1 = normal)
   nextMeeting: number; // temps absolu (mois) de la prochaine réunion
   last: string; // dernière décision
+  intents?: Record<Id, -1 | 0 | 1>; // intentions de vote des membres pour la réunion en cours
 }
 
 export interface MissionState extends MissionDef {

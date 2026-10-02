@@ -283,6 +283,11 @@ export class App {
         s.priceHistory ??= Object.fromEntries(Object.keys(GOODS).map((g) => [g, [s.prices[g] ?? 1]]));
         s.version = SAVE_VERSION;
       }
+      // Armées et flottes entières (anciennes sauvegardes : effectifs décimaux)
+      for (const n of Object.values(s.nations)) {
+        n.army = Math.round(n.army);
+        n.navy = Math.round(n.navy);
+      }
       return s.version === SAVE_VERSION && s.provinces.length === this.world.provinces.length ? s : null;
     } catch {
       return null;
@@ -1039,7 +1044,9 @@ export class App {
         ${deposit ? '' : this.action('prospect', '⛏️ Prospecter', `1 chance sur 3 : pétrole, gaz, métaux… · 💰${money(E.prospectCost(s, w, pid))} · ${E.PROSPECT_MONTHS} mois`, { disabled: cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
       </div>
       <h3>🔄 Changer de production</h3>
-      <p class="hint">Reconversion : 💰${money(conv)}, ${E.CONVERT_MONTHS} mois de travaux (production divisée par deux pendant le chantier), puis niveau remis à zéro. Valeur estimée au cours du jour :</p>
+      <div class="conv-cost ${this.me.treasury < conv ? 'short' : ''}"><div><small>Coût</small><b>💰 ${money(conv)}</b></div><div><small>Durée</small><b>🏗️ ${E.CONVERT_MONTHS} mois</b></div><div><small>Ensuite</small><b>${lvl ? `★ ${lvl} → 0` : 'niveau 0'}</b></div></div>
+      ${this.me.treasury < conv ? `<div class="verdict bad">Trésor insuffisant : il manque ${money(conv - this.me.treasury)}.</div>` : ''}
+      <p class="hint">Pendant les ${E.CONVERT_MONTHS} mois de chantier, la province produit deux fois moins ; ensuite son niveau de modernisation repart à zéro. Les valeurs ci-dessous sont estimées au cours du jour, au niveau 0.</p>
       <div class="conv-list">${targets.map((c) => {
         const locked = info.dev < c.minDev;
         const ok = !locked && !cant && this.me.treasury >= conv;
@@ -1185,12 +1192,12 @@ export class App {
     const me = this.me;
     const wars = warsOf(s, me.id);
     return `<div class="stats">
-        ${stat('Divisions', num(me.army, 1))}${stat('Flottes', num(me.navy, 1))}${stat('Puissance', `#${powerRank(s, me.id)}`)}
+        ${stat('Corps d’armée', String(Math.round(me.army)))}${stat('Flottes', String(Math.round(me.navy)))}${stat('Puissance', `#${powerRank(s, me.id)}`)}
         ${stat('Entretien', money(me.income.upkeep))}${stat('Lassitude', `<span class="${me.exhaustion > 50 ? 'neg' : ''}">${num(me.exhaustion)} %</span>`)}${stat('Agressivité', `<span class="${me.aggression > 40 ? 'neg' : ''}">${num(me.aggression)}</span>`)}
       </div>
       <p class="muted" style="font-size:12px">L’armée prend les provinces ennemies une à une ; la flotte protège votre commerce (pouvoir commercial dans les nœuds côtiers) et permet les débarquements.</p>
       <div class="actions">
-        ${this.action('recruit', 'Recruter des divisions', A.COSTS.recruit(s, me.id))}
+        ${this.action('recruit', 'Recruter des corps d’armée', A.COSTS.recruit(s, me.id))}
         ${this.action('disband', 'Démobiliser', 'Réduit l’entretien', { disabled: me.army < 1 ? 'Aucune' : undefined })}
         ${this.action('fleet', 'Construire des flottes', A.COSTS.fleet(s, me.id))}
         ${this.action('disbandFleet', 'Désarmer des flottes', 'Réduit l’entretien', { disabled: me.navy < 1 ? 'Aucune' : undefined })}
@@ -1277,7 +1284,7 @@ export class App {
       <div class="stats">
         ${stat('Religion', `${RELIGIONS[n.religion].icon} ${RELIGIONS[n.religion].name}`)}${stat('Politique', POLICIES[n.policy].name)}
         ${stat('Provinces', `${owned(s, id).length} · dév. ${devOf(s, id)}`)}${stat('Revenus / mois', money(inc.production + inc.trade + inc.tolls))}
-        ${stat('Armée', `${num(n.army, 1)} div. · #${powerRank(s, id)}`)}${stat('Flotte', num(n.navy, 1))}
+        ${stat('Armée', `${Math.round(n.army)} corps · #${powerRank(s, id)}`)}${stat('Flotte', String(Math.round(n.navy)))}
       </div>
       ${war ? `<h3>Guerre</h3>${this.warLine(war)}` : ''}
       <h3>Diplomatie</h3><div class="actions">
@@ -1313,11 +1320,54 @@ export class App {
     }
     const e = s.events[0];
     if (!e || this.el.overlay.style.display !== 'none') return;
+    if (e.kind === 'opec' && s.orgs?.opep) return this.showOpec(e.uid);
     this.modal(
       esc(e.title),
       `<div class="event-kind">${dateLabel(s)}</div><p>${esc(e.text)}</p>`,
       e.options.map((o, i) => ({ label: esc(o.label), hint: esc(o.hint), a: 'event', p: `${e.uid}:${i}`, primary: i === 0 })),
     );
+  }
+
+  /** Réunion de l'OPEP : table ronde des membres, intentions de vote, relations, et prévision de chaque choix. */
+  private showOpec(uid: number) {
+    const s = this.state;
+    const w = this.world;
+    const o = s.orgs!.opep;
+    const base = O.opecTally(s, w, null);
+    const n = base.seats.length;
+    const icon = (v: O.Vote) => (v < 0 ? '<i class="v down">▼</i>' : v > 0 ? '<i class="v up">▲</i>' : '<i class="v eq">=</i>');
+    const total = base.seats.reduce((a, x) => a + (x.id === s.player ? x.weight / 2 : x.weight), 0) || 1;
+    const seats = base.seats.map((x, i) => {
+      const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+      const me = x.id === s.player;
+      const r = me ? 0 : Math.round(rel(s, s.player, x.id));
+      const wPct = Math.round(((me ? x.weight / 2 : x.weight) / total) * 100);
+      return `<div class="seat ${me ? 'me' : ''} ${!me && r >= 40 ? 'friend' : ''}" style="left:${(50 + 41 * Math.cos(a)).toFixed(1)}%;top:${(50 + 41 * Math.sin(a)).toFixed(1)}%">
+        <span class="sf" title="${esc(nm(s, x.id))}">${flagOf(x.id)}</span>${me ? '<i class="v me">✋</i>' : icon(x.vote)}
+        <small class="${me ? '' : r >= 40 ? 'pos' : r < 0 ? 'neg' : 'muted'}">${me ? `vous · ${wPct * 2} %` : `🌍${r >= 0 ? '+' : '−'}${Math.abs(r)} · ${wPct} %`}</small></div>`;
+    }).join('');
+    const price = Math.round((s.prices.petrole ?? 1) * 100);
+    const table = `<div class="opec-table"><div class="opec-disc"><span>🛢️</span><b>${price} %</b><small>cours du baril</small><small>quota ${Math.round(o.quota * 100)} %</small></div>${seats}</div>
+      <div class="opec-legend"><span><i class="v down">▼</i> réduire</span><span><i class="v eq">=</i> maintenir</span><span><i class="v up">▲</i> augmenter</span><span>🌍 relations · % poids du vote</span></div>
+      <p class="hint">Chaque membre pèse selon sa production de pétrole ; votre voix compte double. Les membres avec qui vos relations atteignent 40 (cerclés de vert) votent comme vous. Après le vote : relations +${O.VOTE_REL} avec ceux qui ont voté comme vous, −${O.VOTE_REL} avec les autres.</p>`;
+    const names = ['Réduire la production', 'Maintenir les quotas', 'Augmenter la production'];
+    const cards = ([-1, 0, 1] as O.Vote[]).map((v, i) => {
+      const t = O.opecTally(s, w, v);
+      const won = t.choice === v;
+      const sum = t.votes['-1'] + t.votes['0'] + t.votes['1'] || 1;
+      const out = O.oilOutlook(s, w, s.player, t.quota);
+      const d = out.later - out.now;
+      const same = t.seats.filter((x) => x.id !== s.player && x.vote === v);
+      const other = t.seats.filter((x) => x.id !== s.player && x.vote !== v);
+      return `<button class="opec-opt ${won ? 'won' : 'lost'}" data-a="event" data-p="${uid}:${i}">
+        <div class="mh"><b>${icon(v)} ${names[i]}</b><span class="${won ? 'pos' : 'neg'}">${won ? '✔ adopté' : '✖ rejeté'} · ${Math.round((t.votes[String(v) as '-1' | '0' | '1'] / sum) * 100)} %</span></div>
+        ${won ? '' : `<small class="muted">L’OPEP déciderait plutôt de ${O.VOTE_LABEL[String(t.choice) as '-1' | '0' | '1']}.</small>`}
+        <div class="opec-fx"><span>Quota <b>${Math.round(o.quota * 100)} → ${Math.round(t.quota * 100)} %</b></span><span>Baril à terme <b class="${cls(out.price - (s.prices.petrole ?? 1))}">≈ ${Math.round(out.price * 100)} %</b></span>
+        <span>Vos revenus pétroliers <b class="${cls(d)}">${Math.abs(d) < 0.05 ? '≈ inchangés' : `${d > 0 ? '+' : '−'}${money(Math.abs(d))}/mois`}</b></span>
+        <span>Relations <b class="pos">+${O.VOTE_REL}</b> ${same.map((x) => flagOf(x.id)).join('') || '—'} · <b class="neg">−${O.VOTE_REL}</b> ${other.map((x) => flagOf(x.id)).join('') || '—'}</span></div></button>`;
+    }).join('');
+    this.modal('🛢️ Réunion de l’OPEP', `<div class="event-kind">${dateLabel(s)} · ${n} membres</div>${table}<h3>Votre vote</h3>${cards}`, []);
+    this.modalSticky = true;
   }
 
   // ————————————————————————————— Modales —————————————————————————————
@@ -1399,44 +1449,69 @@ export class App {
     const row = (l: string, v: number, unit = '') => `<div class="row"><span>${l}</span><span class="${cls(v)}">${v >= 0 ? '+' : '−'}${unit === 'Md$' ? money(Math.abs(v)) : num(Math.abs(v), 1)}</span></div>`;
     let title = '';
     let html = '';
+    // Présentation commune (modèle de la fiche Influence) : gros chiffre, sources, dépenses en cases
+    const big = (v: string, sub: string, c = '') => `<div class="bigstat"><b class="${c}">${v}</b><small class="${c ? '' : 'pos'}">${sub}</small></div>`;
+    const line = (l: string, v: number, why = '', fmt: (x: number) => string = (x) => num(x, 1)) =>
+      `<div class="row ${Math.abs(v) < 1e-3 ? 'off' : ''}"><span>${l}${why ? ` <small class="muted nosign">${why}</small>` : ''}</span>${Math.abs(v) < 1e-3 ? '<b class="muted nosign">—</b>' : `<b class="${v > 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}${fmt(Math.abs(v))}</b>`}</div>`;
+    // Coût chiffré à droite ; indication textuelle (« fiche », « onglet Foi »…) en petit sous le libellé
+    const use = (icon: string, l: string, c: string | number, cur = '', bad = false) => {
+      const side = cur !== '' || typeof c === 'number';
+      return `<div class="use ${bad ? 'bad' : ''}"><span>${icon}</span><small>${l}${!side && c !== '' ? `<em>${c}</em>` : ''}</small>${side && c !== '' ? `<b data-cur="${cur}">${c}</b>` : ''}</div>`;
+    };
+    const md = (x: number) => money(x);
     if (key === 'treasury') {
       const net = F.netBalance(this.state);
       title = '💰 Trésor';
       const dm = F.debtMonths(s, me.id);
-      html = `<p>L’argent de l’État : <b class="${cls(me.treasury)}">${money(me.treasury)}</b>. ${me.treasury < 0 ? `<b class="neg">Faillite</b> : la dette représente ${num(dm, 1)} mois de revenus et coûte ${Math.round(F.DEBT_RATE * 100 * 10) / 10} % d’intérêts par mois. L’armée déserte, la stabilité s’effrite, les achats d’urgence ne satisfont presque plus la population et le niveau de vie ne peut plus progresser. Au-delà de ${F.CRISIS_MONTHS} mois de revenus, les créanciers exigent un plan du FMI ou un défaut.` : 'En dessous de zéro, c’est la faillite : intérêts de 1,5 % par mois, désertions, pénuries, niveau de vie bloqué, puis crise de la dette.'}</p>
-        ${F.inAusterity(s) ? '<p class="neg">📉 Plan d’austérité du FMI : coût de l’État −30 %, stabilité −0,4 /mois, niveau de vie gelé.</p>' : ''}${F.inDefault(s) ? '<p class="neg">🚫 Défaut de paiement : ni offre de contrat ni fournisseur tant que les marchés vous boudent.</p>' : ''}
-        <h3>Chaque mois</h3><div class="rows">
-        ${row('Contrats commerciaux', inc.contracts ?? 0, 'Md$')}${row('Production vendue sur place', inc.production, 'Md$')}${row(`Exportations via ${Object.keys(inc.byNode ?? {}).length > 1 ? 'vos nœuds' : `le nœud ${esc(NODES.get(Object.keys(inc.byNode ?? {})[0] ?? '')?.name ?? 'commercial')}`}`, inc.trade, 'Md$')}${inc.distrust ? row('Défiance des partenaires', -inc.distrust, 'Md$') : ''}${row('Péages des détroits', inc.tolls, 'Md$')}${row('Entretien armée et flotte', -inc.upkeep, 'Md$')}${row('Contrats d’achat', -(s.needs?.purchases ?? 0), 'Md$')}${row('Besoins de la population (achats d’urgence, stockage)', -(s.needs?.cost ?? 0), 'Md$')}${row(`Fonctionnement de l’État (${TIERS[me.tier - 1].name.toLowerCase()})`, -(inc.admin ?? 0), 'Md$')}${inc.sanctions ? row('Pertes dues aux sanctions', -inc.sanctions, 'Md$') : ''}${inc.war ? row('Guerre : blocus et lassitude', -inc.war, 'Md$') : ''}${inc.interest ? row('Intérêts de la dette', -inc.interest, 'Md$') : ''}
-        <div class="row"><span><b>Solde</b></span><span class="${cls(net)}"><b>${net >= 0 ? '+' : ''}${money(net)}</b></span></div></div>
-        <p class="hint">Un quart de votre production est vendu sur place ; le reste part à l’export par les nœuds commerciaux, où vous en récupérez la part que votre poids (ports, flotte, marchands) vous permet de capter.</p>
+      const nodeName = Object.keys(inc.byNode ?? {}).length > 1 ? 'vos nœuds' : `le nœud ${esc(NODES.get(Object.keys(inc.byNode ?? {})[0] ?? '')?.name ?? 'commercial')}`;
+      html = big(money(me.treasury), `${net >= 0 ? '+' : '−'}${money(Math.abs(net))} par mois`, me.treasury < 0 ? 'neg' : '')
+        + (me.treasury < 0 ? `<div class="verdict bad">💸 <b>Faillite</b> : dette de ${num(dm, 1)} mois de revenus, intérêts de ${Math.round(F.DEBT_RATE * 1000) / 10} % par mois. Au-delà de ${F.CRISIS_MONTHS} mois, crise de la dette.</div>` : '')
+        + (F.inAusterity(s) ? '<div class="verdict bad">📉 Austérité du FMI : coût de l’État −30 %, stabilité −0,4 /mois, niveau de vie gelé.</div>' : '')
+        + (F.inDefault(s) ? '<div class="verdict bad">🚫 Défaut de paiement : ni offre de contrat ni fournisseur.</div>' : '')
+        + `<h3>Recettes</h3><div class="rows">
+        ${line('📦 Contrats de vente', inc.contracts ?? 0, '', md)}${line('🏭 Production vendue sur place', inc.production, '', md)}${line('⚓ Exportations', inc.trade, `via ${nodeName}`, md)}${line('🚧 Péages des détroits', inc.tolls, '', md)}</div>
+        <h3>Dépenses</h3><div class="rows">
+        ${line('🏛️ Fonctionnement de l’État', -(inc.admin ?? 0), TIERS[me.tier - 1].name.toLowerCase(), md)}${line('⚔️ Armée et flotte', -inc.upkeep, `${Math.round(me.army)} corps · ${Math.round(me.navy)} flottes`, md)}${line('📥 Contrats d’achat', -(s.needs?.purchases ?? 0), '', md)}${line('🍞 Achats d’urgence et stockage', -(s.needs?.cost ?? 0), '', md)}${inc.distrust ? line('🤝 Défiance des partenaires', -inc.distrust, '', md) : ''}${inc.sanctions ? line('🚫 Sanctions', -inc.sanctions, '', md) : ''}${inc.war ? line('🔥 Guerre : blocus et lassitude', -inc.war, '', md) : ''}${inc.interest ? line('💸 Intérêts de la dette', -inc.interest, '', md) : ''}
+        <div class="row total"><span><b>Solde du mois</b></span><b class="${cls(net)}">${net >= 0 ? '+' : '−'}${money(Math.abs(net))}</b></div></div>
         ${this.trustHtml()}
-        <h3>À quoi il sert</h3><p class="hint">Moderniser, reconvertir ou prospecter vos provinces · recruter armée et flotte · acheter des droits de passage · aide aux pays amis.</p>
-        <h3>Comment l’augmenter</h3><p class="hint">Signer des contrats (📦 Économie), moderniser les provinces qui produisent les marchandises chères, placer vos marchands, contrôler un détroit.</p>`;
+        <h3>Dépenses possibles</h3><div class="uses">
+        ${use('⬆️', 'Moderniser une province', 'fiche', '')}${use('🔄', 'Reconvertir une province', 'fiche', '')}${use('⚔️', 'Recruter des corps', md(A.COSTS.recruit(s, me.id).money ?? 0), '💰')}${use('⚓', 'Armer des flottes', md(A.COSTS.fleet(s, me.id).money ?? 0), '💰')}${use('🛒', 'Achats au comptant', 'cours +5 %', '')}${use('🎁', 'Aide à un pays ami', '5 % du trésor', '')}</div>
+        <p class="hint">Un quart de votre production est vendu sur place ; le reste part à l’export par les nœuds commerciaux, où vous captez la part que votre poids (ports, flotte, marchands) permet. Sous zéro : faillite, intérêts, désertions, niveau de vie bloqué. Pour l’augmenter : signer des contrats de vente, moderniser ce qui est cher, contrôler un détroit.</p>`;
     } else if (key === 'influence') {
       title = '🤝 Influence';
       const ranked = alive(s).map((x) => ({ id: x.id, v: x.income.trade + x.income.tolls })).sort((a, b) => b.v - a.v);
       const top = ranked.slice(0, 10).some((x) => x.id === me.id);
       const leader = !!me.bloc && s.blocs[me.bloc]?.leader === me.id;
       const deals = Math.min(2, Math.floor(s.contracts.length / 3));
-      const src = (l: string, v: number, why: string) => `<div class="row ${v ? '' : 'off'}"><span>${l} <small class="muted nosign">${why}</small></span><b class="${v ? 'pos' : 'muted'}">+${v}</b></div>`;
-      const use = (icon: string, l: string, c: number) => `<div class="use"><span>${icon}</span><small>${l}</small><b>${c}</b></div>`;
-      html = `<div class="bigstat"><b>${Math.floor(me.influence)}</b><small>+${influenceGain(s, me.id)} par mois</small></div>
-        <h3>Sources</h3><div class="rows">
-        ${src('Base', 4, '')}${src('Grand commerçant', top ? 1 : 0, 'top 10 mondial')}${src('Meneur de bloc', leader ? 1 : 0, '')}${src('Contrats actifs', deals, `+1 par 3 contrats, max +2 · ${s.contracts.length} en cours`)}</div>
+      html = big(String(Math.floor(me.influence)), `+${influenceGain(s, me.id)} par mois`)
+        + `<h3>Sources</h3><div class="rows">
+        ${line('Base', 4, '', String)}${line('Grand commerçant', top ? 1 : 0, 'top 10 mondial', String)}${line('Meneur de bloc', leader ? 1 : 0, '', String)}${line('Contrats actifs', deals, `+1 par 3 contrats, max +2 · ${s.contracts.length} en cours`, String)}</div>
         <p class="hint">Le rayonnement religieux (🔥 60, onglet Foi) rapporte d’un coup 25 d’influence.</p>
         <h3>Dépenses</h3><div class="uses">
-        ${use('🌍', 'Relations', 25)}${use('📜', 'Accord commercial', 30)}${use('🚫', 'Embargo', 15)}${use('🛡️', 'Alliance', 40)}${use('⚔️', 'Casus belli', 50)}${use('✉️', 'Négocier un contrat', 10)}${use('⚓', 'Fermer un détroit', 30)}${use('🏳️', 'Intégrer une conquête', 30)}</div>`;
+        ${use('🌍', 'Relations', 25, '🤝')}${use('📜', 'Accord commercial', 30, '🤝')}${use('🚫', 'Embargo', 15, '🤝')}${use('🛡️', 'Alliance', 40, '🤝')}${use('⚔️', 'Casus belli', 50, '🤝')}${use('✉️', 'Négocier un contrat', 10, '🤝')}${use('⚓', 'Fermer un détroit', 30, '🤝')}${use('🏳️', 'Intégrer une conquête', 30, '🤝')}</div>`;
     } else if (key === 'fervor') {
       title = '🔥 Ferveur';
-      html = `<p>L’élan religieux de votre peuple : <b>${Math.floor(me.fervor)}</b>, +${num(fervorGain(s, this.world, me.id), 1)} par mois.</p>
-        <div class="rows">${row('Base', 1)}${row('Lieux saints de votre foi (×3)', holySitesOf(s, this.world, me.id).filter((h) => h.ours).length * 3)}${row(`Politique : ${POLICIES[me.policy].name}`, POLICIES[me.policy].fervor)}</div>
-        <h3>À quoi elle sert</h3><p class="hint">Missionnaires (30) · appel à l’unité nationale (+10 stabilité, 40) · collecte des fidèles (≈ 1,5 mois de revenus, 50) · rayonnement religieux (+25 influence, 60) · appel aux coreligionnaires (50) · armer des insurgés à l’étranger (40) · guerre sainte (60).</p>`;
+      const holy = holySitesOf(s, this.world, me.id).filter((h) => h.ours);
+      html = big(String(Math.floor(me.fervor)), `+${num(fervorGain(s, this.world, me.id), 1)} par mois`)
+        + `<h3>Sources</h3><div class="rows">
+        ${line('Base', 1)}${line('⭐ Lieux saints de votre foi', holy.length * 3, holy.length ? `${holy.map((h) => esc(h.name)).join(', ')} · +3 chacun` : '+3 par lieu saint détenu')}${line(`🧭 Politique : ${POLICIES[me.policy].name}`, POLICIES[me.policy].fervor)}</div>
+        <h3>Dépenses</h3><div class="uses">
+        ${use('✝️', 'Missionnaires', 30, '🔥')}${use('🤲', 'Unité nationale (+10 ⚖️)', 40, '🔥')}${use('🪙', 'Collecte des fidèles', 50, '🔥')}${use('🌟', 'Rayonnement (+25 🤝)', 60, '🔥')}${use('📣', 'Appel aux coreligionnaires', 50, '🔥')}${use('🗡️', 'Armer des insurgés', 40, '🔥')}${use('⚔️', 'Guerre sainte', 60, '🔥')}</div>`;
     } else if (key === 'stability') {
       title = '⚖️ Stabilité';
-      html = `<p>La cohésion du pays : <b>${num(me.stability)}/100</b>. Elle revient doucement vers ${num(me.baseStability)} (son niveau naturel).</p>
-        <h3>Ce qui la fait baisser</h3><p class="hint">Guerres sans casus belli, lassitude de guerre, insurrections, faillite, crises mal gérées, réformes brutales.</p>
-        <h3>Ce qui la fait monter</h3><p class="hint">Appel à l’unité nationale (🔥40), victoires, concessions aux minorités, politique de tolérance.</p>
-        <h3>Effets</h3><p class="hint">Sous 50, les partenaires commerciaux se détournent (jusqu’à −35 % d’exportations à 0) et les minorités s’agitent davantage ; sous 35, l’armée perd en efficacité et les insurrections se multiplient.</p>`;
+      const st = me.stability;
+      const label = st < 35 ? 'Danger' : st < 50 ? 'Fragile' : 'Solide';
+      const drift = me.baseStability - st;
+      const tr = me.trust;
+      html = big(`${num(st)}<small>/100</small>`, `${label} · tend vers ${num(me.baseStability)}`, st < 35 ? 'neg' : st < 50 ? 'c-warn' : '')
+        + `<h3>Effets actuels</h3><div class="rows">
+        ${line('🤝 Exportations', -Math.round((tr?.stability ?? 0) * 100), 'sous 50, les partenaires se détournent', (x) => `${x} %`)}
+        <div class="row ${st < 35 ? '' : 'off'}"><span>⚔️ Armée moins efficace, révoltes plus fréquentes <small class="muted nosign">sous 35</small></span><b class="${st < 35 ? 'neg' : 'muted'}">${st < 35 ? 'oui' : 'non'}</b></div>
+        <div class="row"><span>↺ Retour vers le niveau naturel</span><b class="${cls(drift)}">${drift >= 0 ? '↑' : '↓'} ${num(me.baseStability)}</b></div></div>
+        <h3>Pour la remonter</h3><div class="uses">
+        ${use('🤲', 'Unité nationale (+10)', 40, '🔥')}${use('🕊️', 'Politique de tolérance', 'onglet Foi', '')}${use('🏳️', 'Concessions aux minorités', 'fiche province', '')}${use('🍞', 'Satisfaction ≥ 80 %', 'besoins', '')}</div>
+        <h3>Ce qui la fait baisser</h3><div class="uses">
+        ${use('⚔️', 'Guerre sans casus belli', '', '', true)}${use('😩', 'Lassitude de guerre', '', '', true)}${use('🔥', 'Insurrections', '', '', true)}${use('💸', 'Faillite et austérité', '', '', true)}${use('🍞', 'Pénuries (< 80 %)', '', '', true)}${use('🚫', 'Sanctions', '', '', true)}</div>`;
     } else if (key === 'sanctions') {
       const sp = me.sanctions;
       title = '🚫 Sanctions internationales';
@@ -2071,7 +2146,7 @@ export class App {
         .map((n) => ({ id: n.id, v: n.income.production + n.income.trade + n.income.tolls }))
         .sort((a, b) => b.v - a.v).slice(0, 40).map((x, i) => row(x.id, i, `${money(x.v)} / mois`)).join('')}</div>`;
     } else if (tab === 'power') {
-      html += `<div class="rows">${alive(s).sort((a, b) => power(b) - power(a)).slice(0, 40).map((n, i) => row(n.id, i, `${num(n.army, 1)} div.${n.nuclear ? ' ☢' : ''}`)).join('')}</div>`;
+      html += `<div class="rows">${alive(s).sort((a, b) => power(b) - power(a)).slice(0, 40).map((n, i) => row(n.id, i, `${Math.round(n.army)} corps${n.nuclear ? ' ☢' : ''}`)).join('')}</div>`;
     } else if (tab === 'faith') {
       html += this.religionShares();
       const holy = this.world.provinces.filter((p) => p.holy);

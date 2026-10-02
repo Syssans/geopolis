@@ -1,7 +1,7 @@
 import { RELIGIONS } from '../data/religions';
 import { rand, shuffle } from './rng';
 import {
-  addRel, alive, clamp, devOf, inReach, invalidate, log, nm, owned, power, rel, sameBloc, warBetween, warsOf,
+  addRel, alive, clamp, devOf, inReach, invalidate, log, loseForces, nm, owned, power, rel, sameBloc, warBetween, warsOf,
 } from './state';
 import type { GameState, Id, PeaceTerms, Pid, War, World } from './types';
 
@@ -205,7 +205,7 @@ export function resolveWarMonth(s: GameState, w: World, war: War) {
 
 function bleed(s: GameState, id: Id, rate: number) {
   const n = s.nations[id];
-  n.army *= 1 - rate;
+  loseForces(n, 'army', n.army * rate);
   n.exhaustion = clamp(n.exhaustion + 0.8 + rate * 25, 0, 100);
   if (n.exhaustion > 50) n.stability = clamp(n.stability - 0.3, 0, 100);
 }

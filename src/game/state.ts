@@ -254,3 +254,19 @@ export function desecratedHolySites(s: GameState, w: World, religion: string): {
       }
   return res;
 }
+
+/**
+ * Pertes d'armée ou de flotte : les effectifs restent entiers, les pertes partielles s'accumulent
+ * jusqu'à faire disparaître une unité complète.
+ */
+export function loseForces(n: Nation, kind: 'army' | 'navy', amount: number) {
+  if (amount <= 0) return;
+  const a = (n.attrition ??= { army: 0, navy: 0 });
+  a[kind] += amount;
+  const lost = Math.min(n[kind], Math.floor(a[kind]));
+  if (lost > 0) {
+    n[kind] -= lost;
+    a[kind] -= lost;
+  }
+  if (n[kind] <= 0) a[kind] = 0;
+}

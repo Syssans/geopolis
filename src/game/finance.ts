@@ -2,7 +2,7 @@
  * Finances publiques : un trésor négatif est une dette qui coûte des intérêts. Quand elle devient écrasante,
  * une crise de la dette oblige à choisir : plan du FMI (austérité), défaut de paiement ou fuite en avant.
  */
-import { addRel, alive, clamp, log } from './state';
+import { addRel, alive, clamp, log, loseForces } from './state';
 import type { GameState, Id, Nation } from './types';
 
 /** Intérêts mensuels sur la dette (≈ 20 % par an). */
@@ -52,8 +52,8 @@ export function monthlyFinance(s: GameState, n: Nation): number {
   if (n.treasury < 0) {
     // Faillite : désertions, grèves, colère
     n.stability = clamp(n.stability - 0.5 - Math.min(1.5, debtMonths(s, n.id) / 12), 0, 100);
-    n.army *= 0.98;
-    n.navy *= 0.98;
+    loseForces(n, 'army', n.army * 0.02);
+    loseForces(n, 'navy', n.navy * 0.02);
     // L'IA finit par restructurer sa dette sans cérémonie
     if (n.id !== s.player && debtMonths(s, n.id) > 12) n.treasury *= 0.4;
   }

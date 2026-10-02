@@ -68,7 +68,7 @@ export function recruit(s: GameState, id: Id, naval = false): ActionResult {
   const add = recruitSize(naval ? n.navy : n.army);
   if (naval) n.navy += add;
   else n.army += add;
-  return { ok: true, msg: naval ? `+${add} flotte(s)` : `+${add} division(s)` };
+  return { ok: true, msg: naval ? `+${add} flotte(s)` : `+${add} corps d’armée` };
 }
 
 export function disband(s: GameState, id: Id, naval = false): ActionResult {
@@ -78,7 +78,7 @@ export function disband(s: GameState, id: Id, naval = false): ActionResult {
   const rem = Math.min(cur, recruitSize(cur));
   if (naval) n.navy -= rem;
   else n.army -= rem;
-  return { ok: true, msg: naval ? `−${rem} flotte(s)` : `−${rem} division(s)` };
+  return { ok: true, msg: naval ? `−${rem} flotte(s)` : `−${rem} corps d’armée` };
 }
 
 export function startNuclearProgram(s: GameState, id: Id): ActionResult {

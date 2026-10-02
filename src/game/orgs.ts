@@ -5,6 +5,7 @@
 import { GOODS } from '../data/trade';
 import { rand } from './rng';
 import { addRel, alive, log, nm, owned, rel } from './state';
+import { production } from './trade';
 import type { GameState, Id, Org, World } from './types';
 
 export type { Org };
@@ -56,6 +57,9 @@ export function monthlyOrgs(s: GameState, w: World) {
   if (now(s) < o.nextMeeting) return;
   o.nextMeeting = now(s) + 6;
   if (o.members.includes(s.player)) {
+    // Intentions arrêtées à l'ouverture de la séance : le joueur les voit autour de la table
+    const ai = aiProposal(s);
+    o.intents = Object.fromEntries(o.members.filter((m) => m !== s.player).map((m) => [m, rand(s) < 0.85 ? ai : 0]));
     if (!s.events.some((e) => e.kind === 'opec'))
       s.events.push({
         uid: s.nextUid++,
@@ -74,23 +78,61 @@ export function monthlyOrgs(s: GameState, w: World) {
   decide(s, w, null);
 }
 
-/** Décision de l'OPEP ; `playerVote` : −1, 0 ou 1 si le joueur est membre. */
-export function decide(s: GameState, w: World, playerVote: -1 | 0 | 1 | null): string {
+export type Vote = -1 | 0 | 1;
+export const VOTE_LABEL = LABEL;
+/** Gain ou perte de relations avec les membres selon qu'ils votent comme le joueur ou non. */
+export const VOTE_REL = 3;
+
+export interface OpecSeat {
+  id: Id;
+  weight: number;
+  vote: Vote;
+  follows: boolean; // suit le joueur (relations ≥ 40)
+}
+
+/** Table de l'OPEP si le joueur vote `playerVote` : votes de chacun, poids, résultat. */
+export function opecTally(s: GameState, w: World, playerVote: Vote | null) {
   const o = s.orgs!.opep;
-  const votes = { '-1': 0, '0': 0, '1': 0 };
   const ai = aiProposal(s);
-  const lobby: Id[] = [];
-  for (const m of o.members) {
+  const seats: OpecSeat[] = o.members.map((m) => {
     // Le joueur fait campagne : son vote compte double et ses amis (relations ≥ 40) le suivent
-    const friend = playerVote !== null && m !== s.player && rel(s, s.player, m) >= 40;
-    if (friend) lobby.push(m);
-    const v = m === s.player && playerVote !== null ? playerVote : friend ? playerVote! : rand(s) < 0.85 ? ai : 0;
-    votes[String(v) as '-1' | '0' | '1'] += oilWeight(s, w, m) * (m === s.player ? 2 : 1);
-  }
-  const choice = Number((Object.entries(votes) as [string, number][]).sort((a, b) => b[1] - a[1])[0][0]) as -1 | 0 | 1;
+    const follows = playerVote !== null && m !== s.player && rel(s, s.player, m) >= 40;
+    const vote: Vote = m === s.player && playerVote !== null ? playerVote : follows ? playerVote! : (o.intents?.[m] ?? ai);
+    return { id: m, weight: oilWeight(s, w, m) * (m === s.player ? 2 : 1), vote, follows };
+  });
+  const votes = { '-1': 0, '0': 0, '1': 0 };
+  for (const x of seats) votes[String(x.vote) as '-1' | '0' | '1'] += x.weight;
+  const choice = Number((Object.entries(votes) as [string, number][]).sort((a, b) => b[1] - a[1])[0][0]) as Vote;
+  const quota = Math.round(Math.min(QUOTA_MAX, Math.max(QUOTA_MIN, o.quota + choice * 0.1)) * 100) / 100;
+  return { seats, votes, choice, quota };
+}
+
+/**
+ * Production pétrolière d'une nation (valeur par mois) : actuelle, et estimée à terme si le quota passait à `quota`
+ * (moins de barils, mais un cours qui dérive de 2,5 × l'écart de quota).
+ */
+export function oilOutlook(s: GameState, w: World, id: Id, quota: number): { now: number; later: number; price: number } {
+  const o = s.orgs!.opep;
+  const member = o.members.includes(id);
+  const nowV = owned(s, id).filter((pid) => (s.provinces[pid].good ?? w.provinces[pid].good) === 'petrole').reduce((a, pid) => a + production(s, w, pid), 0);
+  const p = s.prices.petrole ?? 1;
+  const price = Math.max(0.4, p + (o.quota - quota) * 2.5);
+  const later = nowV * (member && o.quota ? quota / o.quota : 1) * (price / p);
+  return { now: nowV, later, price };
+}
+
+/** Décision de l'OPEP ; `playerVote` : −1, 0 ou 1 si le joueur est membre. */
+export function decide(s: GameState, w: World, playerVote: Vote | null): string {
+  const o = s.orgs!.opep;
+  const t = opecTally(s, w, playerVote);
+  const lobby = t.seats.filter((x) => x.follows).map((x) => x.id);
+  const choice = t.choice;
   const before = o.quota;
-  o.quota = Math.round(Math.min(QUOTA_MAX, Math.max(QUOTA_MIN, o.quota + choice * 0.1)) * 100) / 100;
+  o.quota = t.quota;
+  o.intents = undefined;
   o.last = o.quota === before ? 'Quotas inchangés' : o.quota < before ? `Production réduite (quota ${Math.round(o.quota * 100)} %)` : `Production relevée (quota ${Math.round(o.quota * 100)} %)`;
+  if (playerVote !== null)
+    for (const x of t.seats) if (x.id !== s.player) addRel(s, s.player, x.id, x.vote === playerVote ? VOTE_REL : -VOTE_REL);
   const mine = o.members.includes(s.player) || owned(s, s.player).length > 0;
   if (o.quota !== before) log(s, `🛢️ OPEP : ${LABEL[String(choice) as '-1' | '0' | '1']} — le ${GOODS.petrole.name.toLowerCase()} va ${choice < 0 ? 'grimper' : 'baisser'}.`, 'trade', mine ? [s.player] : []);
   const allies = lobby.length ? ` (${lobby.map((m) => nm(s, m)).join(', ')} vous ont suivi)` : '';

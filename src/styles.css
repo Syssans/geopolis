@@ -546,11 +546,16 @@ button.link.danger { color: var(--bad); }
 .bigstat b { font-size: 34px; color: var(--hl); }
 .bigstat small { color: var(--good); font-size: 14px; }
 .rows .row.off { opacity: .5; }
-.uses { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.uses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
 .uses .use { display: flex; align-items: center; gap: 6px; background: var(--btn); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
-.uses .use small { flex: 1; font-size: 12px; line-height: 1.2; }
-.uses .use b { font-size: 12px; color: var(--hl); white-space: nowrap; }
-.uses .use b::before { content: '🤝'; margin-right: 2px; }
+.uses .use { min-width: 0; }
+.uses .use small { flex: 1; min-width: 0; font-size: 12px; line-height: 1.2; overflow-wrap: break-word; hyphens: auto; }
+.uses .use small em { display: block; font-style: normal; color: var(--hl); font-size: 11px; margin-top: 1px; }
+.uses .use b { font-size: 12px; color: var(--hl); white-space: nowrap; flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
+.uses .use b[data-cur]::before { content: attr(data-cur); margin-right: 2px; }
+.uses .use.bad { border-color: #8e2b2b88; background: #3a161655; }
+.rows .row.total { border-top: 1px solid var(--line); }
+.bigstat b small { font-size: 16px; color: var(--muted); }
 .sat-h { margin: 8px 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; }
 .buy-from { display: block; margin: -4px 0 6px; }
 
@@ -627,3 +632,40 @@ button.link.danger { color: var(--bad); }
 .news { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
 .news.latest { border-color: var(--gold); }
 .news ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.45; }
+.conv-cost { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 0 8px; }
+.conv-cost > div { background: var(--btn); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; }
+.conv-cost small { font-size: 11px; color: var(--muted); }
+.conv-cost b { font-size: 15px; }
+.conv-cost > div:first-child { border-color: var(--gold); }
+.conv-cost > div:first-child b { color: var(--gold); }
+.conv-cost.short > div:first-child { border-color: var(--bad); }
+.conv-cost.short > div:first-child b { color: var(--bad); }
+.bigstat b.neg { color: var(--bad); } .bigstat b.c-warn { color: var(--warn); }
+
+/* ——— Réunion de l'OPEP ——— */
+.opec-table { position: relative; width: 100%; max-width: 340px; aspect-ratio: 1; margin: 4px auto 6px; }
+.opec-table::before { content: ''; position: absolute; inset: 22%; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #5a3d1f, #2c1d0e 70%); border: 3px solid #8a6a3a; box-shadow: 0 8px 24px #000a, inset 0 0 18px #0008; }
+.opec-disc { position: absolute; inset: 22%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; line-height: 1.15; }
+.opec-disc span { font-size: 26px; }
+.opec-disc b { font-size: 20px; color: #ffd54a; }
+.opec-disc small { font-size: 10px; color: #e8d6b0; }
+.seat { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 0; background: var(--btn); border: 1.5px solid var(--line);
+  border-radius: 12px; padding: 3px 5px 2px; min-width: 52px; animation: seatIn .35s ease-out both; }
+.seat .sf { font-size: 22px; line-height: 1.1; }
+.seat small { font-size: 9.5px; white-space: nowrap; }
+.seat.friend { border-color: var(--good); box-shadow: 0 0 0 2px #3fb95033; }
+.seat.me { border-color: var(--gold); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 30%, transparent); }
+.seat .v { position: absolute; top: -7px; right: -7px; }
+i.v { font-style: normal; display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; font-size: 10px; font-weight: 700; color: #fff; }
+i.v.down { background: #d9622b; } i.v.up { background: #2f6fdb; } i.v.eq { background: #6b6f76; } i.v.me { background: var(--gold); color: var(--on-gold); }
+.opec-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: center; font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+.opec-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.opec-opt { display: block; width: 100%; text-align: left; background: var(--btn); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; cursor: pointer; color: var(--text); }
+.opec-opt.won { border-color: #2c7a3a; }
+.opec-opt:hover, .opec-opt:active { border-color: var(--gold); }
+.opec-opt .mh { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.opec-opt .mh span { font-size: 12px; font-weight: 600; }
+.opec-fx { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.opec-fx b { color: var(--text); }
+.opec-fx span:last-child { grid-column: 1 / -1; }
+@keyframes seatIn { from { opacity: 0; transform: translate(-50%, -50%) scale(.6); } to { opacity: 1; transform: translate(-50%, -50%); } }

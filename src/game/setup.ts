@@ -109,7 +109,7 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
       baseStability: c.stab ?? 60,
       army: 0,
       navy: 0,
-      // Une division coûte moins cher là où la main-d'œuvre est bon marché
+      // Une division (corps d'armée) coûte moins cher là où la main-d'œuvre est bon marché
       upkeepRate: ARMY_UPKEEP / Math.sqrt(clamp(45000 / Math.max(pc, 1), 1, 6)),
       milShare: clamp(0.3 * ((c.mil / c.gdp) * 100) / 2, 0.08, 0.6),
       aggression: 0,
@@ -160,8 +160,9 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
     const monthly = inc.production + inc.trade + inc.tolls - admin;
     const budget = Math.max(0, monthly) * n.milShare;
     const coastal = world.provinces.some((p) => p.owner === n.id && p.coastal);
-    n.army = Math.max(1, Math.round(((budget * (coastal ? 0.75 : 1)) / n.upkeepRate) * 10) / 10);
-    n.navy = coastal ? Math.round(((budget * 0.25) / (n.upkeepRate * 2)) * 10) / 10 : 0;
+    n.army = Math.max(1, Math.round((budget * (coastal ? 0.75 : 1)) / n.upkeepRate));
+    const fleets = coastal ? (budget * 0.25) / (n.upkeepRate * 2) : 0;
+    n.navy = fleets >= 0.3 ? Math.max(1, Math.round(fleets)) : 0;
     n.treasury = Math.round(Math.max(monthly, 0.2) * 12 * 10) / 10;
     n.income = { production: inc.production, trade: inc.trade, tolls: inc.tolls, contracts: 0, admin, upkeep: n.army * n.upkeepRate + n.navy * n.upkeepRate * 2, byNode: {} };
   }

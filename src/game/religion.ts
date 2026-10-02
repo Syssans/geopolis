@@ -136,7 +136,7 @@ function secede(s: GameState, w: World, pid: Pid) {
   if (!dest.alive) {
     dest.alive = true;
     invalidateAlive(s);
-    dest.army = Math.max(1, info.dev / 4);
+    dest.army = Math.max(1, Math.round(info.dev / 4));
     dest.stability = 40;
     dest.treasury = 0;
   }

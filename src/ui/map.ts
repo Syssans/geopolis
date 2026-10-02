@@ -610,19 +610,20 @@ export class MapView {
 
   /** Taille lisible à tout zoom ; les noms n'apparaissent qu'en zoomant (sauf pour son propre pays). */
   private sizeMarkers() {
-    const f = 1 / Math.sqrt(this.k);
+    // Taille fixe à l'écran (en pixels) : les noms ne grossissent plus quand on zoome fort
+    const u = 1 / (this.k * this.pxPerUnit());
     for (const m of this.markerLayer.querySelectorAll<SVGGElement>('g.marker')) {
       const [icon, name] = m.children as unknown as SVGElement[];
       const own = m.classList.contains('own');
       const cap = m.classList.contains('cap');
       // Les capitales sont nombreuses : leurs noms n'apparaissent qu'en zoomant franchement
       const names = this.k >= (cap ? 12 : 4);
-      if (cap) icon.setAttribute('r', ((own ? 2 : 1.4) * f).toFixed(2));
-      else icon.setAttribute('transform', `scale(${((own ? 0.5 : 0.42) * f).toFixed(3)})`);
+      if (cap) icon.setAttribute('r', ((own ? 3.2 : 2.4) * u).toFixed(3));
+      else icon.setAttribute('transform', `scale(${(((own ? 24 : 19) / 22) * u).toFixed(4)})`);
       name.style.display = names ? '' : 'none';
-      name.setAttribute('font-size', (4.5 * f).toFixed(2));
-      name.setAttribute('dy', ((cap ? 2.5 : 6) * f).toFixed(2));
-      name.setAttribute('stroke-width', (1.2 * f).toFixed(2));
+      name.setAttribute('font-size', ((cap ? 10 : 11) * u).toFixed(3));
+      name.setAttribute('dy', ((cap ? 4 : 11) * u).toFixed(3));
+      name.setAttribute('stroke-width', (2.5 * u).toFixed(3));
     }
   }
 
