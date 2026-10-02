@@ -9,8 +9,8 @@
   --gold: #d4a017;
   /* Couleur de jeu du joueur : fixe, indépendante du thème culturel (convois, routes, contour) */
   --mine: #ffd54a;
-  /* Coûts en argent : toujours jaunes, quel que soit le thème */
-  --cost: #ffd54a;
+  /* Coûts en argent : toujours en or, quel que soit le thème */
+  --cost: #d4a017; /* l’or d’origine du jeu */
   --hl: #d4a017;
   --good: #3fb950;
   --bad: #f85149;
