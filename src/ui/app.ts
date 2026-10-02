@@ -1040,8 +1040,8 @@ export class App {
     const cant = p.occupiedBy || p.revolt ? 'Province instable' : undefined;
     const base = info.dev * 0.05; // unités au niveau 0 (une reconversion remet le niveau à zéro)
     html += `<div class="actions">
-        ${this.action('upgrade', `⬆️ Moderniser (niveau ${Math.min(lvl + 1, E.MAX_LEVEL)})`, `💰${money(up)} · ${E.UPGRADE_MONTHS} mois · gain réel +${money(gain.market)}/mois au marché, +${money(gain.contract)} sous contrat (rentable en ${Math.ceil(up / Math.max(gain.contract, 1e-6))}–${Math.ceil(up / Math.max(gain.market, 1e-6))} mois)`, { disabled: cant ?? (lvl >= E.MAX_LEVEL ? 'Niveau maximal' : this.me.treasury < up ? `Trésor insuffisant (${money(up)})` : undefined) })}
-        ${this.action('prospect', '⛏️ Prospecter', `1 chance sur 3 : pétrole, gaz, métaux… · 💰${money(E.prospectCost(s, w, pid))} · ${E.PROSPECT_MONTHS} mois`, { disabled: deposit ? 'Gisement déjà exploité' : cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
+        ${this.action('upgrade', `⬆️ Moderniser (niveau ${Math.min(lvl + 1, E.MAX_LEVEL)})`, `<b class="cost">💰 ${money(up)}</b> · ${E.UPGRADE_MONTHS} mois · gain réel +${money(gain.market)}/mois au marché, +${money(gain.contract)} sous contrat (rentable en ${Math.ceil(up / Math.max(gain.contract, 1e-6))}–${Math.ceil(up / Math.max(gain.market, 1e-6))} mois)`, { disabled: cant ?? (lvl >= E.MAX_LEVEL ? 'Niveau maximal' : this.me.treasury < up ? `Trésor insuffisant (${money(up)})` : undefined) })}
+        ${this.action('prospect', '⛏️ Prospecter', `<b class="cost">💰 ${money(E.prospectCost(s, w, pid))}</b> · ${E.PROSPECT_MONTHS} mois · 1 chance sur 3 : pétrole, gaz, métaux…`, { disabled: deposit ? 'Gisement déjà exploité' : cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
       </div>
       <h3>🔄 Changer de production</h3>
       <p class="hint">Pendant les ${E.CONVERT_MONTHS} mois de chantier, la province produit deux fois moins ; ensuite son niveau de modernisation repart à zéro. Les valeurs ci-dessous sont estimées au cours du jour, au niveau 0.</p>
@@ -2335,7 +2335,7 @@ function stat(label: string, value: string) {
 
 function costLabel(c: A.Cost): string {
   const p: string[] = [];
-  if (c.money) p.push(`💰${money(c.money)}`);
+  if (c.money) p.push(`<b class="cost">💰${money(c.money)}</b>`);
   if (c.influence) p.push(`🤝${c.influence}`);
   if (c.fervor) p.push(`🔥${c.fervor}`);
   return p.join(' ') || 'Gratuit';

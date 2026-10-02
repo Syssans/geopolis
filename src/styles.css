@@ -9,6 +9,8 @@
   --gold: #d4a017;
   /* Couleur de jeu du joueur : fixe, indépendante du thème culturel (convois, routes, contour) */
   --mine: #ffd54a;
+  /* Coûts en argent : toujours jaunes, quel que soit le thème */
+  --cost: #ffd54a;
   --hl: #d4a017;
   --good: #3fb950;
   --bad: #f85149;
@@ -637,7 +639,7 @@ button.link.danger { color: var(--bad); }
 .conv-cost > div + div { border-left: 1px solid var(--line); }
 .conv-cost small { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .conv-cost b { font-size: 15px; }
-.conv-cost > div:first-child b { color: var(--gold); }
+.conv-cost > div:first-child b { color: var(--cost); }
 .conv-cost.short > div:first-child b { color: var(--bad); }
 .bigstat b.neg { color: var(--bad); } .bigstat b.c-warn { color: var(--warn); }
 
@@ -682,3 +684,6 @@ i.v.down { background: #d9622b; } i.v.up { background: #2f6fdb; } i.v.eq { backg
 .real-income span { font-weight: 600; font-size: 13px; }
 .real-income b { font-size: 18px; }
 .real-income small { grid-column: 1 / -1; font-size: 11px; color: var(--muted); }
+
+.cost, .act .c b.cost { color: var(--cost); font-weight: 700; }
+.act:disabled .c b.cost { color: var(--muted); }
