@@ -304,7 +304,7 @@ export class App {
     this.el.title.innerHTML = `
       <h1>GEOPOLIS</h1>
       <p>Commerce, foi et puissance · 2026</p>
-      <small class="version">v${VERSION}</small>
+      <small class="version title-version">v${VERSION}</small>
       ${hasSave ? `<button class="btn primary" data-a="continue">Continuer la partie</button>` : ''}
       <button class="btn ${hasSave ? '' : 'primary'}" data-a="newgame">Nouvelle partie</button>
       <button class="btn" data-a="help">Comment jouer</button>`;
