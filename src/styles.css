@@ -632,13 +632,12 @@ button.link.danger { color: var(--bad); }
 .news { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
 .news.latest { border-color: var(--gold); }
 .news ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.45; }
-.conv-cost { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 0 8px; }
-.conv-cost > div { background: var(--btn); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; }
-.conv-cost small { font-size: 11px; color: var(--muted); }
+.conv-cost { display: grid; grid-template-columns: repeat(3, 1fr); margin: 2px 0 8px; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); padding: 6px 0; }
+.conv-cost > div { display: flex; flex-direction: column; padding: 0 8px; }
+.conv-cost > div + div { border-left: 1px solid var(--line); }
+.conv-cost small { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .conv-cost b { font-size: 15px; }
-.conv-cost > div:first-child { border-color: var(--gold); }
 .conv-cost > div:first-child b { color: var(--gold); }
-.conv-cost.short > div:first-child { border-color: var(--bad); }
 .conv-cost.short > div:first-child b { color: var(--bad); }
 .bigstat b.neg { color: var(--bad); } .bigstat b.c-warn { color: var(--warn); }
 
@@ -669,3 +668,10 @@ i.v.down { background: #d9622b; } i.v.up { background: #2f6fdb; } i.v.eq { backg
 .opec-fx b { color: var(--text); }
 .opec-fx span:last-child { grid-column: 1 / -1; }
 @keyframes seatIn { from { opacity: 0; transform: translate(-50%, -50%) scale(.6); } to { opacity: 1; transform: translate(-50%, -50%); } }
+
+.solde { display: flex; justify-content: space-between; align-items: center; margin: 8px 0 12px; padding: 10px 12px; border-radius: 10px; font-size: 15px; font-weight: 600; }
+.solde b { font-size: 22px; }
+.solde.up { background: #12301d; border: 1px solid #2c7a3a; } .solde.up b { color: var(--good); }
+.solde.down { background: #3a1616; border: 1px solid #8e2b2b; } .solde.down b { color: var(--bad); }
+.tut-link { display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 10px; background: none; border: 1px dashed var(--line); border-radius: 10px; padding: 9px 12px; color: var(--text); cursor: pointer; font-size: 13px; text-align: left; }
+.tut-link i { margin-left: auto; font-style: normal; color: var(--gold); font-size: 16px; }

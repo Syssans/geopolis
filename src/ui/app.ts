@@ -976,7 +976,7 @@ export class App {
     for (const h of info.holy ?? []) badges.push(`<span class="badge-i nuke">⭐ Lieu saint : ${esc(h.name)} (${h.religions.map((x) => RELIGIONS[x].icon).join('')})</span>`);
     if (info.capital && info.owner === p.owner) badges.push('<span class="badge-i ally">Capitale</span>');
     if (owner.missionary === pid) badges.push(`<span class="badge-i ally">Missionnaires ${num(owner.missionProgress)} %</span>`);
-    let html = `<div class="badges">${badges.join('')}</div>${mine ? this.exploitation(pid) : ''}
+    let html = `<div class="badges">${badges.join('')}</div>
       <div class="stats">
         ${stat('Développement', String(info.dev))}
         ${stat('Population', pop(info.pop))}
@@ -987,7 +987,7 @@ export class App {
         ${stat('Nœud commercial', esc(NODES.get(info.node)!.name))}
         ${stat('Agitation', `<span class="${p.unrest > 50 ? 'neg' : ''}">${num(p.unrest)} → ${num(u.total)}</span>`)}
         ${p.integration < 100 ? stat('Intégration', `${num(p.integration)} %`) : ''}
-      </div>`;
+      </div>${mine ? `<h3>🏭 Production</h3>${this.exploitation(pid)}` : ''}`;
     if (info.strait) {
       const def = STRAITS.find((x) => x.id === info.strait)!;
       const closed = straitClosed(s, this.world, info.strait);
@@ -1041,7 +1041,7 @@ export class App {
     const base = info.dev * 0.05; // unités au niveau 0 (une reconversion remet le niveau à zéro)
     html += `<div class="actions">
         ${this.action('upgrade', `⬆️ Moderniser (niveau ${Math.min(lvl + 1, E.MAX_LEVEL)})`, `💰${money(up)} · ${E.UPGRADE_MONTHS} mois · gain réel +${money(gain.market)}/mois au marché, +${money(gain.contract)} sous contrat (rentable en ${Math.ceil(up / Math.max(gain.contract, 1e-6))}–${Math.ceil(up / Math.max(gain.market, 1e-6))} mois)`, { disabled: cant ?? (lvl >= E.MAX_LEVEL ? 'Niveau maximal' : this.me.treasury < up ? `Trésor insuffisant (${money(up)})` : undefined) })}
-        ${deposit ? '' : this.action('prospect', '⛏️ Prospecter', `1 chance sur 3 : pétrole, gaz, métaux… · 💰${money(E.prospectCost(s, w, pid))} · ${E.PROSPECT_MONTHS} mois`, { disabled: cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
+        ${this.action('prospect', '⛏️ Prospecter', `1 chance sur 3 : pétrole, gaz, métaux… · 💰${money(E.prospectCost(s, w, pid))} · ${E.PROSPECT_MONTHS} mois`, { disabled: deposit ? 'Gisement déjà exploité' : cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
       </div>
       <h3>🔄 Changer de production</h3>
       <div class="conv-cost ${this.me.treasury < conv ? 'short' : ''}"><div><small>Coût</small><b>💰 ${money(conv)}</b></div><div><small>Durée</small><b>🏗️ ${E.CONVERT_MONTHS} mois</b></div><div><small>Ensuite</small><b>${lvl ? `★ ${lvl} → 0` : 'niveau 0'}</b></div></div>
@@ -1459,6 +1459,11 @@ export class App {
       return `<div class="use ${bad ? 'bad' : ''}"><span>${icon}</span><small>${l}${!side && c !== '' ? `<em>${c}</em>` : ''}</small>${side && c !== '' ? `<b data-cur="${cur}">${c}</b>` : ''}</div>`;
     };
     const md = (x: number) => money(x);
+    // Lien vers le chapitre du tutoriel qui explique cette ressource
+    const tutLink = (title: string) => {
+      const i = TUTORIAL.findIndex((c) => c.title === title);
+      return i < 0 ? '' : `<button class="tut-link" data-a="tut" data-p="${i}">📖 Tutoriel : ${TUTORIAL[i].icon} ${esc(title)} <i>›</i></button>`;
+    };
     if (key === 'treasury') {
       const net = F.netBalance(this.state);
       title = '💰 Trésor';
@@ -1472,11 +1477,9 @@ export class App {
         ${line('📦 Contrats de vente', inc.contracts ?? 0, '', md)}${line('🏭 Production vendue sur place', inc.production, '', md)}${line('⚓ Exportations', inc.trade, `via ${nodeName}`, md)}${line('🚧 Péages des détroits', inc.tolls, '', md)}</div>
         <h3>Dépenses</h3><div class="rows">
         ${line('🏛️ Fonctionnement de l’État', -(inc.admin ?? 0), TIERS[me.tier - 1].name.toLowerCase(), md)}${line('⚔️ Armée et flotte', -inc.upkeep, `${Math.round(me.army)} corps · ${Math.round(me.navy)} flottes`, md)}${line('📥 Contrats d’achat', -(s.needs?.purchases ?? 0), '', md)}${line('🍞 Achats d’urgence et stockage', -(s.needs?.cost ?? 0), '', md)}${inc.distrust ? line('🤝 Défiance des partenaires', -inc.distrust, '', md) : ''}${inc.sanctions ? line('🚫 Sanctions', -inc.sanctions, '', md) : ''}${inc.war ? line('🔥 Guerre : blocus et lassitude', -inc.war, '', md) : ''}${inc.interest ? line('💸 Intérêts de la dette', -inc.interest, '', md) : ''}
-        <div class="row total"><span><b>Solde du mois</b></span><b class="${cls(net)}">${net >= 0 ? '+' : '−'}${money(Math.abs(net))}</b></div></div>
+        </div><div class="solde ${net >= 0 ? 'up' : 'down'}"><span>Solde du mois</span><b>${net >= 0 ? '+' : '−'}${money(Math.abs(net))}</b></div>
         ${this.trustHtml()}
-        <h3>Dépenses possibles</h3><div class="uses">
-        ${use('⬆️', 'Moderniser une province', 'fiche', '')}${use('🔄', 'Reconvertir une province', 'fiche', '')}${use('⚔️', 'Recruter des corps', md(A.COSTS.recruit(s, me.id).money ?? 0), '💰')}${use('⚓', 'Armer des flottes', md(A.COSTS.fleet(s, me.id).money ?? 0), '💰')}${use('🛒', 'Achats au comptant', 'cours +5 %', '')}${use('🎁', 'Aide à un pays ami', '5 % du trésor', '')}</div>
-        <p class="hint">Un quart de votre production est vendu sur place ; le reste part à l’export par les nœuds commerciaux, où vous captez la part que votre poids (ports, flotte, marchands) permet. Sous zéro : faillite, intérêts, désertions, niveau de vie bloqué. Pour l’augmenter : signer des contrats de vente, moderniser ce qui est cher, contrôler un détroit.</p>`;
+        ${tutLink('L’argent')}`;
     } else if (key === 'influence') {
       title = '🤝 Influence';
       const ranked = alive(s).map((x) => ({ id: x.id, v: x.income.trade + x.income.tolls })).sort((a, b) => b.v - a.v);
@@ -1488,7 +1491,7 @@ export class App {
         ${line('Base', 4, '', String)}${line('Grand commerçant', top ? 1 : 0, 'top 10 mondial', String)}${line('Meneur de bloc', leader ? 1 : 0, '', String)}${line('Contrats actifs', deals, `+1 par 3 contrats, max +2 · ${s.contracts.length} en cours`, String)}</div>
         <p class="hint">Le rayonnement religieux (🔥 60, onglet Foi) rapporte d’un coup 25 d’influence.</p>
         <h3>Dépenses</h3><div class="uses">
-        ${use('🌍', 'Relations', 25, '🤝')}${use('📜', 'Accord commercial', 30, '🤝')}${use('🚫', 'Embargo', 15, '🤝')}${use('🛡️', 'Alliance', 40, '🤝')}${use('⚔️', 'Casus belli', 50, '🤝')}${use('✉️', 'Négocier un contrat', 10, '🤝')}${use('⚓', 'Fermer un détroit', 30, '🤝')}${use('🏳️', 'Intégrer une conquête', 30, '🤝')}</div>`;
+        ${use('🌍', 'Relations', 25, '🤝')}${use('📜', 'Accord commercial', 30, '🤝')}${use('🚫', 'Embargo', 15, '🤝')}${use('🛡️', 'Alliance', 40, '🤝')}${use('⚔️', 'Casus belli', 50, '🤝')}${use('✉️', 'Négocier un contrat', 10, '🤝')}${use('⚓', 'Fermer un détroit', 30, '🤝')}${use('🏳️', 'Intégrer une conquête', 30, '🤝')}</div>${tutLink('Diplomatie')}`;
     } else if (key === 'fervor') {
       title = '🔥 Ferveur';
       const holy = holySitesOf(s, this.world, me.id).filter((h) => h.ours);
@@ -1496,7 +1499,7 @@ export class App {
         + `<h3>Sources</h3><div class="rows">
         ${line('Base', 1)}${line('⭐ Lieux saints de votre foi', holy.length * 3, holy.length ? `${holy.map((h) => esc(h.name)).join(', ')} · +3 chacun` : '+3 par lieu saint détenu')}${line(`🧭 Politique : ${POLICIES[me.policy].name}`, POLICIES[me.policy].fervor)}</div>
         <h3>Dépenses</h3><div class="uses">
-        ${use('✝️', 'Missionnaires', 30, '🔥')}${use('🤲', 'Unité nationale (+10 ⚖️)', 40, '🔥')}${use('🪙', 'Collecte des fidèles', 50, '🔥')}${use('🌟', 'Rayonnement (+25 🤝)', 60, '🔥')}${use('📣', 'Appel aux coreligionnaires', 50, '🔥')}${use('🗡️', 'Armer des insurgés', 40, '🔥')}${use('⚔️', 'Guerre sainte', 60, '🔥')}</div>`;
+        ${use('✝️', 'Missionnaires', 30, '🔥')}${use('🤲', 'Unité nationale (+10 ⚖️)', 40, '🔥')}${use('🪙', 'Collecte des fidèles', 50, '🔥')}${use('🌟', 'Rayonnement (+25 🤝)', 60, '🔥')}${use('📣', 'Appel aux coreligionnaires', 50, '🔥')}${use('🗡️', 'Armer des insurgés', 40, '🔥')}${use('⚔️', 'Guerre sainte', 60, '🔥')}</div>${tutLink('Religion')}`;
     } else if (key === 'stability') {
       title = '⚖️ Stabilité';
       const st = me.stability;
