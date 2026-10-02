@@ -2082,7 +2082,7 @@ export class App {
 
   private showMenu() {
     this.setSpeed(0);
-    this.modal('Menu', `<p class="muted">La partie est sauvegardée automatiquement chaque année.</p><small class="version">Geopolis v${VERSION}</small>`, [
+    this.modal('Menu', `<p class="muted menu-note">La partie est sauvegardée automatiquement chaque année.</p><small class="version menu-version">Geopolis v${VERSION}</small>`, [
       { label: 'Reprendre', a: 'closeModal', primary: true },
       { label: 'Classements', a: 'ledger' },
       { label: 'Sauvegarder', a: 'save' },

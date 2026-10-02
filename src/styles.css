@@ -687,3 +687,6 @@ i.v.down { background: #d9622b; } i.v.up { background: #2f6fdb; } i.v.eq { backg
 
 .cost, .act .c b.cost { color: var(--cost); font-weight: 700; }
 .act:disabled .c b.cost { color: var(--muted); }
+/* Menu : numéro de version à égale distance du texte et des boutons (bas du contenu 12 px + haut du pied 10 px) */
+.menu-note { margin: 0 0 22px; }
+.version.menu-version { margin: 0 auto; }
