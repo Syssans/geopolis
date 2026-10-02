@@ -17,10 +17,10 @@ export const TUTORIAL: TutChapter[] = [
   {
     icon: '👋',
     title: 'Bienvenue dans Geopolis',
-    body: `<p>Vous dirigez un pays réel de <b>janvier 2026 à 2036</b>. Dix ans pour l’enrichir, élever le niveau de vie de sa population et l’emporter sur votre <b>rival</b>.</p>
+    body: `<p>Vous dirigez un pays réel de <b>janvier 2026 à 2036</b>. Dix ans pour l’enrichir, élever le niveau de vie de sa population et remplir vos objectifs.</p>
       ${keys([
         ['🎯 Objectifs', 'des missions propres à votre pays, chacune rapporte des points'],
-        ['🗡️ Rival', 'un pays de puissance comparable à dépasser'],
+        ['🗡️ Rival', 'la plupart des pays en ont un, de puissance comparable, à dépasser ; certains (souvent les petits pays) n’en ont pas'],
         ['🏆 Bilan', 'à la fin, une note de S (exceptionnel) à D'],
       ])}
       <p>Pas de panique : les <b>24 premiers mois</b> sont un répit, personne ne vous attaquera. Profitez-en pour lancer votre économie.</p>
@@ -37,7 +37,7 @@ export const TUTORIAL: TutChapter[] = [
         ['⚖️ Stabilité', 'la cohésion du pays (sur 100)'],
         ['🏙️ Palier', 'le niveau de vie et la satisfaction 😄'],
       ])}
-      <p>Dessous : la barre du <b>rival</b> (rouge = votre écart) et le menu déroulant des <b>objectifs</b> avec votre score.</p>
+      <p>Dessous : la barre du <b>rival</b> si vous en avez un (rouge = votre écart) et le menu déroulant des <b>objectifs</b> avec votre score.</p>
       <p><b>En bas</b> : le mode de carte, 📦 Économie, 🎯 Objectifs, 📰 Journal et ☰ Menu.</p>
       ${tip('Partout dans le jeu, un petit <b>?</b> à côté d’un titre déplie une explication. Touchez à côté d’une fenêtre pour la fermer.')}`,
   },
@@ -204,7 +204,7 @@ export const TUTORIAL: TutChapter[] = [
     icon: '⚡',
     title: 'Crises et rival',
     body: `<p>Des <b>crises</b> surviennent : catastrophes, ultimatums, crise de la dette, révoltes, coups de force de votre rival… Le jeu se met en pause et vous choisissez une réponse ; chaque option affiche ses conséquences.</p>
-      <p>Votre <b>rival</b> est un pays de puissance comparable. La barre sous le bandeau montre votre écart : le dépasser rapporte des points au bilan, et l’éliminer davantage encore.</p>
+      <p>Si votre campagne vous désigne un <b>rival</b>, c’est un pays de puissance comparable. La barre sous le bandeau montre votre écart : le dépasser rapporte des points au bilan, et l’éliminer davantage encore. Sans rival, vos objectifs comptent d’autant plus.</p>
       ${tip('Une crise de la dette se gère mieux tôt : le plan du FMI coupe la dette de moitié mais impose deux ans d’austérité.')}`,
   },
   {
@@ -217,7 +217,7 @@ export const TUTORIAL: TutChapter[] = [
         ['🏙️ Niveau de vie', 'le palier atteint'],
         ['🗺️ Territoire', 'provinces gagnées, lieux saints, détroits'],
         ['💰 Finances et ⚖️ stabilité', 'un trésor sain et un pays calme'],
-        ['🗡️ Rival', 'votre avance sur lui'],
+        ['🗡️ Rival', 'votre avance sur lui, si vous en avez un'],
       ])}
       <p class="tut-ladder">S ≥ 290 · A ≥ 220 · B ≥ 150 · C ≥ 90 · D</p>
       ${tip('Le menu 🎯 Objectifs montre votre score en direct et la progression de chaque mission.')}`,

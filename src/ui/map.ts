@@ -10,6 +10,7 @@ import { HOLY_SITES, RELIGIONS } from '../data/religions';
 import { GOODS, STRAITS, TRADE_NODES } from '../data/trade';
 import { EXTRA_LANES, LAND, lane, laneKey, PORTS, routePath, type LonLat } from '../data/routes';
 import { clock } from '../game/convoys';
+import { FAITH_DEFS, FAITH_OF } from './faith-icons';
 import { rel, sameBloc, warBetween } from '../game/state';
 import { straitClosed } from '../game/trade';
 import type { Convoy, GameState, Id, Pid, World } from '../game/types';
@@ -119,6 +120,24 @@ export class MapView {
       if (g.type === 'Polygon') for (const ring of g.arcs as number[][]) add(ring, g.id);
       else if (g.type === 'MultiPolygon') for (const poly of g.arcs as number[][][]) for (const ring of poly) add(ring, g.id);
     }
+    // Certains voisins ne partagent pas le même arc (deux tracés identiques en double, enclaves comme Brasília) :
+    // on les apparie par leurs extrémités pour ne pas les dessiner comme une côte ou une frontière
+    const ends = new Map<string, number>();
+    topo.arcs.forEach((arc, i) => {
+      if (users[i].length !== 1 || arc.length < 4) return;
+      let x = 0, y = 0;
+      const pts = arc.map(([dx, dy]) => [(x += dx), (y += dy)]);
+      // Clé : tous les points, dans un sens canonique (un arc partagé est parcouru à l'envers par le voisin)
+      const fwd = pts.map((q) => q.join()).join(' ');
+      const rev = pts.slice().reverse().map((q) => q.join()).join(' ');
+      const key = fwd < rev ? fwd : rev;
+      const j = ends.get(key);
+      if (j === undefined) ends.set(key, i);
+      else if (users[j][0] !== users[i][0]) {
+        users[i].push(users[j][0]);
+        users[j].push(users[i][0]);
+      }
+    });
     const [sx, sy] = topo.transform.scale;
     const [tx, ty] = topo.transform.translate;
     const paths = topo.arcs.map((arc) => {
@@ -137,6 +156,15 @@ export class MapView {
   private tradeSig = '';
   private lastSel: number | null = null;
   private view: ZoomTransform = zoomIdentity;
+  private resizePending = false;
+  private svgWidth = 0;
+  private pxPerUnit() {
+    if (!this.svgWidth) {
+      this.svgWidth = this.svg.clientWidth || 390;
+      window.addEventListener('resize', () => (this.svgWidth = 0), { once: true });
+    }
+    return this.svgWidth / W;
+  }
   onSelect: (pid: Pid | null) => void = () => {};
   onConvoy: (id: number) => void = () => {};
 
@@ -147,7 +175,7 @@ export class MapView {
       <pattern id="fire" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
       <rect width="2.5" height="5" fill="#ff9800cc"/></pattern>
       <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#ffffffcc"/></marker></defs>`;
+      <path d="M0,0 L10,5 L0,10 z" fill="#ffffffcc"/></marker>${FAITH_DEFS}</defs>`;
     this.root = el('g', {}, this.svg);
     parent.appendChild(this.svg);
 
@@ -211,13 +239,18 @@ export class MapView {
         this.root.setAttribute('transform', e.transform.toString());
         this.overlayRoot.setAttribute('transform', e.transform.toString());
         this.view = e.transform;
-        if (Math.abs(e.transform.k - this.k) > 0.01) {
-          this.k = e.transform.k;
-          this.updateLabels();
-          this.sizeDots();
-          this.sizeTrade();
-          this.sizeMarkers();
-          this.sizeGoods();
+        // Tailles des textes et icônes : recalculées au plus une fois par image, et seulement si le zoom a vraiment changé
+        if (Math.abs(e.transform.k / this.k - 1) > 0.02 && !this.resizePending) {
+          this.resizePending = true;
+          requestAnimationFrame(() => {
+            this.resizePending = false;
+            this.k = this.view.k;
+            this.updateLabels();
+            this.sizeDots();
+            this.sizeTrade();
+            this.sizeMarkers();
+            this.sizeGoods();
+          });
         }
       });
     select(this.svg).call(this.zoomer);
@@ -421,10 +454,11 @@ export class MapView {
       this.baseClock = t;
     }
     this.showAll = mode === 'trade';
+    this.overlay.style.display = this.showAll ? '' : 'none';
     const keep = new Set<number>();
     for (const c of s.convoys) {
-      const mine = c.from === s.player || c.to === s.player;
-      if (!this.showAll && !mine) continue;
+      // Les convois n'apparaissent que sur la carte du commerce
+      if (!this.showAll) continue;
       keep.add(c.id);
       let d = this.dots.get(c.id);
       const cls = `convoy ${c.from === s.player ? 'mine' : c.to === s.player ? 'inbound' : warBetween(s, s.player, c.from) ? 'enemy' : ''} ${c.id === selConvoy ? 'sel' : ''}`;
@@ -537,10 +571,17 @@ export class MapView {
     g.innerHTML = '';
     if (!wanted) return;
     const caps = CAPITALS as Record<string, { name: string; lon: number; lat: number }>;
-    const add = (x: number, y: number, icon: string, name: string, cls: string) => {
+    const add = (x: number, y: number, icons: string[], name: string, cls: string) => {
       const m = el('g', { class: `marker ${cls}`, transform: `translate(${x.toFixed(2)},${y.toFixed(2)})` }, g);
-      if (icon) el('text', { class: 'm-icon' }, m).textContent = icon;
-      else el('circle', { class: 'm-dot', r: '1' }, m);
+      if (icons.length) {
+        // Icônes vectorielles dorées sur un halo lumineux (côte à côte si le lieu est sacré pour plusieurs fois)
+        const sym = el('g', { class: 'm-sym' }, m);
+        el('circle', { class: 'm-glow', r: String(15 + 10 * (icons.length - 1)) }, sym);
+        icons.forEach((k, i) => {
+          const u = el('use', { href: `#faith-${k}`, x: String(-11 + (i - (icons.length - 1) / 2) * 21), y: '-11', width: '22', height: '22' }, sym);
+          u.setAttribute('class', 'm-faith');
+        });
+      } else el('circle', { class: 'm-dot', r: '1' }, m);
       el('text', { class: 'm-name' }, m).textContent = name;
     };
     if (mode === 'political') {
@@ -551,7 +592,7 @@ export class MapView {
         const [x, y] = c ? (this.projection([c.lon, c.lat]) ?? this.centers[p.id]) : this.centers[p.id];
         // Capitale tombée aux mains d'un autre pays : étoile grisée
         const cls = owner !== p.country ? 'lost' : owner === s.player ? 'own' : '';
-        add(x, y, '', c?.name ?? p.name, `cap ${cls}`);
+        add(x, y, [], c?.name ?? p.name, `cap ${cls}`);
       }
     } else {
       for (const p of this.world.provinces) {
@@ -559,7 +600,7 @@ export class MapView {
           // Position réelle du site (le centre d'une province peut tomber loin, voire en mer)
           const site = HOLY_SITES.find((x) => x.name === h.name);
           const [x, y] = (site && this.projection([site.lon, site.lat])) || this.centers[p.id];
-          const icons = [...new Set(h.religions.map((r) => RELIGIONS[r].icon))].join('');
+          const icons = [...new Set(h.religions.map((r) => FAITH_OF[r]))].slice(0, 4);
           add(x, y, icons, h.name, s.provinces[p.id].owner === s.player ? 'own' : '');
         }
       }
@@ -577,10 +618,10 @@ export class MapView {
       // Les capitales sont nombreuses : leurs noms n'apparaissent qu'en zoomant franchement
       const names = this.k >= (cap ? 12 : 4);
       if (cap) icon.setAttribute('r', ((own ? 2 : 1.4) * f).toFixed(2));
-      else icon.setAttribute('font-size', ((own ? 5.5 : 4.5) * f).toFixed(2));
+      else icon.setAttribute('transform', `scale(${((own ? 0.5 : 0.42) * f).toFixed(3)})`);
       name.style.display = names ? '' : 'none';
       name.setAttribute('font-size', (4.5 * f).toFixed(2));
-      name.setAttribute('dy', ((cap ? 2.5 : 4) * f).toFixed(2));
+      name.setAttribute('dy', ((cap ? 2.5 : 6) * f).toFixed(2));
       name.setAttribute('stroke-width', (1.2 * f).toFixed(2));
     }
   }
@@ -622,7 +663,8 @@ export class MapView {
 
   private sizeGoods() {
     // Taille à l'écran : à la mesure de la province, plafonnée à ~16 px ; masquée si elle serait illisible
-    const pxPerUnit = (this.svg.clientWidth || 390) / W;
+    // Largeur mémorisée : la relire ici forcerait un recalcul complet de la mise en page à chaque zoom
+    const pxPerUnit = this.pxPerUnit();
     for (const g of this.goodsLayer.children as HTMLCollectionOf<SVGGElement>) {
       const [icon, level] = g.children as unknown as SVGTextElement[];
       const screen = Math.min(16, Number(g.dataset.size) * 0.55 * this.k * pxPerUnit);
@@ -695,6 +737,9 @@ export class MapView {
           else fill = ramp((rel(s, me, n.id) + 100) / 200, ['#8e2b2b', '#6b6f76', '#3c8d4f']);
           break;
       }
+      // Éclaircissement calculé ici plutôt qu'en filtre CSS (un filtre par province ralentit le zoom)
+      if (i === selected) fill = mix(fill, '#ffffff', 0.28);
+      else if (p.owner === selOwner) fill = mix(fill, '#ffffff', 0.14);
       // N'écrire dans le DOM que ce qui change : chaque écriture force le navigateur à redessiner la carte
       const cls = `prov${p.owner === me ? ' mine' : ''}${i === selected ? ' selected' : ''}${p.owner === selOwner && i !== selected ? ' sel-nation' : ''}`;
       const occ = p.revolt ? 'fire' : p.occupiedBy ? 'hatch' : '';
@@ -723,7 +768,10 @@ export class MapView {
       this.buildLabels(s);
     }
     this.labelMode(s, mode);
-    this.svg.setAttribute('class', `mode-${mode}`);
+    if (!this.svg.classList.contains(`mode-${mode}`)) {
+      for (const c of [...this.svg.classList]) if (c.startsWith('mode-')) this.svg.classList.remove(c);
+      this.svg.classList.add(`mode-${mode}`);
+    }
     if (mode === 'trade') this.drawTrade(s, selected !== null ? this.world.provinces[selected].node : null);
     else if (this.tradeLayer.childElementCount) this.tradeLayer.innerHTML = '';
     this.drawMarkers(s, mode);

@@ -1,6 +1,6 @@
 {
   "name": "geopolis",
-  "version": "0.1.0",
+  "version": "0.10.2",
   "description": "Jeu mobile de grande stratégie géopolitique contemporaine",
   "scripts": {
     "dev": "vite --host",

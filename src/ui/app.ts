@@ -33,12 +33,20 @@ import { cls, colorSigns, esc, hintify, iconize, money, num, partitive, pct, pop
 import { MapView, type MapMode } from './map';
 import { flagOf } from '../data/flags';
 import { TUTORIAL } from './tutorial';
+import { CHANGELOG, VERSION } from '../version';
 import { applyTheme, themeOf, THEMES } from './themes';
 import { chartPointer, priceChart, sparkline, type RefLine } from './charts';
 import { clock as clockOf } from '../game/convoys';
 
 const SAVE_KEY = 'geopolis-save-v2';
 const SPEEDS = [0, 4000, 2500, 1500, 800]; // ms par mois
+const MODE_SHORT: Record<MapMode, string> = {
+  political: 'Nations, capitales, frontières',
+  trade: 'Nœuds, routes, convois, détroits',
+  diplomatic: 'Vos relations avec le monde',
+  religion: 'Confessions et lieux saints',
+  unrest: 'Risque de révolte',
+};
 const MODES: { id: MapMode; icon: string; name: string; legend: string }[] = [
   { id: 'political', icon: '🗺️', name: 'Politique', legend: 'Les nations et leurs frontières. Votre pays est entouré d’or.' },
   { id: 'religion', icon: '🕊️', name: 'Religions', legend: 'La confession de chaque province : repérez vos minorités et celles de vos voisins.' },
@@ -87,10 +95,10 @@ export class App {
     this.map = new MapView(root, topo, world);
     this.map.onSelect = (pid) => this.onMapTap(pid);
     this.map.onConvoy = (id) => !this.picking && this.showConvoy(id);
-    for (const k of ['hud', 'wars', 'tension', 'bottom', 'legend', 'sheet', 'toasts', 'overlay', 'picker', 'title']) {
+    for (const k of ['hud', 'wars', 'tension', 'bottom', 'modedrop', 'legend', 'sheet', 'toasts', 'overlay', 'picker', 'title']) {
       const d = document.createElement('div');
       d.className = k;
-      if (['overlay', 'picker', 'title', 'hud', 'wars', 'tension', 'bottom', 'legend'].includes(k)) d.style.display = 'none';
+      if (['overlay', 'picker', 'title', 'hud', 'wars', 'tension', 'bottom', 'modedrop', 'legend'].includes(k)) d.style.display = 'none';
       root.appendChild(d);
       this.el[k] = d;
     }
@@ -100,6 +108,7 @@ export class App {
         this.closeModal();
         return;
       }
+      if (this.modeOpen && !(e.target as HTMLElement).closest('.modedrop, .mapbtn')) this.setModeOpen(false);
       if (this.objOpen && !(e.target as HTMLElement).closest('.objdrop')) {
         this.objOpen = false;
         this.renderHud();
@@ -230,7 +239,7 @@ export class App {
     this.s = s;
     this.selected = null;
     this.report = null;
-    for (const k of ['hud', 'wars', 'tension', 'bottom', 'legend']) this.el[k].style.display = '';
+    for (const k of ['hud', 'wars', 'tension', 'bottom', 'modedrop', 'legend']) this.el[k].style.display = '';
     this.el.title.style.display = 'none';
     this.el.picker.style.display = 'none';
     this.picking = false;
@@ -290,6 +299,7 @@ export class App {
     this.el.title.innerHTML = `
       <h1>GEOPOLIS</h1>
       <p>Commerce, foi et puissance · 2026</p>
+      <button class="version" data-a="news">v${VERSION} · nouveautés</button>
       ${hasSave ? `<button class="btn primary" data-a="continue">Continuer la partie</button>` : ''}
       <button class="btn ${hasSave ? '' : 'primary'}" data-a="newgame">Nouvelle partie</button>
       <button class="btn" data-a="help">Comment jouer</button>`;
@@ -365,6 +375,7 @@ export class App {
       if (sv) this.start(sv);
     };
     h.help = () => this.showHelp();
+    h.news = () => this.showNews();
     h.tut = (p) => this.showHelp(Number(p));
     h.tutToc = () => this.showTutToc();
     h.tutEnd = () => {
@@ -387,10 +398,11 @@ export class App {
     h.closeModal = () => this.closeModal();
     h.speed = (v) => this.setSpeed(Number(v));
     h.toggle = () => this.setSpeed(this.speed ? 0 : this.lastSpeed);
-    h.modes = () => this.showModes();
+    h.modes = () => this.setModeOpen(!this.modeOpen);
     h.explain = (k) => this.explain(k);
     h.mode = (m) => {
       this.mode = m as MapMode;
+      this.setModeOpen(false);
       this.closeModal();
       this.renderAll();
     };
@@ -413,7 +425,7 @@ export class App {
       this.save(true);
       this.closeModal();
       this.el.sheet.classList.remove('open');
-      for (const k of ['hud', 'wars', 'tension', 'bottom', 'legend']) this.el[k].style.display = 'none';
+      for (const k of ['hud', 'wars', 'tension', 'bottom', 'modedrop', 'legend']) this.el[k].style.display = 'none';
       this.showTitle();
     };
     h.log = () => this.showLog();
@@ -796,7 +808,7 @@ export class App {
     const unread = s.log.length - this.seenLog;
     patch(
       this.el.bottom,
-      `<button class="mapbtn" data-a="modes"><span>${MODES.find((m) => m.id === this.mode)!.icon}</span><span class="lbl">Carte<br><b>${MODES.find((m) => m.id === this.mode)!.name}</b></span></button>
+      `<button class="mapbtn ${this.modeOpen ? 'open' : ''}" data-a="modes"><span>${MODES.find((m) => m.id === this.mode)!.icon}</span><span class="lbl">Carte<br><b>${MODES.find((m) => m.id === this.mode)!.name}</b></span><i class="chev">▴</i></button>
       <span class="spacer"></span>
       <button class="fab" data-a="contracts"><span>📦</span><small>Économie</small>${s.offers.length ? `<span class="badge">${s.offers.length}</span>` : ''}</button>
       <button class="fab" data-a="objectives"><span>🎯</span><small>Objectifs</small></button>
@@ -1313,6 +1325,7 @@ export class App {
 
   private modal(title: string, html: string, buttons: { label: string; hint?: string; a: string; p?: string; primary?: boolean; disabled?: boolean }[]) {
     const o = this.el.overlay;
+    if (this.modeOpen) this.setModeOpen(false);
     // Une crise ou une fin de partie exige une réponse : pas de fermeture en touchant à côté
     this.modalSticky = buttons.some((x) => x.a === 'event' || x.a === 'sandbox') || buttons.every((x) => x.a === 'quit');
     o.style.display = '';
@@ -1353,12 +1366,19 @@ export class App {
     }
   }
 
-  private showModes() {
-    this.modal(
-      'Mode de carte',
-      MODES.map((m) => `<button class="btn ${this.mode === m.id ? 'primary' : ''}" data-a="mode" data-p="${m.id}" style="width:100%;margin-bottom:6px">${m.icon} ${m.name}<small>${esc(m.legend)}</small></button>`).join(''),
-      [{ label: 'Fermer', a: 'closeModal' }],
+  private modeOpen = false;
+
+  /** Menu déroulant des cartes, au-dessus du bouton « Carte » : s'ouvre et se ferme en douceur. */
+  private setModeOpen(open: boolean) {
+    this.modeOpen = open;
+    const d = this.el.modedrop;
+    patch(
+      d,
+      `<div class="md-list">${MODES.map((m, i) => `<button class="md-item ${m.id === this.mode ? 'on' : ''}" data-a="mode" data-p="${m.id}" style="--i:${MODES.length - 1 - i}"><span class="md-ic">${m.icon}</span><span class="md-t"><b>${m.name}</b><small>${MODE_SHORT[m.id]}</small></span>${m.id === this.mode ? '<i>✓</i>' : ''}</button>`).join('')}</div>`,
     );
+    void d.offsetWidth; // départ de l'animation depuis l'état fermé
+    d.classList.toggle('open', open);
+    this.el.bottom.querySelector('.mapbtn')?.classList.toggle('open', open);
   }
 
   /** Confiance des partenaires : ce qui ampute les exportations et pourquoi. */
@@ -1978,13 +1998,18 @@ export class App {
 
   private showMenu() {
     this.setSpeed(0);
-    this.modal('Menu', '<p class="muted">La partie est sauvegardée automatiquement chaque année.</p>', [
+    this.modal('Menu', `<p class="muted">La partie est sauvegardée automatiquement chaque année.</p><button class="version" data-a="news">Geopolis v${VERSION} · nouveautés</button>`, [
       { label: 'Reprendre', a: 'closeModal', primary: true },
       { label: 'Classements', a: 'ledger' },
       { label: 'Sauvegarder', a: 'save' },
       { label: 'Comment jouer', a: 'help' },
       { label: 'Quitter vers le menu', a: 'quit' },
     ]);
+  }
+
+  private showNews() {
+    const html = CHANGELOG.map((v, i) => `<div class="news ${i ? '' : 'latest'}"><div class="mh"><b>v${v.version}</b><small>${v.date}</small></div><ul>${v.items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
+    this.modal('🆕 Nouveautés', html, [{ label: 'Fermer', a: 'closeModal', primary: true }]);
   }
 
   /** Fiche d'un convoi : origine, destination, cargaison, itinéraire ; interception possible. */
