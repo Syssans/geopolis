@@ -1044,9 +1044,9 @@ export class App {
         ${this.action('prospect', '⛏️ Prospecter', `1 chance sur 3 : pétrole, gaz, métaux… · 💰${money(E.prospectCost(s, w, pid))} · ${E.PROSPECT_MONTHS} mois`, { disabled: deposit ? 'Gisement déjà exploité' : cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
       </div>
       <h3>🔄 Changer de production</h3>
+      <p class="hint">Pendant les ${E.CONVERT_MONTHS} mois de chantier, la province produit deux fois moins ; ensuite son niveau de modernisation repart à zéro. Les valeurs ci-dessous sont estimées au cours du jour, au niveau 0.</p>
       <div class="conv-cost ${this.me.treasury < conv ? 'short' : ''}"><div><small>Coût</small><b>💰 ${money(conv)}</b></div><div><small>Durée</small><b>🏗️ ${E.CONVERT_MONTHS} mois</b></div><div><small>Ensuite</small><b>${lvl ? `★ ${lvl} → 0` : 'niveau 0'}</b></div></div>
       ${this.me.treasury < conv ? `<div class="verdict bad">Trésor insuffisant : il manque ${money(conv - this.me.treasury)}.</div>` : ''}
-      <p class="hint">Pendant les ${E.CONVERT_MONTHS} mois de chantier, la province produit deux fois moins ; ensuite son niveau de modernisation repart à zéro. Les valeurs ci-dessous sont estimées au cours du jour, au niveau 0.</p>
       <div class="conv-list">${targets.map((c) => {
         const locked = info.dev < c.minDev;
         const ok = !locked && !cant && this.me.treasury >= conv;

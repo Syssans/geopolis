@@ -632,7 +632,7 @@ button.link.danger { color: var(--bad); }
 .news { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
 .news.latest { border-color: var(--gold); }
 .news ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.45; }
-.conv-cost { display: grid; grid-template-columns: repeat(3, 1fr); margin: 2px 0 8px; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); padding: 6px 0; }
+.conv-cost { display: grid; grid-template-columns: repeat(3, 1fr); margin: 2px 0 10px; padding: 2px 0; }
 .conv-cost > div { display: flex; flex-direction: column; padding: 0 8px; }
 .conv-cost > div + div { border-left: 1px solid var(--line); }
 .conv-cost small { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
