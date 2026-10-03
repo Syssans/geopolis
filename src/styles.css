@@ -693,3 +693,14 @@ i.v.down { background: #d9622b; } i.v.up { background: #2f6fdb; } i.v.eq { backg
 /* Accueil : numéro de version à égale distance du sous-titre et des boutons */
 .title p { margin-bottom: 0; }
 .version.title-version { margin: 22px auto; }
+
+/* ——— Bandeau « jouer en plein écran » (navigateur mobile uniquement) ——— */
+.install-banner { position: relative; display: flex; gap: 10px; align-items: flex-start; width: 100%; max-width: 320px; margin-top: 14px; padding: 10px 34px 10px 12px;
+  background: var(--btn); border: 1px solid var(--line); border-left: 3px solid var(--gold); border-radius: 10px; text-align: left; }
+.install-banner .ib-ic { font-size: 22px; line-height: 1.2; }
+.install-banner b { font-size: 13px; }
+.install-banner small { display: block; font-size: 12px; color: var(--muted); line-height: 1.45; margin-top: 2px; }
+.install-banner small b { color: var(--text); font-size: 12px; }
+.install-banner .ib-share { width: 15px; height: 15px; vertical-align: -2px; color: #4da3ff; }
+.install-banner .ib-go { margin-top: 8px; padding: 6px 14px; width: auto; }
+.install-banner .ib-x { position: absolute; top: 6px; right: 6px; background: none; border: none; color: var(--muted); font-size: 14px; padding: 4px 6px; cursor: pointer; }

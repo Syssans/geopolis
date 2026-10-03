@@ -2,9 +2,10 @@
  * Version du jeu : 0.<mois>.<jour> de la mise à jour (0.10.2 = 2 octobre).
  * Seules les mises à jour importantes sont notées ici (usage interne, non affiché dans le jeu).
  */
-export const VERSION = '0.10.2';
+export const VERSION = '0.10.3';
 
 export const CHANGELOG: { version: string; date: string; items: string[] }[] = [
+  { version: '0.10.3', date: '3 octobre 2026', items: ['Bandeau « jouer en plein écran » sur navigateur mobile (ajout à l’écran d’accueil)'] },
   {
     version: '0.10.2',
     date: '2 octobre 2026',

@@ -5,7 +5,7 @@ Il est centré sur le **commerce** et les **conflits religieux**, sur une carte 
 
 **Jouer en ligne :** https://syssans.github.io/geopolis/ (une fois GitHub Pages activé, voir plus bas).
 
-Version actuelle : **0.10.2** (numérotation 0.<mois>.<jour> de la mise à jour ; mises à jour importantes notées dans `src/version.ts`).
+Version actuelle : **0.10.3** (numérotation 0.<mois>.<jour> de la mise à jour ; mises à jour importantes notées dans `src/version.ts`).
 
 ## Lancer le jeu en local
 

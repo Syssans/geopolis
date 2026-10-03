@@ -140,6 +140,11 @@ export class App {
       const t = e.target as HTMLSelectElement;
       if (t.dataset.c) this.handlers[t.dataset.c]?.(`${t.dataset.p ?? ''}|${t.value}`);
     });
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      this.installPrompt = e as Event & { prompt: () => Promise<void> };
+      if (this.el.title.style.display !== 'none') this.showTitle();
+    });
     this.registerHandlers();
     this.initSheetDrag();
     this.showTitle();
@@ -307,7 +312,36 @@ export class App {
       <small class="version title-version">v${VERSION}</small>
       ${hasSave ? `<button class="btn primary" data-a="continue">Continuer la partie</button>` : ''}
       <button class="btn ${hasSave ? '' : 'primary'}" data-a="newgame">Nouvelle partie</button>
-      <button class="btn" data-a="help">Comment jouer</button>`;
+      <button class="btn" data-a="help">Comment jouer</button>
+      ${this.installBanner()}`;
+  }
+
+  /**
+   * Bandeau « jouer en plein écran » : seulement dans le navigateur d'un téléphone ou d'une tablette,
+   * jamais une fois le jeu ajouté à l'écran d'accueil (il s'ouvre alors sans barre de navigation).
+   */
+  private installBanner(): string {
+    const nav = navigator as Navigator & { standalone?: boolean };
+    const standalone = nav.standalone === true || matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
+    const ua = navigator.userAgent;
+    const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    const android = /Android/.test(ua);
+    let hidden = false;
+    try {
+      hidden = localStorage.getItem('geopolis-install-hidden') === '1';
+    } catch {
+      /* stockage indisponible : on affiche */
+    }
+    if (standalone || hidden || !(ios || android)) return '';
+    const share = '<svg class="ib-share" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    const how = ios
+      ? `Touchez ${share} <b>Partager</b>, puis <b>Sur l’écran d’accueil</b>.`
+      : this.installPrompt
+        ? 'Installez le jeu sur votre téléphone en un geste.'
+        : 'Ouvrez le menu <b>⋮</b> du navigateur, puis <b>Ajouter à l’écran d’accueil</b>.';
+    return `<div class="install-banner"><span class="ib-ic">📲</span><div><b>Jouer en plein écran</b><small>${how} Le jeu s’ouvrira alors sans barre de navigation.</small>
+      ${!ios && this.installPrompt ? '<button class="btn primary ib-go" data-a="install">Installer</button>' : ''}</div>
+      <button class="ib-x" data-a="installHide" aria-label="Masquer">✕</button></div>`;
   }
 
   private showPicker(filter = '') {
@@ -380,6 +414,21 @@ export class App {
       if (sv) this.start(sv);
     };
     h.help = () => this.showHelp();
+    h.installHide = () => {
+      try {
+        localStorage.setItem('geopolis-install-hidden', '1');
+      } catch {
+        /* rien */
+      }
+      this.el.title.querySelector('.install-banner')?.remove();
+    };
+    h.install = async () => {
+      const p = this.installPrompt;
+      if (!p) return;
+      this.installPrompt = null;
+      await p.prompt();
+      this.el.title.querySelector('.install-banner')?.remove();
+    };
     h.tut = (p) => this.showHelp(Number(p));
     h.tutToc = () => this.showTutToc();
     h.tutEnd = () => {
@@ -2031,6 +2080,8 @@ export class App {
   }
 
   private tutPage = 0;
+  /** Invitation à installer (Android/Chrome), gardée pour le bouton « Installer » du bandeau. */
+  private installPrompt: (Event & { prompt: () => Promise<void> }) | null = null;
 
   /** Tutoriel en chapitres : navigation précédent/suivant, sommaire, raccourci vers l'écran concerné. */
   private showHelp(page = this.tutPage) {
