@@ -585,9 +585,9 @@ button.link.danger { color: var(--bad); }
 .tut-toc-row b { flex: 1; font-weight: 500; font-size: 14px; }
 .tut-toc-row i { font-style: normal; color: var(--muted); }
 .tut-toc-row.on { border-color: var(--gold); }
-.modal footer:has([data-a=tutToc]) { flex-direction: row; flex-wrap: wrap; }
-.modal footer:has([data-a=tutToc]) .btn { flex: 1; }
-.modal footer:has([data-a=tutToc]) .btn.primary { flex-basis: 100%; }
+.modal.tut footer { flex-direction: row; flex-wrap: wrap; }
+.modal.tut footer .btn { flex: 1; }
+.modal.tut footer .btn.primary { flex-basis: 100%; }
 
 /* Tutoriel : fenêtre de taille fixe, pages qui glissent */
 .modal.tut { height: min(720px, 88%); }
@@ -704,3 +704,4 @@ i.v.down { background: #d9622b; } i.v.up { background: #2f6fdb; } i.v.eq { backg
 .install-banner .ib-share { width: 15px; height: 15px; vertical-align: -2px; color: #4da3ff; }
 .install-banner .ib-go { margin-top: 8px; padding: 6px 14px; width: auto; }
 .install-banner .ib-x { position: absolute; top: 6px; right: 6px; background: none; border: none; color: var(--muted); font-size: 14px; padding: 4px 6px; cursor: pointer; }
+.tut-toc-row .tut-pg { color: var(--muted); font-size: 11px; white-space: nowrap; }

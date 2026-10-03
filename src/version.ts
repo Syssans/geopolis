@@ -5,7 +5,7 @@
 export const VERSION = '0.10.3';
 
 export const CHANGELOG: { version: string; date: string; items: string[] }[] = [
-  { version: '0.10.3', date: '3 octobre 2026', items: ['Bandeau « jouer en plein écran » sur navigateur mobile (ajout à l’écran d’accueil)'] },
+  { version: '0.10.3', date: '3 octobre 2026', items: ['Bandeau « jouer en plein écran » sur navigateur mobile (ajout à l’écran d’accueil)', 'Tutoriel : sommaire en page 2, développement des provinces expliqué'] },
   {
     version: '0.10.2',
     date: '2 octobre 2026',

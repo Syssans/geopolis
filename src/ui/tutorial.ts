@@ -7,6 +7,8 @@ export interface TutChapter {
   title: string;
   body: string;
   go?: { label: string; a: string; p?: string };
+  /** Page sommaire : la liste des chapitres est générée à l'affichage. */
+  toc?: boolean;
 }
 
 const tip = (t: string) => `<div class="tut-tip">💡 ${t}</div>`;
@@ -25,6 +27,12 @@ export const TUTORIAL: TutChapter[] = [
       ])}
       <p>Pas de panique : les <b>24 premiers mois</b> sont un répit, personne ne vous attaquera. Profitez-en pour lancer votre économie.</p>
       ${tip('Ce tutoriel se lit dans l’ordre en 5 minutes. Vous pouvez le rouvrir à tout moment depuis ☰ Menu → Comment jouer.')}`,
+  },
+  {
+    icon: '📑',
+    title: 'Sommaire',
+    body: '<p>Touchez un chapitre pour y aller directement, ou continuez page par page.</p>',
+    toc: true,
   },
   {
     icon: '🖥️',
@@ -144,14 +152,22 @@ export const TUTORIAL: TutChapter[] = [
   {
     icon: '🏭',
     title: 'Vos provinces',
-    body: `<p>Chaque province produit une marchandise. Touchez une de vos provinces pour agir :</p>
+    body: `<p>Chaque province a un <b>niveau de développement</b> (« dév. » dans les fiches) : sa richesse, ses villes, ses infrastructures et sa main-d’œuvre. C’est le chiffre le plus important d’une province :</p>
+      ${keys([
+        ['🏭 Production', 'une province produit chaque mois 5 % de son développement en marchandises (avant modernisation)'],
+        ['🔄 Reconversions', 'les productions avancées exigent un minimum : textile 8, industrie 15, semi-conducteurs 25, finance 30'],
+        ['⚓ Poids commercial', 'le développement fait votre poids dans le nœud de la province (+30 % si elle est côtière)'],
+        ['🍞 Besoins et État', 'plus votre pays est développé, plus sa population consomme et plus l’État coûte cher'],
+        ['🏆 Score', 'le développement gagné ou perdu compte dans la ligne « Territoire » du bilan'],
+      ])}
+      <p><b>Comment l’augmenter ?</b> Le développement d’une province est fixe : il reflète la réalité du pays. Votre développement total ne grandit qu’en gagnant des provinces — annexions à la paix, territoires qui vous rejoignent après une insurrection. Pour produire davantage <i>sans</i> conquérir, modernisez :</p>
       ${keys([
         ['⬆️ Moderniser', '12 mois de travaux, +35 % de production par niveau (★ jusqu’à ★★★)'],
         ['🔄 Reconvertir', '18 mois pour produire une marchandise plus chère (le niveau repart à zéro)'],
-        ['⛏️ Prospecter', '6 mois de forage pour découvrir une ressource'],
+        ['⛏️ Prospecter', '6 mois de forage pour découvrir une ressource du sous-sol'],
       ])}
-      <p>Sur la carte ⚓ Commerce, l’émoji de chaque province indique sa production, et le chiffre son niveau de modernisation.</p>
-      ${tip('Modernisez en priorité les provinces qui produisent ce qui est cher ou ce qui manque à votre population.')}`,
+      <p>Touchez une de vos provinces pour agir. Sur la carte ⚓ Commerce, l’émoji de chaque province indique sa production, et le chiffre son niveau de modernisation.</p>
+      ${tip('Modernisez d’abord les provinces les plus développées : +35 % sur une grosse province rapporte bien plus que sur une petite.')}`,
   },
   {
     icon: '⚓',

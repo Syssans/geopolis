@@ -430,7 +430,7 @@ export class App {
       this.el.title.querySelector('.install-banner')?.remove();
     };
     h.tut = (p) => this.showHelp(Number(p));
-    h.tutToc = () => this.showTutToc();
+    h.tutToc = () => this.showHelp(Math.max(0, TUTORIAL.findIndex((c) => c.toc)));
     h.tutEnd = () => {
       this.tutPage = 0;
       this.closeModal();
@@ -2092,14 +2092,15 @@ export class App {
     const n = TUTORIAL.length;
     const inGame = !!this.s && !this.picking;
     const dots = TUTORIAL.map((x, i) => `<button class="tut-dot ${i === this.tutPage ? 'on' : i < this.tutPage ? 'done' : ''}" data-a="tut" data-p="${i}" aria-label="${esc(x.title)}"></button>`).join('');
+    const toc = c.toc ? `<div class="tut-toc">${TUTORIAL.map((x, i) => (x.toc ? '' : `<button class="tut-toc-row" data-a="tut" data-p="${i}"><span>${x.icon}</span><b>${esc(x.title)}</b><small class="tut-pg">p. ${i + 1}</small><i>›</i></button>`)).join('')}</div>` : '';
     const html = `<div class="tut-dots">${dots}</div>
-      <div class="tut-body">${c.body}</div>
+      <div class="tut-body">${c.body}${toc}</div>
       ${c.go && inGame ? `<button class="act wide tut-go" data-a="tutGo"><span class="t">${c.go.label}</span><span class="c">ouvre l’écran dans votre partie</span></button>` : ''}`;
     const buttons: Parameters<App['modal']>[2] = [];
     if (this.tutPage < n - 1) buttons.push({ label: `Suivant › ${TUTORIAL[this.tutPage + 1].icon}`, hint: esc(TUTORIAL[this.tutPage + 1].title), a: 'tut', p: String(this.tutPage + 1), primary: true });
     else buttons.push({ label: 'Terminer', a: 'tutEnd', primary: true });
     if (this.tutPage > 0) buttons.push({ label: '‹ Précédent', a: 'tut', p: String(this.tutPage - 1) });
-    buttons.push({ label: '📑 Sommaire', a: 'tutToc' });
+    if (!c.toc) buttons.push({ label: '📑 Sommaire', a: 'tutToc' });
     this.modal(`${c.icon} ${esc(c.title)} <small class="tut-count">${this.tutPage + 1}/${n}</small>`, html, buttons);
     this.el.overlay.querySelector('.content')?.scrollTo(0, 0);
     // Même taille de fenêtre d'une page à l'autre ; le contenu glisse dans le sens de la lecture
@@ -2121,14 +2122,6 @@ export class App {
       const dy = e.changedTouches[0].clientY - y0;
       if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) this.showHelp(this.tutPage + (dx < 0 ? 1 : -1));
     });
-  }
-
-  private showTutToc() {
-    const html = `<div class="tut-toc">${TUTORIAL.map((c, i) => `<button class="tut-toc-row ${i === this.tutPage ? 'on' : ''}" data-a="tut" data-p="${i}"><span>${c.icon}</span><b>${i + 1}. ${esc(c.title)}</b><i>›</i></button>`).join('')}</div>`;
-    const fromTut = !!this.el.overlay.querySelector('.modal.tut');
-    this.modal('📖 Comment jouer', html, [{ label: 'Fermer', a: 'closeModal', primary: true }]);
-    this.tutModal(fromTut ? 'tut-fade' : 'tut-open');
-    this.el.overlay.querySelector('.tut-toc-row.on')?.scrollIntoView({ block: 'center' });
   }
 
   private showMenu() {
