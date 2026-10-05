@@ -5,7 +5,7 @@ import { blockedStraits, estimate, escortsUsed, PIRACY, type ContractNews } from
 import { pushEvent } from './events';
 import { monthlyIncome } from './missions';
 import { pick, rand } from './rng';
-import { addRel, alive, clamp, embargoes, inReach, log, neighbours, nm, owned, power, rel, sameBloc, warBetween } from './state';
+import { addRel, alive, clamp, embargoes, inReach, log, neighbours, nm, owned, power, rel, sameBloc, warBetween, provDev } from './state';
 import { straitOwner } from './trade';
 import { declareWar, guarantors } from './war';
 import type { GameState, PendingEvent, World, Id } from './types';
@@ -207,7 +207,7 @@ export function marketCrisis(s: GameState, w: World) {
   const counts: Record<string, number> = {};
   for (const pid of owned(s, s.player)) {
     const g = s.provinces[pid].good ?? w.provinces[pid].good;
-    counts[g] = (counts[g] ?? 0) + w.provinces[pid].dev;
+    counts[g] = (counts[g] ?? 0) + provDev(s, w, pid);
   }
   const good = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
   if (!good) return;

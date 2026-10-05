@@ -41,6 +41,8 @@ export interface Province {
   supportMonths: number;
   good?: Good; // production modifiée (événement, reconversion, prospection)
   level?: number; // niveau d'équipement 0-3 (+35 % de production par niveau)
+  devGain?: number; // développement gagné (ou perdu) depuis 2026, selon le niveau de vie
+  devProgress?: number; // progression vers le prochain point de développement (−1 à 1)
   works?: { kind: 'upgrade' | 'convert' | 'prospect'; months: number; good?: Good };
 }
 

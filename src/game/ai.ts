@@ -5,7 +5,7 @@ import {
 } from './actions';
 import { pushEvent, termsToParams } from './events';
 import { pick, rand, shuffle } from './rng';
-import { alive, atWar, embargoes, hasTrade, inReach, neighbours, owned, power, rel, sameBloc, warsOf } from './state';
+import { alive, atWar, embargoes, hasTrade, inReach, neighbours, owned, power, rel, sameBloc, warsOf, provDev } from './state';
 import { STRAITS } from '../data/trade';
 import { homeNode, straitOwner, upstreamOf } from './trade';
 import { mayAttackPlayer } from './crises';
@@ -58,7 +58,7 @@ function faith(s: GameState, w: World, n: Nation) {
   if (n.stability < 40 && n.fervor >= 40) nationalUnity(s, n.id);
   if (n.missionary === null && n.policy !== 'tolerance' && n.fervor >= 30 && rand(s) < 0.2) {
     const cands = owned(s, n.id).filter((pid) => s.provinces[pid].religion !== n.religion && !s.provinces[pid].revolt);
-    const target = cands.sort((a, b) => w.provinces[a].dev - w.provinces[b].dev)[0];
+    const target = cands.sort((a, b) => provDev(s, w, a) - provDev(s, w, b))[0];
     if (target !== undefined) sendMissionary(s, n.id, target);
   }
   if (n.policy === 'proselytisme' && n.fervor >= 80 && rand(s) < 0.03) {
@@ -199,7 +199,7 @@ export function aiTerms(s: GameState, w: World, war: War, winner: Id): PeaceTerm
     // Priorité aux provinces de même religion que le vainqueur, puis aux plus riches
     const W = s.nations[winner];
     const cands = annexable(s, war, winner).sort(
-      (a, b) => Number(s.provinces[b].religion === W.religion) - Number(s.provinces[a].religion === W.religion) || w.provinces[b].dev - w.provinces[a].dev,
+      (a, b) => Number(s.provinces[b].religion === W.religion) - Number(s.provinces[a].religion === W.religion) || provDev(s, w, b) - provDev(s, w, a),
     );
     for (const pid of cands) {
       const trial = { ...t, annex: [...t.annex, pid] };

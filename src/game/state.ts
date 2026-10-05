@@ -74,7 +74,7 @@ function index(s: GameState): Index {
       if (arr) arr.push(i);
       else ix!.owned.set(p.owner, [i]);
       const info = worldRef!.provinces[i];
-      ix!.dev.set(p.owner, (ix!.dev.get(p.owner) ?? 0) + info.dev);
+      ix!.dev.set(p.owner, (ix!.dev.get(p.owner) ?? 0) + info.dev + (p.devGain ?? 0));
       ix!.pop.set(p.owner, (ix!.pop.get(p.owner) ?? 0) + info.pop);
     });
     indexes.set(s, ix);
@@ -269,4 +269,9 @@ export function loseForces(n: Nation, kind: 'army' | 'navy', amount: number) {
     a[kind] -= lost;
   }
   if (n[kind] <= 0) a[kind] = 0;
+}
+
+/** Développement actuel d'une province : sa valeur de départ plus ce qu'elle a gagné avec le niveau de vie. */
+export function provDev(s: GameState, w: World, pid: Pid): number {
+  return w.provinces[pid].dev + (s.provinces[pid].devGain ?? 0);
 }

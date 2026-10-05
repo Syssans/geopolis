@@ -1,6 +1,6 @@
 import { GOODS, type Good } from '../data/trade';
 import { rand } from './rng';
-import { alive, log, owned } from './state';
+import { alive, clamp, log, owned, provDev } from './state';
 import { goodOf, output, production, unitPrice } from './trade';
 import { contractFactor, marketFactor } from './contracts';
 import type { GameState, Id, Pid, World } from './types';
@@ -29,12 +29,12 @@ export interface Result {
 
 /** Valeur de référence d'une province (hors aléas d'occupation), base des coûts. */
 function baseValue(s: GameState, w: World, pid: Pid) {
-  return w.provinces[pid].dev * 0.05 * (1 + 0.35 * (s.provinces[pid].level ?? 0)) * unitPrice(s, goodOf(s, w, pid));
+  return provDev(s, w, pid) * 0.05 * (1 + 0.35 * (s.provinces[pid].level ?? 0)) * unitPrice(s, goodOf(s, w, pid));
 }
 
 /** Valeur mensuelle brute de la province au niveau 0. */
 function value0(s: GameState, w: World, pid: Pid) {
-  return w.provinces[pid].dev * 0.05 * unitPrice(s, goodOf(s, w, pid));
+  return provDev(s, w, pid) * 0.05 * unitPrice(s, goodOf(s, w, pid));
 }
 
 /** Coût d'une modernisation : 3, 4,5 puis 6 mois de valeur brute (rentable en 2 à 4 ans selon le débouché). */
@@ -90,7 +90,7 @@ export function convert(s: GameState, w: World, id: Id, pid: Pid, good: Good): R
   if (err) return { ok: false, msg: err };
   const opt = CONVERSIONS.find((c) => c.good === good);
   if (!opt) return { ok: false, msg: 'Reconversion impossible' };
-  if (w.provinces[pid].dev < opt.minDev) return { ok: false, msg: `Développement ${opt.minDev} requis` };
+  if (provDev(s, w, pid) < opt.minDev) return { ok: false, msg: `Développement ${opt.minDev} requis` };
   if (goodOf(s, w, pid) === good) return { ok: false, msg: 'La province produit déjà cela' };
   const cost = convertCost(s, w, pid);
   if (s.nations[id].treasury < cost) return { ok: false, msg: 'Trésor insuffisant' };
@@ -163,4 +163,46 @@ export function producers(s: GameState, w: World, id: Id, good: Good): Pid[] {
   return owned(s, id)
     .filter((pid) => goodOf(s, w, pid) === good)
     .sort((a, b) => output(s, w, b) - output(s, w, a));
+}
+
+/**
+ * Développement des provinces : il suit le niveau de vie. Une population bien servie (palier élevé, besoins
+ * satisfaits, pays stable) investit, se forme et s'urbanise : ses provinces gagnent des points de développement.
+ * Pénuries, révoltes et occupation les font reculer. Croissance plafonnée à +50 % du développement de départ.
+ */
+export const DEV_RATE = [0, 0.015, 0.022, 0.03, 0.038, 0.046]; // progression mensuelle selon le palier (1 à 5)
+
+export function monthlyDevelopment(s: GameState, w: World) {
+  for (const n of alive(s)) {
+    const player = n.id === s.player;
+    const sat = player ? (s.prosperity?.satisfaction ?? 1) : 0.85;
+    const blocked = player && n.treasury < 0;
+    // Progression proportionnelle à la satisfaction (nulle sous 70 %) et à la stabilité (nulle sous 35)
+    const fSat = clamp((sat - 0.7) / 0.2, 0, 1.25);
+    const fStab = clamp(0.4 + (n.stability - 35) / 50, 0, 1.4);
+    let rate = blocked || n.stability < 35 ? 0 : DEV_RATE[n.tier ?? 3] * fSat * fStab;
+    if (sat < 0.6 || n.stability < 25) rate = -0.02;
+    if (!rate) continue;
+    for (const pid of owned(s, n.id)) {
+      const p = s.provinces[pid];
+      const base = w.provinces[pid].dev;
+      let r = rate;
+      if (p.revolt || p.occupiedBy) r = -0.03;
+      else if (p.unrest > 60) r = Math.min(r, 0);
+      if (!r) continue;
+      p.devProgress = (p.devProgress ?? 0) + r * (0.6 + 0.4 * Math.min(1, base / 20)); // les grandes villes attirent davantage
+      const gain = p.devGain ?? 0;
+      if (p.devProgress >= 1) {
+        p.devProgress -= 1;
+        if (gain < Math.ceil(base * 0.5)) {
+          p.devGain = gain + 1;
+          if (player && (p.devGain === 1 || p.devGain % 3 === 0)) log(s, `🏙️ ${w.provinces[pid].name} se développe (dév. ${base + p.devGain}).`, 'info', [s.player]);
+        }
+      } else if (p.devProgress <= -1) {
+        p.devProgress += 1;
+        if (base + gain > 1) p.devGain = gain - 1;
+      }
+      p.devProgress = clamp(p.devProgress, -1, 1);
+    }
+  }
 }

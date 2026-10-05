@@ -5,7 +5,7 @@ import { fervorGain, holySitesOf, missionSpeed, POLICIES, unrestTarget } from '.
 import { influenceGain } from '../game/tick';
 import { createGame, SAVE_VERSION, START_EMBARGOES } from '../game/setup';
 import {
-  MONTHS, alive, dateLabel, devOf, hasTrade, embargoes, inReach, neighbours, nm, owned, popOf, power, powerRank, rel, sameBloc,
+  MONTHS, alive, dateLabel, devOf, hasTrade, embargoes, inReach, neighbours, nm, owned, popOf, power, powerRank, provDev, rel, sameBloc,
   warBetween, warsOf, desecratedHolySites,
 } from '../game/state';
 import { monthEconomy, monthPolitics } from '../game/tick';
@@ -1027,7 +1027,7 @@ export class App {
     if (owner.missionary === pid) badges.push(`<span class="badge-i ally">Missionnaires ${num(owner.missionProgress)} %</span>`);
     let html = `<div class="badges">${badges.join('')}</div>
       <div class="stats">
-        ${stat('Développement', String(info.dev))}
+        ${stat('Développement', `${provDev(s, this.world, pid)}${p.devGain ? ` <small class="${cls(p.devGain)}">${p.devGain > 0 ? '+' : '−'}${Math.abs(p.devGain)} depuis 2026</small>` : ''}`)}
         ${stat('Population', pop(info.pop))}
         ${mine ? '' : `${stat('Production', `${this.gi((p.good ?? info.good) as keyof typeof GOODS)} ${good.name} ${'★'.repeat(p.level ?? 0)}`)}
         ${stat('Quantité / mois', `${num(output(s, this.world, pid), 2)} ${esc(good.unit)}`)}
@@ -1087,7 +1087,7 @@ export class App {
     const targets = E.CONVERSIONS.filter((c) => c.good !== current);
     const deposit = ['petrole', 'gaz', 'metaux', 'terres_rares'].includes(current);
     const cant = p.occupiedBy || p.revolt ? 'Province instable' : undefined;
-    const base = info.dev * 0.05; // unités au niveau 0 (une reconversion remet le niveau à zéro)
+    const base = provDev(s, w, pid) * 0.05; // unités au niveau 0 (une reconversion remet le niveau à zéro)
     html += `<div class="actions">
         ${this.action('upgrade', `⬆️ Moderniser (niveau ${Math.min(lvl + 1, E.MAX_LEVEL)})`, `<b class="cost">💰 ${money(up)}</b> · ${E.UPGRADE_MONTHS} mois · gain réel +${money(gain.market)}/mois au marché, +${money(gain.contract)} sous contrat (rentable en ${Math.ceil(up / Math.max(gain.contract, 1e-6))}–${Math.ceil(up / Math.max(gain.market, 1e-6))} mois)`, { disabled: cant ?? (lvl >= E.MAX_LEVEL ? 'Niveau maximal' : this.me.treasury < up ? `Trésor insuffisant (${money(up)})` : undefined) })}
         ${this.action('prospect', '⛏️ Prospecter', `<b class="cost">💰 ${money(E.prospectCost(s, w, pid))}</b> · ${E.PROSPECT_MONTHS} mois · 1 chance sur 3 : pétrole, gaz, métaux…`, { disabled: deposit ? 'Gisement déjà exploité' : cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
@@ -1097,7 +1097,7 @@ export class App {
       <div class="conv-cost ${this.me.treasury < conv ? 'short' : ''}"><div><small>Coût</small><b>💰 ${money(conv)}</b></div><div><small>Durée</small><b>🏗️ ${E.CONVERT_MONTHS} mois</b></div><div><small>Ensuite</small><b>${lvl ? `★ ${lvl} → 0` : 'niveau 0'}</b></div></div>
       ${this.me.treasury < conv ? `<div class="verdict bad">Trésor insuffisant : il manque ${money(conv - this.me.treasury)}.</div>` : ''}
       <div class="conv-list">${targets.map((c) => {
-        const locked = info.dev < c.minDev;
+        const locked = provDev(s, w, pid) < c.minDev;
         const ok = !locked && !cant && this.me.treasury >= conv;
         // Même base que la valeur actuelle (« Cette province produit ») : cours × marge × productivité, au niveau 0
         const v = base * unitPriceOf(s, c.good) * MARGIN[c.good] * TIERS[this.me.tier - 1].productivity;
@@ -1127,7 +1127,7 @@ export class App {
     const line = (r: (typeof rows)[number]) => {
       const lvl = r.p.level ?? 0;
       const tags = [
-        `dév. ${r.info.dev}`,
+        `dév. ${provDev(s, w, r.pid)}${r.p.devGain ? ` (${r.p.devGain > 0 ? '+' : '−'}${Math.abs(r.p.devGain)})` : ''}`,
         `<span class="stars">${'★'.repeat(lvl)}${'☆'.repeat(E.MAX_LEVEL - lvl)}</span>`,
         r.p.works ? `🏗️ ${r.p.works.months} m` : '',
         r.info.capital ? '🏛️' : '',
@@ -1336,7 +1336,7 @@ export class App {
       <div class="relbar"><i style="left:${(r + 100) / 2}%"></i></div>
       <div class="stats">
         ${stat('Religion', `${RELIGIONS[n.religion].icon} ${RELIGIONS[n.religion].name}`)}${stat('Politique', POLICIES[n.policy].name)}
-        ${stat('Provinces', `${owned(s, id).length} · dév. ${devOf(s, id)}`)}${stat('Revenus / mois', money(inc.production + inc.trade + inc.tolls))}
+        ${stat('Provinces', String(owned(s, id).length))}${stat('Niveau de vie', `${TIERS[n.tier - 1].icon} ${TIERS[n.tier - 1].name}`)}${stat('Revenus / mois', money(inc.production + inc.trade + inc.tolls))}
         ${stat('Armée', `${Math.round(n.army)} corps · #${powerRank(s, id)}`)}${stat('Flotte', String(Math.round(n.navy)))}
       </div>
       ${war ? `<h3>Guerre</h3>${this.warLine(war)}` : ''}

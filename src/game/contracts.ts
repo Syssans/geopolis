@@ -1,7 +1,7 @@
 import { GOODS, STRAITS, TRADE_NODES, type Good } from '../data/trade';
 import { EXTRA_LANES } from '../data/routes';
 import { pick, rand } from './rng';
-import { addRel, alive, devOf, embargoes, log, nm, owned, rel, warBetween } from './state';
+import { addRel, alive, devOf, embargoes, log, nm, owned, rel, warBetween, provDev } from './state';
 import { absorption, COMMISSION, goodOf, homeNode, NODES, output, straitClosed, straitOwner, TOLL, unitPrice, type TradeReport } from './trade';
 import { needsOf } from './needs';
 import { inDefault } from './finance';
@@ -294,7 +294,7 @@ export function generateOffers(s: GameState, w: World, force = false) {
 export function sourceNode(s: GameState, w: World, id: Id, good: Good): string | undefined {
   let best: number | undefined;
   for (const pid of owned(s, id))
-    if ((s.provinces[pid].good ?? w.provinces[pid].good) === good && (best === undefined || w.provinces[pid].dev > w.provinces[best].dev)) best = pid;
+    if ((s.provinces[pid].good ?? w.provinces[pid].good) === good && (best === undefined || provDev(s, w, pid) > provDev(s, w, best))) best = pid;
   return best === undefined ? homeNode(s, w, id) : w.provinces[best].node;
 }
 

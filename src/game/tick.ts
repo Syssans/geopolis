@@ -10,7 +10,7 @@ import { adminCost } from './needs';
 import { consumeNeeds, processPurchases } from './purchases';
 import { contractCrises, marketCrisis, runRival } from './crises';
 import { processMissions } from './missions';
-import { monthlyWorks } from './economy';
+import { monthlyDevelopment, monthlyWorks } from './economy';
 import { monthlyReligion } from './religion';
 import { rand } from './rng';
 import { alive, atWar, clamp, invalidate, log, nm, owned, warsOf } from './state';
@@ -137,6 +137,8 @@ export function monthEconomy(s: GameState, w: World): MonthContext | null {
 
   // Religion : agitation, insurrections, conversions
   monthlyReligion(s, w);
+  // Le niveau de vie fait grandir (ou reculer) le développement des provinces
+  monthlyDevelopment(s, w);
   invalidate(s);
   for (const n of alive(s)) if (!owned(s, n.id).length) checkElimination(s, n.id);
 

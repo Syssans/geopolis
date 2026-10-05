@@ -4,7 +4,7 @@
  */
 import { GOODS } from '../data/trade';
 import { rand } from './rng';
-import { addRel, alive, log, nm, owned, rel } from './state';
+import { addRel, alive, log, nm, owned, rel, provDev } from './state';
 import { production } from './trade';
 import type { GameState, Id, Org, World } from './types';
 
@@ -36,7 +36,7 @@ export const isMember = (s: GameState, org: string, id: Id) => !!s.orgs?.[org]?.
 
 /** Poids d'un membre dans les votes : sa production de pétrole. */
 function oilWeight(s: GameState, w: World, id: Id): number {
-  return owned(s, id).filter((pid) => (s.provinces[pid].good ?? w.provinces[pid].good) === 'petrole').reduce((a, pid) => a + w.provinces[pid].dev, 0) || 1;
+  return owned(s, id).filter((pid) => (s.provinces[pid].good ?? w.provinces[pid].good) === 'petrole').reduce((a, pid) => a + provDev(s, w, pid), 0) || 1;
 }
 
 /** Ce que les membres gérés par l'IA proposent selon le cours du pétrole. */

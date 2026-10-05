@@ -1,7 +1,7 @@
 import { RELIGIONS } from '../data/religions';
 import { rand, shuffle } from './rng';
 import {
-  addRel, alive, clamp, devOf, inReach, invalidate, log, loseForces, nm, owned, power, rel, sameBloc, warBetween, warsOf,
+  addRel, alive, clamp, devOf, inReach, invalidate, log, loseForces, nm, owned, power, provDev, rel, sameBloc, warBetween, warsOf,
 } from './state';
 import type { GameState, Id, PeaceTerms, Pid, War, World } from './types';
 
@@ -179,7 +179,7 @@ export function resolveWarMonth(s: GameState, w: World, war: War) {
     for (const pid of front) {
       if (n <= 0) break;
       // Les grosses provinces résistent plus longtemps
-      if (rand(s) < 8 / (8 + w.provinces[pid].dev)) {
+      if (rand(s) < 8 / (8 + provDev(s, w, pid))) {
         s.provinces[pid].occupiedBy = side[0];
         if (side.includes(s.player) || s.provinces[pid].owner === s.player)
           log(s, `${w.provinces[pid].name} tombe aux mains de ${nm(s, side[0])}.`, 'war', [side[0], s.provinces[pid].owner]);
@@ -217,7 +217,7 @@ function occupiedShare(s: GameState, w: World, victims: Id[], occupiers: Id[]): 
   victims.forEach((v, i) => {
     const weight = i === 0 ? 1 : 0.3;
     for (const pid of owned(s, v)) {
-      const d = w.provinces[pid].dev * weight;
+      const d = provDev(s, w, pid) * weight;
       tot += d;
       const o = s.provinces[pid].occupiedBy;
       if (o && occupiers.includes(o)) occ += d;
@@ -250,7 +250,7 @@ export function enemyLeader(war: War, id: Id): Id {
 export function termsCost(s: GameState, w: World, loser: Id, t: PeaceTerms): number {
   const total = devOf(s, loser) || 1;
   let c = 0;
-  for (const pid of t.annex) c += 3 + (w.provinces[pid].dev / total) * 80;
+  for (const pid of t.annex) c += 3 + (provDev(s, w, pid) / total) * 80;
   if (t.satellite) c += 50;
   if (t.reparations) c += 15;
   return Math.round(c);
@@ -290,7 +290,7 @@ export function applyPeace(s: GameState, w: World, war: War, winner: Id, t: Peac
   for (const pid of t.annex) {
     const p = s.provinces[pid];
     if (p.owner !== loser) continue;
-    share += w.provinces[pid].dev / loserDev;
+    share += provDev(s, w, pid) / loserDev;
     p.owner = winner;
     p.occupiedBy = null;
     p.integration = p.core === winner ? 100 : 0;

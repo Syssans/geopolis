@@ -1,6 +1,6 @@
 import { holyHolders, RELIGIONS, religiousDistance } from '../data/religions';
 import { rand } from './rng';
-import { addRel, alive, clamp, invalidate, invalidateAlive, log, nm, power } from './state';
+import { addRel, alive, clamp, invalidate, invalidateAlive, log, nm, power, provDev } from './state';
 import type { GameState, Id, Pid, Policy, World } from './types';
 
 export const POLICIES: Record<Policy, { name: string; desc: string; unrest: number; fervor: number; mission: number }> = {
@@ -53,7 +53,7 @@ export function fervorGain(s: GameState, w: World, id: Id): number {
 /** Progression mensuelle des missionnaires. */
 export function missionSpeed(s: GameState, w: World, id: Id, pid: Pid): number {
   const n = s.nations[id];
-  return Math.max(1, (4 - w.provinces[pid].dev / 10) * POLICIES[n.policy].mission + (n.fervor > 200 ? 1 : 0));
+  return Math.max(1, (4 - provDev(s, w, pid) / 10) * POLICIES[n.policy].mission + (n.fervor > 200 ? 1 : 0));
 }
 
 export function monthlyReligion(s: GameState, w: World) {
@@ -72,7 +72,7 @@ export function monthlyReligion(s: GameState, w: World) {
     }
     p.revolt++;
     owner.stability = clamp(owner.stability - 0.3, 0, 100);
-    const rebels = w.provinces[pid].dev * 3 + (p.supportedBy ? 30 : 0) + 5;
+    const rebels = provDev(s, w, pid) * 3 + (p.supportedBy ? 30 : 0) + 5;
     const crush = clamp((power(owner) / rebels) * 0.12, 0.04, 0.5);
     if (rand(s) < crush) {
       p.revolt = 0;

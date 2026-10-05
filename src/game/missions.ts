@@ -156,7 +156,7 @@ export function scoreBreakdown(s: GameState, w: World): { lines: ScoreLine[]; to
   const growth = monthlyIncome(s, me) / Math.max(s.stats.startIncome, 0.01);
   lines.push({ label: `Croissance des revenus (×${growth.toFixed(2)})`, value: Math.round(Math.max(-30, Math.min(60, (growth - 1) * 40))) });
   const devGain = devOf(s, me) - s.stats.startDev;
-  lines.push({ label: `Territoire (${devGain >= 0 ? '+' : ''}${devGain} dév.)`, value: Math.round(Math.max(-40, Math.min(40, devGain / 5))) });
+  lines.push({ label: `Territoire et développement (${devGain >= 0 ? '+' : ''}${devGain} dév.)`, value: Math.round(Math.max(-40, Math.min(40, devGain / 5))) });
   const holy = holySitesOf(s, w, me).filter((h) => h.ours).length;
   if (holy) lines.push({ label: `Lieux saints de votre foi (${holy})`, value: holy * 10 });
   const straits = STRAITS.filter((st) => straitOwner(s, w, st.id) === me).length;

@@ -1,6 +1,6 @@
 import { GOODS, STRAITS, TRADE_NODES, type Good } from '../data/trade';
 import { needsOf } from './needs';
-import { embargoes, owned, tradeCount } from './state';
+import { embargoes, owned, tradeCount, provDev } from './state';
 import { oilPricePush, oilQuota } from './orgs';
 import { MARGIN, TIERS } from '../data/tiers';
 import type { GameState, Id, Pid, World } from './types';
@@ -80,7 +80,7 @@ export const goodOf = (s: GameState, w: World, pid: Pid): Good => s.provinces[pi
 export function output(s: GameState, w: World, pid: Pid): number {
   const info = w.provinces[pid];
   const p = s.provinces[pid];
-  let u = info.dev * 0.05 * (1 + 0.35 * (p.level ?? 0));
+  let u = (info.dev + (p.devGain ?? 0)) * 0.05 * (1 + 0.35 * (p.level ?? 0));
   if (p.works && p.works.kind !== 'upgrade') u *= 0.5; // chantier de reconversion ou de forage
   if ((p.good ?? info.good) === 'petrole') u *= oilQuota(s, p.owner); // quotas de l'OPEP
   if (p.occupiedBy) u *= 0.3;
@@ -162,7 +162,7 @@ export interface TradeReport {
 export function homeNode(s: GameState, w: World, id: Id): string | undefined {
   const mine = owned(s, id);
   if (!mine.length) return undefined;
-  const cap = mine.find((p) => w.provinces[p].capital && w.provinces[p].owner === id) ?? mine.reduce((a, b) => (w.provinces[a].dev >= w.provinces[b].dev ? a : b));
+  const cap = mine.find((p) => w.provinces[p].capital && w.provinces[p].owner === id) ?? mine.reduce((a, b) => (provDev(s, w, a) >= provDev(s, w, b) ? a : b));
   return w.provinces[cap].node;
 }
 
@@ -175,7 +175,7 @@ export function tradePower(s: GameState, w: World): Record<string, Record<Id, nu
     if (p.occupiedBy || p.revolt) return;
     const info = w.provinces[i];
     const node = res[info.node];
-    node[p.owner] = (node[p.owner] ?? 0) + info.dev * (info.coastal ? 1.3 : 1);
+    node[p.owner] = (node[p.owner] ?? 0) + (info.dev + (p.devGain ?? 0)) * (info.coastal ? 1.3 : 1);
     if (info.coastal) {
       if (!coastalIn.has(p.owner)) coastalIn.set(p.owner, new Set());
       coastalIn.get(p.owner)!.add(info.node);

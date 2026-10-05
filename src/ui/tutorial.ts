@@ -160,14 +160,14 @@ export const TUTORIAL: TutChapter[] = [
         ['🍞 Besoins et État', 'plus votre pays est développé, plus sa population consomme et plus l’État coûte cher'],
         ['🏆 Score', 'le développement gagné ou perdu compte dans la ligne « Territoire » du bilan'],
       ])}
-      <p><b>Comment l’augmenter ?</b> Le développement d’une province est fixe : il reflète la réalité du pays. Votre développement total ne grandit qu’en gagnant des provinces — annexions à la paix, territoires qui vous rejoignent après une insurrection. Pour produire davantage <i>sans</i> conquérir, modernisez :</p>
+      <p><b>Comment l’augmenter ?</b> Le développement suit le <b>niveau de vie</b> : quand votre population est bien servie (satisfaction au-dessus de 70 %) et le pays stable (au-dessus de 35), vos provinces gagnent peu à peu des points — d’autant plus vite que le palier est élevé (environ +1 tous les 2 à 4 ans au palier 4 ou 5). Pénuries, instabilité, révoltes et occupation les font reculer. Une province peut gagner jusqu’à +50 % de son développement de 2026. Conquérir des provinces augmente aussi votre total. Pour produire davantage tout de suite, modernisez :</p>
       ${keys([
         ['⬆️ Moderniser', '12 mois de travaux, +35 % de production par niveau (★ jusqu’à ★★★)'],
         ['🔄 Reconvertir', '18 mois pour produire une marchandise plus chère (le niveau repart à zéro)'],
         ['⛏️ Prospecter', '6 mois de forage pour découvrir une ressource du sous-sol'],
       ])}
       <p>Touchez une de vos provinces pour agir. Sur la carte ⚓ Commerce, l’émoji de chaque province indique sa production, et le chiffre son niveau de modernisation.</p>
-      ${tip('Modernisez d’abord les provinces les plus développées : +35 % sur une grosse province rapporte bien plus que sur une petite.')}`,
+      ${tip('Modernisez d’abord les provinces les plus développées : +35 % sur une grosse province rapporte bien plus que sur une petite. La fiche d’une province indique les points gagnés depuis 2026.')}`,
   },
   {
     icon: '⚓',
