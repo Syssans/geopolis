@@ -707,3 +707,8 @@ i.v.down { background: #d9622b; } i.v.up { background: #2f6fdb; } i.v.eq { backg
 .tut-toc-row .tut-pg { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .comm-fx { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); margin: 6px 0; }
 .badge-i.neutral { border-color: var(--line); color: var(--muted); }
+/* Noms des mers : calligraphie discrète, intégrée à l'océan (globe ancien) */
+#map g.seas { pointer-events: none; }
+#map text.sea-name { fill: #d9e6f5; fill-opacity: .26; font-style: normal; }
+#map text.sea-name.ocean { fill-opacity: .32; }
+#map g.seas.greek text.sea-name { font-style: italic; }

@@ -15,3 +15,10 @@ import '@fontsource/baloo-2/latin-800.css';
 import '@fontsource/fraunces/latin-800.css';
 import '@fontsource/frank-ruhl-libre/latin-800.css';
 import '@fontsource/uncial-antiqua/latin-400.css';
+// Noms des mers et océans, calligraphiés dans l'alphabet du pays joué
+// (fichiers « 400.css » : ils déclarent chaque sous-ensemble avec sa plage de caractères)
+import '@fontsource/pinyon-script/400.css';
+import '@fontsource/marck-script/400.css';
+import '@fontsource/aref-ruqaa/400.css';
+import '@fontsource/kalam/400.css';
+import '@fontsource/frank-ruhl-libre/400.css';

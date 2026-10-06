@@ -5,7 +5,7 @@
 export const VERSION = '0.10.6';
 
 export const CHANGELOG: { version: string; date: string; items: string[] }[] = [
-  { version: '0.10.6', date: '6 octobre 2026', items: ['Nouvelle ressource : l’uranium ☢️ (Niger, Kazakhstan, Namibie, Ouzbékistan, Canada, Australie), besoin du palier « Économie du savoir »', 'Avertissement en vendant une marchandise que l’on ne produit pas', 'Projection navale et débarquements', 'Communautés économiques : UE, OCS, Union africaine, Commonwealth, ASEAN, Mercosur, ACEUM, UEE, CEDEAO, CCG, BRICS', 'Palier « Subsistance » : nouvel emoji 🌱'] },
+  { version: '0.10.6', date: '6 octobre 2026', items: ['Nouvelle ressource : l’uranium ☢️ (Niger, Kazakhstan, Namibie, Ouzbékistan, Canada, Australie), besoin du palier « Économie du savoir »', 'Avertissement en vendant une marchandise que l’on ne produit pas', 'Projection navale et débarquements', 'Communautés économiques : UE, OCS, Union africaine, Commonwealth, ASEAN, Mercosur, ACEUM, UEE, CEDEAO, CCG, BRICS', 'Palier « Subsistance » : nouvel emoji 🌱', 'Noms des mers et océans calligraphiés, dans l’alphabet de la langue du pays joué', 'Carte du commerce : 🏗️ sur les provinces en chantier'] },
   { version: '0.10.5', date: '5 octobre 2026', items: ['Le développement des provinces suit le niveau de vie (croissance ou recul)', 'Fiche pays : niveau de vie au lieu du développement total'] },
   { version: '0.10.3', date: '3 octobre 2026', items: ['Bandeau « jouer en plein écran » sur navigateur mobile (ajout à l’écran d’accueil)', 'Tutoriel : sommaire en page 2, développement des provinces expliqué'] },
   {

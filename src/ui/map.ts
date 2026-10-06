@@ -11,6 +11,7 @@ import { GOODS, STRAITS, TRADE_NODES } from '../data/trade';
 import { EXTRA_LANES, LAND, lane, laneKey, PORTS, routePath, type LonLat } from '../data/routes';
 import { clock } from '../game/convoys';
 import { FAITH_DEFS, FAITH_OF } from './faith-icons';
+import { langOf, SEA_LABELS, seaName, seaScript } from '../data/seas';
 import { rel, sameBloc, warBetween } from '../game/state';
 import { straitClosed } from '../game/trade';
 import type { Convoy, GameState, Id, Pid, World } from '../game/types';
@@ -74,6 +75,8 @@ export class MapView {
   private occ: SVGPathElement[] = [];
   private borders: SVGPathElement;
   private labelLayer: SVGGElement;
+  private seaLayer: SVGGElement;
+  private seaLang = '';
   private tradeLayer: SVGGElement;
   private markerLayer: SVGGElement;
   private outline: SVGPathElement;
@@ -182,6 +185,8 @@ export class MapView {
     this.projection.fitExtent([[4, 4], [W - 4, H - 4]], { type: 'Sphere' });
     el('path', { d: this.path({ type: 'Sphere' }) ?? '', class: 'sphere' }, this.root);
     el('path', { d: this.path(geoGraticule10()) ?? '', class: 'graticule' }, this.root);
+    // Noms des mers, sous les terres : ils font partie de l'océan
+    this.seaLayer = el('g', { class: 'seas' }, this.root);
 
     const obj = topo.objects.provinces as GeometryCollection;
     this.feats = (feature(topo, obj) as unknown as { features: Feature<Geometry>[] }).features.map(rewind);
@@ -250,6 +255,7 @@ export class MapView {
             this.sizeTrade();
             this.sizeMarkers();
             this.sizeGoods();
+            this.sizeSeas();
           });
         }
       });
@@ -644,10 +650,43 @@ export class MapView {
     this.outline.setAttribute('class', `nation-outline ${focus === s.player ? 'mine' : ''}`);
   }
 
+  /** Noms des océans et des mers, calligraphiés le long de leur axe, dans la langue du pays joué. */
+  private drawSeas(player: Id) {
+    const lang = langOf(player);
+    if (lang === this.seaLang) return;
+    this.seaLang = lang;
+    const g = this.seaLayer;
+    g.innerHTML = '';
+    const sc = seaScript(lang);
+    g.setAttribute('font-family', sc.font);
+    g.setAttribute('letter-spacing', sc.spacing);
+    if (sc.rtl) g.setAttribute('direction', 'rtl');
+    else g.removeAttribute('direction');
+    g.classList.toggle('greek', lang === 'el');
+    SEA_LABELS.forEach((l, i) => {
+      // Tracé lissé (courbe) : le nom suit l'axe de la mer comme sur un globe ancien
+      const pts = l.path.map((p) => this.projection(p)!);
+      const d = `M${pts[0][0]},${pts[0][1]} Q${pts[1][0]},${pts[1][1]} ${pts[2][0]},${pts[2][1]}`;
+      const id = `sea-${i}`;
+      el('path', { id, d, fill: 'none', stroke: 'none' }, g);
+      const t = el('text', { class: `sea-name${l.ocean ? ' ocean' : ''}`, 'font-size': String(l.size) }, g);
+      const tp = el('textPath', { href: `#${id}`, startOffset: '50%', 'text-anchor': 'middle' }, t);
+      tp.textContent = seaName(l.key, lang);
+      t.dataset.size = String(l.size);
+    });
+    this.sizeSeas();
+  }
+
+  /** Les petites mers n'apparaissent qu'en zoomant (illisibles sinon). */
+  private sizeSeas() {
+    const px = this.k * this.pxPerUnit();
+    for (const t of this.seaLayer.querySelectorAll<SVGTextElement>('text')) t.style.display = Number(t.dataset.size) * px < 6 ? 'none' : '';
+  }
+
   /** Marchandise et niveau de modernisation sur chaque province du pays sélectionné. */
   private drawGoods(s: GameState, nation: Id | null) {
     const pids = nation ? s.provinces.map((p, i) => (p.owner === nation ? i : -1)).filter((i) => i >= 0) : [];
-    const sig = pids.map((i) => `${i}:${s.provinces[i].good ?? ''}:${s.provinces[i].level ?? 0}`).join(',');
+    const sig = pids.map((i) => `${i}:${s.provinces[i].good ?? ''}:${s.provinces[i].level ?? 0}:${s.provinces[i].works ? 1 : 0}`).join(',');
     if (sig === this.goodsSig) return;
     this.goodsSig = sig;
     this.goodsLayer.innerHTML = '';
@@ -656,7 +695,8 @@ export class MapView {
       const [x, y] = this.centers[i];
       const g = el('g', { transform: `translate(${x.toFixed(2)},${y.toFixed(2)})` }, this.goodsLayer);
       g.dataset.size = String(Math.sqrt(this.areas[i]));
-      el('text', { class: 'pg-icon' }, g).textContent = GOODS[p.good ?? this.world.provinces[i].good].icon;
+      // Chantier en cours (modernisation, reconversion, forage) : la grue remplace la ressource
+      el('text', { class: 'pg-icon' }, g).textContent = p.works ? '🏗️' : GOODS[p.good ?? this.world.provinces[i].good].icon;
       if (p.level) el('text', { class: 'pg-level' }, g).textContent = '▲'.repeat(p.level);
     }
     this.sizeGoods();
@@ -779,5 +819,6 @@ export class MapView {
     this.drawOutline(s, selOwner ?? me, owners);
     this.drawGoods(s, mode === 'trade' ? (selOwner ?? me) : null);
     this.syncConvoys(s, mode, selConvoy);
+    this.drawSeas(me);
   }
 }
