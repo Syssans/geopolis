@@ -5,7 +5,7 @@ Il est centré sur le **commerce** et les **conflits religieux**, sur une carte 
 
 **Jouer en ligne :** https://syssans.github.io/geopolis/ (une fois GitHub Pages activé, voir plus bas).
 
-Version actuelle : **0.10.5** (numérotation 0.<mois>.<jour> de la mise à jour ; mises à jour importantes notées dans `src/version.ts`).
+Version actuelle : **0.10.6** (numérotation 0.<mois>.<jour> de la mise à jour ; mises à jour importantes notées dans `src/version.ts`).
 
 ## Lancer le jeu en local
 
@@ -47,6 +47,7 @@ npm run build      # build de production dans dist/ (PWA installable)
 | **HUD** | Cinq tuiles : trésor, influence, ferveur, stabilité et **niveau de vie** (emoji du palier, satisfaction de la population, progression ▲/▼). Sous la barre du rival, les **objectifs** en menu déroulant : missions, points, avancement, score et note. |
 | **Temps** | Tick mensuel, pause + 4 vitesses. Le jeu se met en pause sur les événements. |
 | **Ressources** | 💰 Trésor (contrats + production + commerce + péages − entretien des forces), 🤝 Influence (diplomatie : 4/mois, +1 top 10 commerce, +1 meneur de bloc, +1 par 3 contrats), 🔥 Ferveur (religion : unité nationale, missionnaires, guerre sainte, **collecte des fidèles** ≈ 1,5 mois de revenus pour 🔥50, **rayonnement religieux** +25 influence pour 🔥60). Les alertes de piraterie sont regroupées en une ligne par mois. |
+| **Uranium** ☢️ | Ressource stratégique extraite au Niger (Agadez), au Kazakhstan, en Namibie, en Ouzbékistan, au Canada (Saskatchewan) et en Australie ; réclamée par les populations au palier « Économie du savoir » (électricité nucléaire). Découvrable par prospection. |
 | **Provinces** | ~900 provinces (régions françaises, États américains, provinces chinoises…), chacune avec développement (qui grandit avec le niveau de vie et recule avec les pénuries, l’instabilité et les révoltes), population, marchandise, religion et nœud commercial. |
 | **Commerce** | 26 nœuds commerciaux (Golfe Persique, Malacca, Suez, Manche, Shanghai, New York…) reliés d'amont en aval. Les provinces produisent des **marchandises** : le joueur les livre d'abord à ses contrats, puis à sa population, puis à ses stocks ; seul le surplus est vendu au marché (commission de 30 %, absorption de 40 à 95 % selon le prix du marché, l'invendu est perdu). Les exportations transitent par les nœuds, où les nations qui y pèsent (provinces, côtes, flotte, marchands, accords) prélèvent une commission de 12 % : un complément, pas une rente. |
 | **Marchands** | Automatiques : ils attirent la richesse des zones voisines vers votre zone d'attache (même logique que l'IA). L'onglet Commerce du pays montre vos revenus et votre part dans chaque zone. |

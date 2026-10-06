@@ -164,7 +164,7 @@ export const TUTORIAL: TutChapter[] = [
       ${keys([
         ['⬆️ Moderniser', '12 mois de travaux, +35 % de production par niveau (★ jusqu’à ★★★)'],
         ['🔄 Reconvertir', '18 mois pour produire une marchandise plus chère (le niveau repart à zéro)'],
-        ['⛏️ Prospecter', '6 mois de forage pour découvrir une ressource du sous-sol'],
+        ['⛏️ Prospecter', '6 mois de forage pour découvrir une ressource du sous-sol : pétrole, gaz, métaux, terres rares ou uranium'],
       ])}
       <p>Touchez une de vos provinces pour agir. Sur la carte ⚓ Commerce, l’émoji de chaque province indique sa production, et le chiffre son niveau de modernisation.</p>
       ${tip('Modernisez d’abord les provinces les plus développées : +35 % sur une grosse province rapporte bien plus que sur une petite. La fiche d’une province indique les points gagnés depuis 2026.')}`,

@@ -20,7 +20,7 @@ export const CONVERSIONS: { good: Good; minDev: number }[] = [
 ];
 
 /** Ressources du sous-sol que la prospection peut révéler. */
-const DEPOSITS: Good[] = ['petrole', 'gaz', 'metaux', 'terres_rares'];
+const DEPOSITS: Good[] = ['petrole', 'gaz', 'metaux', 'terres_rares', 'uranium'];
 
 export interface Result {
   ok: boolean;

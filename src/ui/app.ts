@@ -1085,12 +1085,12 @@ export class App {
     const gain = E.upgradeGain(s, w, pid);
     const conv = E.convertCost(s, w, pid);
     const targets = E.CONVERSIONS.filter((c) => c.good !== current);
-    const deposit = ['petrole', 'gaz', 'metaux', 'terres_rares'].includes(current);
+    const deposit = ['petrole', 'gaz', 'metaux', 'terres_rares', 'uranium'].includes(current);
     const cant = p.occupiedBy || p.revolt ? 'Province instable' : undefined;
     const base = provDev(s, w, pid) * 0.05; // unités au niveau 0 (une reconversion remet le niveau à zéro)
     html += `<div class="actions">
         ${this.action('upgrade', `⬆️ Moderniser (niveau ${Math.min(lvl + 1, E.MAX_LEVEL)})`, `<b class="cost">💰 ${money(up)}</b> · ${E.UPGRADE_MONTHS} mois · gain réel +${money(gain.market)}/mois au marché, +${money(gain.contract)} sous contrat (rentable en ${Math.ceil(up / Math.max(gain.contract, 1e-6))}–${Math.ceil(up / Math.max(gain.market, 1e-6))} mois)`, { disabled: cant ?? (lvl >= E.MAX_LEVEL ? 'Niveau maximal' : this.me.treasury < up ? `Trésor insuffisant (${money(up)})` : undefined) })}
-        ${this.action('prospect', '⛏️ Prospecter', `<b class="cost">💰 ${money(E.prospectCost(s, w, pid))}</b> · ${E.PROSPECT_MONTHS} mois · 1 chance sur 3 : pétrole, gaz, métaux…`, { disabled: deposit ? 'Gisement déjà exploité' : cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
+        ${this.action('prospect', '⛏️ Prospecter', `<b class="cost">💰 ${money(E.prospectCost(s, w, pid))}</b> · ${E.PROSPECT_MONTHS} mois · 1 chance sur 3 : pétrole, gaz, métaux, uranium…`, { disabled: deposit ? 'Gisement déjà exploité' : cant ?? (this.me.treasury < E.prospectCost(s, w, pid) ? 'Trésor insuffisant' : undefined) })}
       </div>
       <h3>🔄 Changer de production</h3>
       <p class="hint">Pendant les ${E.CONVERT_MONTHS} mois de chantier, la province produit deux fois moins ; ensuite son niveau de modernisation repart à zéro. Chaque ligne donne la valeur au marché de la nouvelle production (au niveau 0), puis l’écart avec ce que la province produit aujourd’hui. Comme partout, cette valeur ne devient de l’argent qu’une fois vendue.</p>

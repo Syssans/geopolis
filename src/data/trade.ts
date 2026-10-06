@@ -10,7 +10,8 @@ export type Good =
   | 'industrie'
   | 'textile'
   | 'finance'
-  | 'peche';
+  | 'peche'
+  | 'uranium';
 
 export const GOODS: Record<Good, { name: string; icon: string; price: number; volatility: number; unit: string }> = {
   petrole: { name: 'Pétrole', icon: '🛢️', price: 1.6, volatility: 0.12, unit: 'Mbl' },
@@ -24,6 +25,7 @@ export const GOODS: Record<Good, { name: string; icon: string; price: number; vo
   textile: { name: 'Textile', icon: '🧵', price: 0.8, volatility: 0.04, unit: 'Mt' },
   finance: { name: 'Services financiers', icon: '🏦', price: 1.4, volatility: 0.05, unit: 'Md$ gérés' },
   peche: { name: 'Pêche', icon: '🐟', price: 0.7, volatility: 0.05, unit: 'kt' },
+  uranium: { name: 'Uranium', icon: '☢️', price: 1.7, volatility: 0.09, unit: 'kt' },
 };
 
 /**
@@ -130,6 +132,8 @@ export const PROVINCE_GOODS: Record<string, Good> = {
   Katanga: 'metaux', 'Haut-Katanga': 'metaux', Lualaba: 'metaux', 'Western Australia': 'metaux', Queensland: 'gaz', 'New South Wales': 'finance',
   'São Paulo': 'finance', 'Mato Grosso': 'cereales', 'Rio de Janeiro': 'petrole', Pará: 'metaux', 'Minas Gerais': 'metaux',
   Scotland: 'petrole', Wales: 'industrie', 'Northern Ireland': 'cereales', Manchester: 'industrie', Birmingham: 'industrie', Cornwall: 'cereales',
+  // Grands gisements d'uranium (Kazakhstan, Niger, Namibie, Ouzbékistan, Canada, Australie)
+  'South Kazakhstan': 'uranium', Agadez: 'uranium', Erongo: 'uranium', Navoi: 'uranium', Saskatchewan: 'uranium', 'South Australia': 'uranium',
   Antofagasta: 'metaux', Atyrau: 'petrole', Mangghystau: 'petrole', Cabinda: 'petrole',
 };
 

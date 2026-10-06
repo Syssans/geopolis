@@ -20,6 +20,7 @@ export const NEED_LABEL: Partial<Record<Good, string>> = {
   petrole: 'Carburants et transports',
   gaz: 'Chauffage et électricité',
   industrie: 'Biens de consommation',
+  uranium: 'Électricité nucléaire',
 };
 /** Surcoût des achats d'urgence au marché. */
 export const EMERGENCY = 0.25;
