@@ -664,16 +664,37 @@ export class MapView {
     else g.removeAttribute('direction');
     g.classList.toggle('greek', lang === 'el');
     SEA_LABELS.forEach((l, i) => {
-      // Tracé lissé (courbe) : le nom suit l'axe de la mer comme sur un globe ancien
-      const pts = l.path.map((p) => this.projection(p)!);
-      const d = `M${pts[0][0]},${pts[0][1]} Q${pts[1][0]},${pts[1][1]} ${pts[2][0]},${pts[2][1]}`;
+      // Tracé lissé (courbe passant par les points) : le nom suit l'axe de la mer comme sur un globe ancien
       const id = `sea-${i}`;
-      el('path', { id, d, fill: 'none', stroke: 'none' }, g);
+      el('path', { id, d: smoothPath(l.path.map((p) => this.projection(p)!)), fill: 'none', stroke: 'none' }, g);
       const t = el('text', { class: `sea-name${l.ocean ? ' ocean' : ''}`, 'font-size': String(l.size) }, g);
       const tp = el('textPath', { href: `#${id}`, startOffset: '50%', 'text-anchor': 'middle' }, t);
       tp.textContent = seaName(l.key, lang);
-      t.dataset.size = String(l.size);
+      t.dataset.max = String(l.size);
+      // Océans en lettres espacées, comme sur les globes anciens (l'écriture arabe, liée, s'espace par les mots)
+      if (l.ocean) {
+        if (sc.rtl && sc.spacing === '0') t.setAttribute('word-spacing', '.4em');
+        else t.setAttribute('letter-spacing', `${(parseFloat(sc.spacing) + 0.45).toFixed(2)}em`);
+      }
     });
+    this.fitSeas();
+    // Les polices calligraphiques arrivent après coup : on remesure une fois chargées
+    document.fonts?.load(`16px ${sc.font}`, SEA_LABELS.map((l) => seaName(l.key, lang)).join('')).then(() => this.fitSeas(), () => {});
+  }
+
+  /** Chaque nom tient dans son tracé (les noms varient beaucoup d'une langue à l'autre) : sinon il déborderait sur les terres. */
+  private fitSeas() {
+    for (const t of this.seaLayer.querySelectorAll<SVGTextElement>('text')) {
+      const path = this.seaLayer.querySelector<SVGPathElement>(t.querySelector('textPath')!.getAttribute('href')!)!;
+      const max = Number(t.dataset.max);
+      t.style.display = '';
+      t.setAttribute('font-size', String(max));
+      const len = t.getComputedTextLength();
+      const room = path.getTotalLength() * 0.96;
+      const size = len > room ? (max * room) / len : max;
+      t.setAttribute('font-size', size.toFixed(2));
+      t.dataset.size = String(size);
+    }
     this.sizeSeas();
   }
 
@@ -821,4 +842,15 @@ export class MapView {
     this.syncConvoys(s, mode, selConvoy);
     this.drawSeas(me);
   }
+}
+
+/** Courbe lisse (Catmull-Rom) passant par tous les points. */
+function smoothPath(pts: [number, number][]): string {
+  const f = (n: number) => n.toFixed(2);
+  let d = `M${f(pts[0][0])},${f(pts[0][1])}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] ?? p2;
+    d += ` C${f(p1[0] + (p2[0] - p0[0]) / 6)},${f(p1[1] + (p2[1] - p0[1]) / 6)} ${f(p2[0] - (p3[0] - p1[0]) / 6)},${f(p2[1] - (p3[1] - p1[1]) / 6)} ${f(p2[0])},${f(p2[1])}`;
+  }
+  return d;
 }

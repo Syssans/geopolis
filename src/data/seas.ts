@@ -33,7 +33,7 @@ const NAMES: Record<string, string> = {
 
 export interface SeaLabel {
   key: string;
-  /** Axe du nom, d'ouest en est (lon, lat). */
+  /** Axe du nom dans le sens de lecture (lon, lat) ; le haut des lettres est à gauche de l'axe. */
   path: [number, number][];
   /** Taille du texte en unités de carte (la carte fait 1000 de large). */
   size: number;
@@ -41,27 +41,27 @@ export interface SeaLabel {
 }
 
 export const SEA_LABELS: SeaLabel[] = [
-  { key: 'atlantic', path: [[-58, 26], [-42, 33], [-26, 42]], size: 13, ocean: true },
-  { key: 'atlantic', path: [[-34, -12], [-22, -24], [-8, -34]], size: 13, ocean: true },
-  { key: 'pacific', path: [[-168, 20], [-145, 12], [-122, 6]], size: 15, ocean: true },
-  { key: 'pacific', path: [[-160, -22], [-130, -30], [-100, -32]], size: 13, ocean: true },
-  { key: 'pacific', path: [[146, 28], [160, 22], [176, 16]], size: 11, ocean: true },
+  // Atlantique : de haut en bas, entre les côtes des Amériques et celles de l'Europe et de l'Afrique
+  { key: 'atlantic', path: [[-40, 52], [-41, 37], [-35, 21], [-26, 5], [-18, -15], [-15, -40]], size: 18, ocean: true },
+  // Pacifique aux deux bords de la carte, en suivant leur courbure (à l'ouest de bas en haut, à l'est de haut en bas)
+  { key: 'pacific', path: [[-137, -38], [-140, -5], [-140, 30]], size: 16, ocean: true },
+  { key: 'pacific', path: [[167, 42], [168, 18], [169, -5]], size: 16, ocean: true },
   { key: 'indian', path: [[58, -12], [78, -20], [100, -24]], size: 14, ocean: true },
-  { key: 'arctic', path: [[-30, 80], [10, 83], [55, 82]], size: 11, ocean: true },
+  { key: 'arctic', path: [[-15, 84.3], [25, 84.8], [65, 84.3]], size: 11, ocean: true },
   { key: 'southern', path: [[-80, -60], [0, -61], [80, -60]], size: 12, ocean: true },
-  { key: 'med', path: [[2, 38.5], [10, 37.2], [18, 34.5]], size: 4.2 },
+  { key: 'med', path: [[16.5, 36.6], [20, 35.3], [24.5, 34], [29.5, 33.6]], size: 3.8 },
   { key: 'black', path: [[30.2, 43.3], [35, 43.6], [39.5, 43]], size: 2.6 },
-  { key: 'caspian', path: [[49.5, 45.5], [50.8, 42], [51.8, 38.8]], size: 2.1 },
-  { key: 'red', path: [[34.5, 26], [37.5, 21], [40.8, 16.5]], size: 2.6 },
+  { key: 'caspian', path: [[49.6, 45.2], [50.2, 42.5], [51.1, 40.2], [51.2, 38.2]], size: 2.1 },
+  { key: 'red', path: [[33.9, 27.2], [35.8, 24.2], [37.7, 20.8], [39.6, 17.4]], size: 2.6 },
   { key: 'gulf', path: [[48.8, 28.6], [51.5, 27.4], [54.5, 26]], size: 1.9 },
   { key: 'arabian', path: [[57, 18], [63, 16], [69, 13]], size: 4.2 },
   { key: 'bengal', path: [[82.5, 16.5], [87.5, 15], [92.5, 13]], size: 3.6 },
-  { key: 'scs', path: [[108.5, 15.5], [113, 12.5], [117.5, 9.5]], size: 3.2 },
+  { key: 'scs', path: [[110.5, 16.5], [113, 13], [115, 9.5]], size: 3.2 },
   { key: 'japan', path: [[131, 38.5], [134.5, 40.5], [138, 42.5]], size: 2.6 },
   { key: 'carib', path: [[-83, 15.5], [-75, 14.6], [-66, 15]], size: 3.8 },
   { key: 'mexico', path: [[-96, 25.6], [-90.5, 25.8], [-84.5, 25]], size: 3.2 },
   { key: 'north', path: [[0.3, 58], [3, 56], [5.2, 54.5]], size: 1.9 },
-  { key: 'baltic', path: [[15.2, 55.6], [18, 57.2], [19.4, 59.5]], size: 1.8 },
+  { key: 'baltic', path: [[17, 55.3], [19.5, 56], [20.3, 57.8]], size: 1.8 },
   { key: 'guinea', path: [[-4, 2.5], [2.5, 1.5], [8, 1.2]], size: 3.4 },
   { key: 'bering', path: [[-179, 58.5], [-174, 58], [-168.5, 57]], size: 2.4 },
   { key: 'tasman', path: [[152.5, -36.5], [158.5, -39], [165, -40.5]], size: 3 },
