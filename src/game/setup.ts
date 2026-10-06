@@ -168,7 +168,12 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
     const fleets = coastal ? (budget * 0.25) / (n.upkeepRate * 2) : 0;
     n.navy = fleets >= 0.3 ? Math.max(1, Math.round(fleets)) : 0;
     // Marines de haute mer historiques (porte-avions, flottes expéditionnaires)
-    n.navy = Math.max(n.navy, BLUE_WATER[n.id] ?? 0);
+    // à budget militaire constant : ces flottes ne creusent pas le déficit de départ (unités un peu moins chères)
+    const extra = Math.max(0, (BLUE_WATER[n.id] ?? 0) - n.navy);
+    if (extra) {
+      n.upkeepRate *= (n.army + n.navy * 2) / (n.army + (n.navy + extra) * 2);
+      n.navy += extra;
+    }
     n.treasury = Math.round(Math.max(monthly, 0.2) * 12 * 10) / 10;
     n.income = { production: inc.production, trade: inc.trade, tolls: inc.tolls, contracts: 0, admin, upkeep: n.army * n.upkeepRate + n.navy * n.upkeepRate * 2, byNode: {} };
   }

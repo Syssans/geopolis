@@ -1,6 +1,6 @@
 import { GOODS, type Good } from '../data/trade';
 import { rand } from './rng';
-import { alive, clamp, log, owned, provDev } from './state';
+import { alive, clamp, log, owned, provDev, setDevGain } from './state';
 import { goodOf, output, production, unitPrice } from './trade';
 import { contractFactor, marketFactor } from './contracts';
 import type { GameState, Id, Pid, World } from './types';
@@ -195,12 +195,12 @@ export function monthlyDevelopment(s: GameState, w: World) {
       if (p.devProgress >= 1) {
         p.devProgress -= 1;
         if (gain < Math.ceil(base * 0.5)) {
-          p.devGain = gain + 1;
-          if (player && (p.devGain === 1 || p.devGain % 3 === 0)) log(s, `🏙️ ${w.provinces[pid].name} se développe (dév. ${base + p.devGain}).`, 'info', [s.player]);
+          setDevGain(s, pid, gain + 1);
+          if (player && (gain + 1 === 1 || (gain + 1) % 3 === 0)) log(s, `🏙️ ${w.provinces[pid].name} se développe (dév. ${base + gain + 1}).`, 'info', [s.player]);
         }
       } else if (p.devProgress <= -1) {
         p.devProgress += 1;
-        if (base + gain > 1) p.devGain = gain - 1;
+        if (base + gain > 1) setDevGain(s, pid, gain - 1);
       }
       p.devProgress = clamp(p.devProgress, -1, 1);
     }

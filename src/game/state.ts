@@ -84,6 +84,14 @@ function index(s: GameState): Index {
   return ix;
 }
 
+/** Change le développement gagné d'une province en tenant l'index à jour (coût de l'État, besoins, score). */
+export function setDevGain(s: GameState, pid: Pid, v: number) {
+  const p = s.provinces[pid];
+  const ix = indexes.get(s);
+  if (ix) ix.dev.set(p.owner, (ix.dev.get(p.owner) ?? 0) + v - (p.devGain ?? 0));
+  p.devGain = v;
+}
+
 export function owned(s: GameState, id: Id): Pid[] {
   return index(s).owned.get(id) ?? [];
 }
@@ -206,7 +214,7 @@ export const PROJECTION_MIN = 3;
 export const hasCoast = (s: GameState, w: World, id: Id) => owned(s, id).some((p) => w.provinces[p].coastal);
 
 /**
- * Projection navale : une flotte suffisante (au moins 4, et au moins égale à celle de la cible)
+ * Projection navale : une flotte suffisante (au moins 3, et au moins égale à celle de la cible)
  * permet d'atteindre n'importe quel pays côtier, et d'y débarquer.
  */
 export function navalReach(s: GameState, w: World, from: Id, to: Id): boolean {
