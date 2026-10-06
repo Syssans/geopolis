@@ -1790,6 +1790,7 @@ export class App {
                 ${o.routes.map((r, i) => `<label class="check"><input type="radio" name="r${o.id}" data-a="offerRoute" data-p="${o.id}:${i}" ${i === sel ? 'checked' : ''}><span>${this.routeLabel(r)} · net ${money(C.estimate(o.volume, o.bonus, r, o.unitPrice, mg).net)}</span></label>`).join('')}
                 ${route ? this.routeSteps(route) : ''}
                 ${est ? `<small class="muted">Péages ${money(est.tolls)} · transport ${money(est.transport)} par mois. Une escorte (onglet Contrats) réduit le risque pirate.</small>` : ''}</details>
+              ${this.notProducedWarning(o.good)}
               <div class="actions three">
                 <button class="act primary-act" data-a="sign" data-p="${o.id}" ${tooMuch || blocked ? 'disabled' : ''}><span class="t">✍️ Signer</span><span class="c">🌍 +8</span></button>
                 <button class="act" data-a="negotiate" data-p="${o.id}" ${o.negotiated ? 'disabled' : ''}><span class="t">💬 Négocier</span><span class="c">${o.negotiated ? 'Déjà tenté' : 'prime +5 % · 🤝 −10 · risque'}</span></button>
@@ -2019,6 +2020,12 @@ export class App {
     this.modal(`📤 Vendre à ${flagOf(id)} ${esc(nm(s, id))}`, html, [{ label: 'Fermer', a: 'closeModal' }]);
   }
 
+  /** Avertissement : vendre une marchandise que l'on ne produit pas (elle sera prise sur les stocks et les achats). */
+  private notProducedWarning(g: keyof typeof GOODS): string {
+    if ((C.capacity(this.state, this.world, this.state.player)[g] ?? 0) > 1e-6) return '';
+    return `<div class="verdict warn">⚠️ Vous ne produisez pas ${esc(partitive(GOODS[g].name))} : ce contrat sera livré avec vos stocks et vos achats. Si votre population en a besoin, elle en manquera.</div>`;
+  }
+
   private showSaleForm() {
     const s = this.state;
     const f = this.sf!;
@@ -2037,6 +2044,7 @@ export class App {
     const risk = route ? C.piracyRisk(route, 0, s) : 0;
     const html = `<div class="offer-head">${this.gi(g, true)}<div>Vous vendez ${esc(partitive(d.name))} à ${this.flag(f.buyer, true)}<br><small class="muted">Prix verrouillé : ${money(q.unitPrice * (1 + q.bonus))}/${esc(d.unit)} (prix du marché ${money(q.unitPrice)}, prime <span class="${q.bonus >= 0 ? 'pos' : 'neg'}">${q.bonus >= 0 ? '+' : '−'}${Math.abs(Math.round(q.bonus * 100))} %</span>)</small></div></div>
       <div class="verdict ${q.ok ? 'ok' : 'bad'}">${q.ok && est ? `✅ <b>+${money(est.net)}/mois</b> pendant ${f.months} mois <small>(au marché, la même quantité rapporterait ${money(market)}/mois · vente directe : ${Math.round(mg * 100)} % du prix du marché encaissés contre ${Math.round(mf * 100)} %)</small>` : `❌ ${esc(q.reason ?? '')}`}</div>
+      ${this.notProducedWarning(g)}
       <h3>Quantité par mois</h3><div class="pick-row">${opts.map(([l, v]) => `<button class="chip ${Math.abs(v - f.volume) < 1e-6 ? 'on' : ''}" data-a="sSet" data-p="v:${v}">${l}</button>`).join('')}</div>
       <h3>Durée</h3><div class="pick-row">${[12, 24, 36].map((m) => `<button class="chip ${m === f.months ? 'on' : ''}" data-a="sSet" data-p="m:${m}">${m} mois</button>`).join('')}</div>
       <h3>Itinéraire</h3>${q.routes.map((r, i) => `<label class="check"><input type="radio" name="sf" data-a="sSet" data-p="r:${i}" ${i === f.route ? 'checked' : ''}><span>${this.routeLabel(r)}</span></label>`).join('')}
