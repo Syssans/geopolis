@@ -78,7 +78,7 @@ export interface Nation {
   nukeProgram: number | null;
   invasionReady?: number; // mois (absolu) à partir duquel un nouveau débarquement est possible
   hawk: number; // tempérament IA 0-1
-  /** Tempérament de l'IA (0-1) : bâtisseur, diplomate, prudent, ambitieux. Tiré au sort au premier mois. */
+  /** Tempérament de l'IA (0-1) : bâtisseur, diplomate, prudent, ambitieux. Tiré au sort en début de partie, jamais montré au joueur. */
   persona?: { build: number; diplo: number; prudence: number; ambition: number };
   /** IA : progression vers le palier de niveau de vie suivant (0-100) et satisfaction de la population. */
   prosperity?: number;

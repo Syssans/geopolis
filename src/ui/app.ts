@@ -1,5 +1,4 @@
 import * as A from '../game/actions';
-import { personaTraits } from '../game/ai-strategy';
 import { aiTerms, describeTerms } from '../game/ai';
 import { resolveEvent } from '../game/events';
 import { fervorGain, holySitesOf, missionSpeed, POLICIES, unrestTarget } from '../game/religion';
@@ -1381,7 +1380,6 @@ export class App {
         ${stat('Provinces', String(owned(s, id).length))}${stat('Niveau de vie', `${TIERS[n.tier - 1].icon} ${TIERS[n.tier - 1].name}`)}${stat('Revenus / mois', money(inc.production + inc.trade + inc.tolls))}
         ${stat('Armée', `${Math.round(n.army)} corps · #${powerRank(s, id)}`)}${stat('Flotte', String(Math.round(n.navy)))}
       </div>
-      ${id !== s.player && n.persona ? `<div class="row" style="border:0"><span>🧭 Tempérament</span><b>${personaTraits(n).join(' · ')}</b></div>` : ''}
       ${war ? `<h3>Guerre</h3>${this.warLine(war)}` : ''}
       <h3>Diplomatie</h3><div class="actions">
         ${this.action('improve', 'Améliorer les relations', A.COSTS.improve(), { disabled: war ? 'En guerre' : r >= 100 ? 'Maximum' : undefined })}

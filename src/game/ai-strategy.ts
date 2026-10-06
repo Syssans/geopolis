@@ -217,15 +217,3 @@ function aid(s: GameState, w: World, n: Nation, b: Budget, p: Persona) {
   if (cand) sendAid(s, n.id, cand.id);
 }
 
-/** Traits marquants du tempérament d'un pays IA, pour sa fiche. */
-export function personaTraits(n: Nation): string[] {
-  const p = n.persona;
-  if (!p) return [];
-  const t: string[] = [];
-  if (p.build > 0.65) t.push('🏗️ bâtisseur');
-  if (p.diplo > 0.65) t.push('🤝 diplomate');
-  if (p.prudence > 0.7) t.push('🏦 prudent');
-  else if (p.prudence < 0.25) t.push('💸 dépensier');
-  if (p.ambition > 0.7 || n.hawk >= 0.6) t.push('⚔️ ambitieux');
-  return t.length ? t : ['⚖️ pragmatique'];
-}
