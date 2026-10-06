@@ -1,6 +1,7 @@
 import { tierFromGdp } from '../data/tiers';
 import { adminCost } from './needs';
 import { initOrgs } from './orgs';
+import { initCommunities } from './communities';
 import { seedConvoys } from './convoys';
 import { seedPriceHistory } from './trade';
 import { COUNTRIES } from '../data/countries';
@@ -36,6 +37,9 @@ export const START_EMBARGOES: [Id, Id][] = [
   ['United States of America', 'Cuba'],
   ['United States of America', 'Venezuela'],
 ];
+
+/** Flottes minimales des marines capables de projection en 2026. */
+const BLUE_WATER: Record<string, number> = { 'United States of America': 6, China: 5, 'United Kingdom': 3, France: 3, Russia: 3, Japan: 3, India: 4, Italy: 2, 'South Korea': 2, Australia: 2, Turkey: 2 };
 
 export function createGame(world: World, player: Id, seed = Date.now()): GameState {
   const s: GameState = {
@@ -163,10 +167,13 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
     n.army = Math.max(1, Math.round((budget * (coastal ? 0.75 : 1)) / n.upkeepRate));
     const fleets = coastal ? (budget * 0.25) / (n.upkeepRate * 2) : 0;
     n.navy = fleets >= 0.3 ? Math.max(1, Math.round(fleets)) : 0;
+    // Marines de haute mer historiques (porte-avions, flottes expéditionnaires)
+    n.navy = Math.max(n.navy, BLUE_WATER[n.id] ?? 0);
     n.treasury = Math.round(Math.max(monthly, 0.2) * 12 * 10) / 10;
     n.income = { production: inc.production, trade: inc.trade, tolls: inc.tolls, contracts: 0, admin, upkeep: n.army * n.upkeepRate + n.navy * n.upkeepRate * 2, byNode: {} };
   }
   initOrgs(s);
+  initCommunities(s);
   initCampaign(s, world);
   seedConvoys(s, world);
   seedPriceHistory(s);

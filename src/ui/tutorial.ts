@@ -140,7 +140,7 @@ export const TUTORIAL: TutChapter[] = [
     icon: '🏙️',
     title: 'Le niveau de vie',
     body: `<p>Votre population gravit cinq paliers :</p>
-      <p class="tut-ladder">🛖 Subsistance → 🏭 Industrialisation → 🏘️ Classe moyenne → 🛍️ Consommation de masse → 🎓 Économie du savoir</p>
+      <p class="tut-ladder">🌱 Subsistance → 🏭 Industrialisation → 🏘️ Classe moyenne → 🛍️ Consommation de masse → 🎓 Économie du savoir</p>
       <p>Chaque palier rend le pays <b>plus productif</b>, mais réclame de <b>nouveaux biens</b> (pétrole, gaz, puces, services…) et fait grimper le <b>coût de l’État</b>.</p>
       ${keys([
         ['😄 ≥ 80 %', 'besoins satisfaits : la population progresse vers le palier suivant'],
@@ -188,6 +188,7 @@ export const TUTORIAL: TutChapter[] = [
         ['🚫 Embargo', 'frapper un pays (🤝 15)'],
         ['⚔️ Casus belli', 'un motif légitime de guerre (🤝 50)'],
       ])}
+      <p>Votre pays appartient peut-être à des <b>communautés économiques</b> (Union européenne, OCS, Union africaine, Commonwealth, ASEAN, Mercosur…) : relations meilleures et contrats plus avantageux entre membres. On peut y adhérer ou les quitter depuis l’onglet 🤝 Diplo.</p>
       <p>Certains pays démarrent <b>sous sanctions</b> : les grandes économies leur imposent un embargo. On peut les négocier une à une (bilan 🚫 Sanctions).</p>
       ${tip('De bonnes relations rendent les clients plus généreux et les fournisseurs moins chers.')}`,
   },
@@ -210,8 +211,9 @@ export const TUTORIAL: TutChapter[] = [
     body: `<p>La guerre est un dernier recours coûteux.</p>
       ${steps([
         'Obtenez un <b>casus belli</b> (🤝 50) : sans motif, la stabilité chute et le monde vous sanctionne.',
-        'Déclarez la guerre depuis la fiche du pays.',
+        'Déclarez la guerre depuis la fiche du pays : à un voisin, ou à tout pays côtier si votre flotte le permet (projection navale : au moins 3 flottes, et autant que la cible).',
         'Votre <b>armée</b> prend les provinces ennemies une à une ; votre <b>flotte</b> protège vos convois et bloque les siens.',
+        'Touchez une province côtière ennemie pour lancer un <b>🚢 débarquement</b> (un tous les 6 mois) ; si votre flotte domine, des débarquements ont aussi lieu d’eux-mêmes.',
         'Le <b>score de guerre</b> grimpe avec les provinces occupées : à la paix, annexez des provinces précises, satellisez ou exigez des réparations.',
       ])}
       <p>Une <b>puissance nucléaire</b> ne cède jamais de territoire. Si deux d’entre elles s’affrontent, la <b>tension mondiale</b> ☢️ monte… au-delà de 95 %, c’est la fin pour tout le monde.</p>`,

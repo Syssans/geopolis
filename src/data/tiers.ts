@@ -17,7 +17,7 @@ export interface Tier {
 }
 
 export const TIERS: Tier[] = [
-  { name: 'Subsistance', icon: '🛖', desc: 'Se nourrir et se vêtir.', adds: { cereales: 0.0025, textile: 0.001 }, productivity: 0.8, admin: 0.003 },
+  { name: 'Subsistance', icon: '🌱', desc: 'Se nourrir et se vêtir.', adds: { cereales: 0.0025, textile: 0.001 }, productivity: 0.8, admin: 0.003 },
   { name: 'Industrialisation', icon: '🏭', desc: 'Usines, routes, premiers véhicules.', adds: { petrole: 0.002, industrie: 0.0012 }, productivity: 0.9, admin: 0.005 },
   { name: 'Classe moyenne', icon: '🏘️', desc: 'Chauffage, logement, alimentation variée.', adds: { gaz: 0.001, metaux: 0.0008, tropicaux: 0.0006, peche: 0.0006 }, productivity: 1, admin: 0.008 },
   { name: 'Consommation de masse', icon: '🛍️', desc: 'Électronique, voitures, équipements.', adds: { puces: 0.0008, industrie: 0.0008, petrole: 0.0004 }, productivity: 1.1, admin: 0.012 },

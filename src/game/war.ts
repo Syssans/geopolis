@@ -1,7 +1,7 @@
 import { RELIGIONS } from '../data/religions';
 import { rand, shuffle } from './rng';
 import {
-  addRel, alive, clamp, devOf, inReach, invalidate, log, loseForces, nm, owned, power, provDev, rel, sameBloc, warBetween, warsOf,
+  addRel, alive, clamp, devOf, inReach, invalidate, log, loseForces, nm, owned, power, PROJECTION_MIN, provDev, rel, sameBloc, warBetween, warsOf,
 } from './state';
 import type { GameState, Id, PeaceTerms, Pid, War, World } from './types';
 
@@ -16,7 +16,7 @@ export function canDeclareWar(s: GameState, w: World, attacker: Id, target: Id):
   if (!t?.alive || attacker === target) return { ok: false, reason: 'Cible invalide' };
   if (sameBloc(s, attacker, target)) return { ok: false, reason: 'Membre de votre bloc' };
   if (warBetween(s, attacker, target)) return { ok: false, reason: 'Déjà en guerre' };
-  if (!inReach(s, w, attacker, target)) return { ok: false, reason: 'Hors de portée (pas de frontière)' };
+  if (!inReach(s, w, attacker, target)) return { ok: false, reason: `Hors de portée (ni frontière, ni flotte suffisante : ${PROJECTION_MIN} flottes et autant que la cible)` };
   if (a.exhaustion > 60) return { ok: false, reason: 'Lassitude de guerre trop élevée' };
   return { ok: true };
 }
@@ -148,6 +148,59 @@ function frontline(s: GameState, w: World, side: Id[], foes: Id[], naval: boolea
   return [...res];
 }
 
+/** Provinces côtières encore tenues par le camp adverse. */
+function coastOf(s: GameState, w: World, foes: Id[]): Pid[] {
+  const res: Pid[] = [];
+  s.provinces.forEach((p, pid) => {
+    if (foes.includes(p.owner) && !p.occupiedBy && w.provinces[pid].coastal) res.push(pid);
+  });
+  return res;
+}
+
+/** Débarquement ciblé du joueur : coût, chances, conditions. */
+export const INVASION_COOLDOWN = 6;
+export function invasionCost(s: GameState, id: Id): number {
+  return Math.max(2, Math.round(s.nations[id].army * 0.6 * 10) / 10);
+}
+export function invasionCheck(s: GameState, w: World, id: Id, pid: Pid): { ok: boolean; reason?: string; chance: number } {
+  const p = s.provinces[pid];
+  const me = s.nations[id];
+  const war = s.wars.find((x) => (x.attackers.includes(id) && x.defenders.includes(p.owner)) || (x.defenders.includes(id) && x.attackers.includes(p.owner)));
+  const no = (reason: string) => ({ ok: false, reason, chance: 0 });
+  if (!war) return no('Pas en guerre avec ce pays');
+  if (!w.provinces[pid].coastal) return no('Province sans littoral');
+  if (p.occupiedBy) return no('Déjà occupée');
+  if (me.navy < PROJECTION_MIN) return no(`Il faut ${PROJECTION_MIN} flottes`);
+  const foes = war.attackers.includes(id) ? war.defenders : war.attackers;
+  if (me.navy < sideNavy(s, foes) * 0.8) return no('Flotte ennemie trop forte');
+  const now = s.year * 12 + s.month;
+  if ((me.invasionReady ?? 0) > now) return no(`Troupes en préparation (${(me.invasionReady ?? 0) - now} mois)`);
+  if (me.treasury < invasionCost(s, id)) return no('Trésor insuffisant');
+  const defense = s.nations[p.owner].army * 0.15 + provDev(s, w, pid) * 0.3;
+  const chance = clamp(me.army / (me.army + defense + 1), 0.15, 0.85);
+  return { ok: true, chance };
+}
+
+/** Lance un débarquement sur une province côtière ennemie. */
+export function launchInvasion(s: GameState, w: World, id: Id, pid: Pid): { ok: boolean; msg: string } {
+  const chk = invasionCheck(s, w, id, pid);
+  if (!chk.ok) return { ok: false, msg: chk.reason! };
+  const me = s.nations[id];
+  me.treasury -= invasionCost(s, id);
+  me.invasionReady = s.year * 12 + s.month + INVASION_COOLDOWN;
+  const name = w.provinces[pid].name;
+  if (rand(s) < chk.chance) {
+    s.provinces[pid].occupiedBy = id;
+    log(s, `🚢 Débarquement réussi : ${name} est occupée.`, 'war', [id, s.provinces[pid].owner]);
+    return { ok: true, msg: `Débarquement réussi : ${name} est à vous.` };
+  }
+  loseForces(me, 'army', me.army * 0.12);
+  loseForces(me, 'navy', 1);
+  me.exhaustion = clamp(me.exhaustion + 6, 0, 100);
+  log(s, `🚢 Débarquement repoussé à ${name} : lourdes pertes.`, 'war', [id]);
+  return { ok: true, msg: `Le débarquement a échoué : corps d’armée et une flotte perdus.` };
+}
+
 /** Provinces du camp occupées par l'ennemi (à libérer). */
 function occupiedOwn(s: GameState, side: Id[], foes: Id[]): Pid[] {
   const res: Pid[] = [];
@@ -175,14 +228,18 @@ export function resolveWarMonth(s: GameState, w: World, war: War) {
       s.provinces[pid].occupiedBy = null;
       n--;
     }
-    const front = shuffle(s, frontline(s, w, side, foes, naval));
-    for (const pid of front) {
+    const frontSet = frontline(s, w, side, foes, naval);
+    const front = shuffle(s, frontSet);
+    // Projection navale : avec une flotte suffisante et dominante, tout le littoral ennemi est exposé aux débarquements
+    const inFront = new Set(frontSet);
+    const landings = naval && sideNavy(s, side) >= PROJECTION_MIN ? shuffle(s, coastOf(s, w, foes).filter((p) => !inFront.has(p))) : [];
+    for (const [pid, landing] of [...front.map((p) => [p, false] as const), ...landings.map((p) => [p, true] as const)]) {
       if (n <= 0) break;
-      // Les grosses provinces résistent plus longtemps
-      if (rand(s) < 8 / (8 + provDev(s, w, pid))) {
+      // Les grosses provinces résistent plus longtemps ; un débarquement est deux fois plus difficile
+      if (rand(s) < (8 / (8 + provDev(s, w, pid))) * (landing ? 0.5 : 1)) {
         s.provinces[pid].occupiedBy = side[0];
         if (side.includes(s.player) || s.provinces[pid].owner === s.player)
-          log(s, `${w.provinces[pid].name} tombe aux mains de ${nm(s, side[0])}.`, 'war', [side[0], s.provinces[pid].owner]);
+          log(s, `${landing ? '🚢 Débarquement : ' : ''}${w.provinces[pid].name} tombe aux mains de ${nm(s, side[0])}.`, 'war', [side[0], s.provinces[pid].owner]);
       }
       n--;
     }

@@ -7,7 +7,7 @@ import { inDefault, tierBlocked } from './finance';
 import { GOODS, type Good } from '../data/trade';
 import { capacity, blockedStraits, storedUnits, findRoutes, piracyRisk, sourceNode, type Result } from './contracts';
 import { rand } from './rng';
-import { addRel, alive, clamp, devOf, embargoes, log, nm, rel, warBetween } from './state';
+import { addRel, alive, clamp, devOf, embargoes, log, nm, marketAdvantage, rel, warBetween } from './state';
 import { homeNode, straitOwner, TOLL, unitPrice } from './trade';
 import type { GameState, Id, NeedLine, NeedsReport, Purchase, Route, World } from './types';
 
@@ -58,7 +58,7 @@ export interface Quote {
 /** Conditions d'un fournisseur : marge selon les relations, quantité selon sa production. */
 export function quote(s: GameState, w: World, seller: Id, good: Good): Quote {
   const r = rel(s, s.player, seller);
-  const markup = Math.round(clamp(0.15 - r / 500 + (s.rival === seller ? 0.15 : 0) + (s.nations[s.player].sanctions?.p ?? 0) * 0.5, 0.02, 0.8) * 100) / 100;
+  const markup = Math.round(clamp(0.15 - r / 500 + (s.rival === seller ? 0.15 : 0) + (s.nations[s.player].sanctions?.p ?? 0) * 0.5 - marketAdvantage(s, s.player, seller), 0.02, 0.8) * 100) / 100;
   const price = Math.round(unitPrice(s, good) * (1 + markup) * 1000) / 1000;
   const max = exportable(s, w, seller, good);
   const from = sourceNode(s, w, seller, good);

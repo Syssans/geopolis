@@ -6,7 +6,7 @@ import { influenceGain } from '../game/tick';
 import { createGame, SAVE_VERSION, START_EMBARGOES } from '../game/setup';
 import {
   MONTHS, alive, dateLabel, devOf, hasTrade, embargoes, inReach, neighbours, nm, owned, popOf, power, powerRank, provDev, rel, sameBloc,
-  warBetween, warsOf, desecratedHolySites,
+  warBetween, warsOf, desecratedHolySites, communitiesOf, communityMembers, hasCoast, PROJECTION_MIN,
 } from '../game/state';
 import { monthEconomy, monthPolitics } from '../game/tick';
 import * as C from '../game/contracts';
@@ -14,6 +14,8 @@ import * as V from '../game/convoys';
 import * as P from '../game/purchases';
 import * as O from '../game/orgs';
 import { initOrgs } from '../game/orgs';
+import * as CM from '../game/communities';
+import { initCommunities } from '../game/communities';
 import { LIFT_COST, MAX_PRESSURE, liftChance, negotiateLift } from '../game/sanctions';
 import { MARGIN, TIERS, tierFromGdp } from '../data/tiers';
 import { COUNTRIES } from '../data/countries';
@@ -24,8 +26,9 @@ import { CAMPAIGNS } from '../data/campaign';
 import { computeTrade, homeNode, NODES, output, playerMarket, production, straitClosed, straitOwner, TOLL, unitPrice as unitPriceOf, type TradeReport } from '../game/trade';
 import type { GameState, Id, NeedLine, PeaceTerms, Pid, Policy, War, World } from '../game/types';
 import {
-  aiAcceptsPeace, annexable, applyPeace, canDeclareWar, enemyLeader, isLeader, scoreFor, termsCost,
+  aiAcceptsPeace, annexable, applyPeace, canDeclareWar, enemyLeader, INVASION_COOLDOWN, invasionCheck, invasionCost, isLeader, launchInvasion, scoreFor, termsCost,
 } from '../game/war';
+import { COMMUNITIES } from '../data/communities';
 import { holyHolders, RELIGIONS, type Religion } from '../data/religions';
 import { GOODS, STRAITS, TRADE_NODES } from '../data/trade';
 import type { Topology } from 'topojson-specification';
@@ -271,6 +274,7 @@ export class App {
       const s = JSON.parse(raw) as GameState;
       s.storePolicy ??= {}; // champs ajoutés depuis
       if (!s.orgs || !Object.keys(s.orgs).length) initOrgs(s);
+      if (!s.communities) initCommunities(s);
       s.prosperity ??= { points: 40, satisfaction: 1, months: 0 };
       // Sanctions historiques (pèsent moins) pour les parties antérieures
       s.legacyEmbargoes ??= START_EMBARGOES.map(([a, b]) => `${a}>${b}`).filter((k) => s.embargoes.includes(k));
@@ -560,6 +564,12 @@ export class App {
       this.renderHud();
     };
     h.opecJoin = () => this.run(O.joinOpec(this.state, this.world, this.state.player));
+    h.commJoin = (cid) => this.run(CM.joinCommunity(this.state, this.state.player, cid));
+    h.commLeave = (cid) => this.run(CM.leaveCommunity(this.state, this.state.player, cid));
+    h.invade = (pid) => {
+      this.run(launchInvasion(this.state, this.world, this.state.player, Number(pid)));
+      this.renderAll();
+    };
     h.opecLeave = () => this.run(O.leaveOpec(this.state, this.state.player));
     h.suppliers = (g) => this.showSuppliers(g as keyof typeof GOODS);
     h.buyFrom = (id) => this.showSellerGoods(id);
@@ -1057,6 +1067,10 @@ export class App {
       const minority = p.religion !== owner.religion || p.core !== p.owner;
       html += `<h3>Actions</h3><div class="actions">
         ${this.action('support', 'Armer les insurgés', A.COSTS.support(), { disabled: !minority ? 'Aucune minorité' : sameBloc(s, me.id, owner.id) ? 'Allié' : p.supportedBy ? 'Déjà soutenus' : !inReach(s, this.world, me.id, owner.id) ? 'Hors de portée' : undefined })}
+        ${warBetween(s, me.id, owner.id) && info.coastal ? (() => {
+          const ic = invasionCheck(s, this.world, me.id, pid);
+          return this.action('invade', '🚢 Débarquement', ic.ok ? `<b class="cost">💰 ${money(invasionCost(s, me.id))}</b> · réussite ${Math.round(ic.chance * 100)} %` : '', { disabled: ic.ok ? undefined : ic.reason, p: String(pid), danger: true });
+        })() : ''}
         <button class="act" data-a="tab" data-p="nation"><span class="t">Diplomatie avec ${esc(owner.name)}</span><span class="c">🌍 ${signed(rel(s, me.id, owner.id))}</span></button>
       </div>`;
     }
@@ -1248,7 +1262,8 @@ export class App {
         ${stat('Corps d’armée', String(Math.round(me.army)))}${stat('Flottes', String(Math.round(me.navy)))}${stat('Puissance', `#${powerRank(s, me.id)}`)}
         ${stat('Entretien', money(me.income.upkeep))}${stat('Lassitude', `<span class="${me.exhaustion > 50 ? 'neg' : ''}">${num(me.exhaustion)} %</span>`)}${stat('Agressivité', `<span class="${me.aggression > 40 ? 'neg' : ''}">${num(me.aggression)}</span>`)}
       </div>
-      <p class="muted" style="font-size:12px">L’armée prend les provinces ennemies une à une ; la flotte protège votre commerce (pouvoir commercial dans les nœuds côtiers) et permet les débarquements.</p>
+      <div class="verdict ${me.navy >= PROJECTION_MIN && hasCoast(s, this.world, me.id) ? 'ok' : ''}">🚢 <b>Projection navale ${me.navy >= PROJECTION_MIN && hasCoast(s, this.world, me.id) ? 'disponible' : 'indisponible'}</b> <small>${hasCoast(s, this.world, me.id) ? `${Math.round(me.navy)} / ${PROJECTION_MIN} flottes` : 'pays sans littoral'}</small></div>
+      <p class="hint">L’armée prend les provinces ennemies une à une. Avec au moins ${PROJECTION_MIN} flottes, vous pouvez déclarer la guerre à tout pays côtier dont la flotte n’est pas plus forte que la vôtre, même lointain, et <b>débarquer</b> sur son littoral : touchez une province côtière ennemie pendant la guerre (« 🚢 Débarquement », un tous les ${INVASION_COOLDOWN} mois). Si votre flotte domine celle de l’ennemi, des débarquements ont aussi lieu d’eux-mêmes. La flotte protège enfin votre commerce (pouvoir dans les nœuds côtiers).</p>
       <div class="actions">
         ${this.action('recruit', 'Recruter des corps d’armée', A.COSTS.recruit(s, me.id))}
         ${this.action('disband', 'Démobiliser', 'Réduit l’entretien', { disabled: me.army < 1 ? 'Aucune' : undefined })}
@@ -1273,6 +1288,26 @@ export class App {
   }
 
   // ——— Diplomatie (soi) ———
+  /** Communautés économiques : celles du joueur, et celles qu'il peut rejoindre. */
+  private communitiesHtml(): string {
+    const s = this.state;
+    const me = s.player;
+    const mine = communitiesOf(s, me);
+    const open = COMMUNITIES.filter((c) => !mine.includes(c.id) && (c.region.includes(me) || c.members.includes(me)));
+    const card = (c: (typeof COMMUNITIES)[number], member: boolean) => {
+      const ms = communityMembers(s, c.id);
+      const why = member ? null : CM.canJoinCommunity(s, me, c.id);
+      return `<div class="card org comm"><div class="mh"><b>${c.icon} ${esc(c.name)}</b><small>${member ? '<b class="c-gold">membre</b>' : `${ms.length} membres`}</small></div>
+        <small class="muted">${esc(c.desc)}</small>
+        <div class="org-flags">${ms.map((m) => this.flag(m)).join('')}</div>
+        <div class="comm-fx"><span>📦 Contrats avec les membres <b class="pos">+${Math.round(c.market * 100)} %</b></span><span>🌍 Relations <b class="pos">+${c.relations}</b></span>${member ? '' : `<span>Relations moyennes <b class="${cls(CM.avgRelWith(s, me, c.id))}">${signed(Math.round(CM.avgRelWith(s, me, c.id)))}</b></span>`}</div>
+        <div class="actions">${member ? this.action('commLeave', `Quitter ${esc(c.short)}`, '🌍 −15 avec les membres · ⚖️ −5', { danger: true, wide: true, p: c.id }) : this.action('commJoin', `Adhérer à ${esc(c.short)}`, `🤝${CM.JOIN_COST} · 🌍 +5 avec les membres`, { wide: true, disabled: why ?? undefined, p: c.id })}</div></div>`;
+    };
+    if (!mine.length && !open.length) return '';
+    return `<h3>Communautés économiques</h3><p class="hint">Entre membres d’une même communauté, les relations sont meilleures et le commerce plus facile : prime plus forte sur vos contrats de vente, marge plus faible sur vos achats (avantages cumulés jusqu’à 10 %).</p>
+      ${mine.map((cid) => card(CM.communityDef(cid), true)).join('')}${open.map((c) => card(c, false)).join('')}`;
+  }
+
   /** Organisations internationales (OPEP) : membres, quotas, adhésion. */
   private orgsHtml(): string {
     const s = this.state;
@@ -1303,6 +1338,7 @@ export class App {
       <h3>Échanges</h3><div class="rows">
         <div class="row"><span>Accords commerciaux</span><span>${s.trades.filter((k) => k.split('|').includes(me.id)).length}</span></div>
         <div class="row" data-a="explain" data-p="sanctions" style="cursor:pointer"><span>Embargos subis</span><span class="${emb.length ? 'neg' : ''}">${emb.length ? `${s.embargoes.filter((k) => k.endsWith(`>${me.id}`)).map((k) => flagOf(k.split('>')[0])).join(' ')} · −${Math.round((me.sanctions?.p ?? 0) * 100)} % ›` : 'aucun'}</span></div></div>
+      ${this.communitiesHtml()}
       ${this.orgsHtml()}
       <h3>Meilleures relations</h3><div class="rows">${rels.slice().sort((a, b) => b.r - a.r).slice(0, 6).map(line).join('')}</div>
       <h3>Pires relations</h3><div class="rows">${rels.slice().sort((a, b) => a.r - b.r).slice(0, 6).map(line).join('')}</div>`;
@@ -1326,6 +1362,11 @@ export class App {
     if (n.bloc) badges.push(`<span class="badge-i ally">🛡️ ${esc(s.blocs[n.bloc].name)}</span>`);
     if (n.nuclear) badges.push('<span class="badge-i nuke">☢ Nucléaire</span>');
     if (O.isMember(s, 'opep', id)) badges.push('<span class="badge-i ally">🛢️ OPEP</span>');
+    const myComms = communitiesOf(s, s.player);
+    for (const cid of communitiesOf(s, id)) {
+      const c = CM.communityDef(cid);
+      badges.push(`<span class="badge-i ${id !== s.player && myComms.includes(cid) ? 'ally' : 'neutral'}" title="${esc(c.name)}">${c.icon} ${esc(c.short)}</span>`);
+    }
     if (n.sanctions) badges.push(`<span class="badge-i war">🚫 Sanctionné −${Math.round(n.sanctions.p * 100)} %</span>`);
     if (trade) badges.push('<span class="badge-i ally">Accord commercial</span>');
     if (emb) badges.push('<span class="badge-i war">Sous votre embargo</span>');

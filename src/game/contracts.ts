@@ -1,7 +1,7 @@
 import { GOODS, STRAITS, TRADE_NODES, type Good } from '../data/trade';
 import { EXTRA_LANES } from '../data/routes';
 import { pick, rand } from './rng';
-import { addRel, alive, devOf, embargoes, log, nm, owned, rel, warBetween, provDev } from './state';
+import { addRel, alive, devOf, embargoes, log, nm, owned, rel, warBetween, provDev, marketAdvantage } from './state';
 import { absorption, COMMISSION, goodOf, homeNode, NODES, output, straitClosed, straitOwner, TOLL, unitPrice, type TradeReport } from './trade';
 import { needsOf } from './needs';
 import { inDefault } from './finance';
@@ -236,7 +236,8 @@ export function buyerNeed(s: GameState, w: World, id: Id, good: Good): BuyerNeed
 function needBonus(s: GameState, need: BuyerNeed, buyer: Id, good: Good, noise = 0): number {
   const market = s.prices[good] ?? 1;
   const b = -0.1 + need.urgency * 0.18 + rel(s, s.player, buyer) / 500 + (1 - market) * 0.1 + noise;
-  return Math.round(Math.min(0.2, Math.max(-0.1, b)) * 100) / 100;
+  // Communautés économiques communes : marché facilité, prime en plus
+  return Math.round((Math.min(0.2, Math.max(-0.1, b)) + marketAdvantage(s, s.player, buyer)) * 100) / 100;
 }
 
 export function generateOffers(s: GameState, w: World, force = false) {

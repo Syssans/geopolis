@@ -1,3 +1,4 @@
+import { COMMUNITIES } from '../data/communities';
 import { holyHolders, religiousDistance } from '../data/religions';
 import type { GameState, Id, LogKind, Nation, Pid, War, World } from './types';
 
@@ -52,6 +53,7 @@ interface Index {
   neighbours: Map<Id, Id[]>;
   top3?: Set<Id>;
   desecrators?: Map<string, Set<Id>>;
+  communities?: Map<Id, string[]>;
 }
 const indexes = new WeakMap<GameState, Index>();
 let worldRef: World | null = null;
@@ -198,10 +200,26 @@ function topPowers(s: GameState): Set<Id> {
   return ix.top3;
 }
 
-/** Peut-on projeter sa force jusqu'à la cible (voisinage, ou superpuissance) ? */
+/** Flottes nécessaires pour projeter une force par la mer. */
+export const PROJECTION_MIN = 3;
+
+export const hasCoast = (s: GameState, w: World, id: Id) => owned(s, id).some((p) => w.provinces[p].coastal);
+
+/**
+ * Projection navale : une flotte suffisante (au moins 4, et au moins égale à celle de la cible)
+ * permet d'atteindre n'importe quel pays côtier, et d'y débarquer.
+ */
+export function navalReach(s: GameState, w: World, from: Id, to: Id): boolean {
+  const a = s.nations[from];
+  const b = s.nations[to];
+  return a.navy >= PROJECTION_MIN && a.navy >= b.navy && hasCoast(s, w, from) && hasCoast(s, w, to);
+}
+
+/** Peut-on projeter sa force jusqu'à la cible (voisinage, superpuissance ou projection navale) ? */
 export function inReach(s: GameState, w: World, from: Id, to: Id, projection = true): boolean {
-  if (projection && topPowers(s).has(from)) return true;
-  return neighbours(s, w, from).includes(to);
+  if (neighbours(s, w, from).includes(to)) return true;
+  if (!projection) return false;
+  return topPowers(s).has(from) || navalReach(s, w, from, to);
 }
 
 export function powerRank(s: GameState, id: Id): number {
@@ -236,6 +254,9 @@ export function baseline(s: GameState, a: Id, b: Id): number {
   if (sameBloc(s, a, b)) v += 25;
   if (hasTrade(s, a, b)) v += 8;
   if (s.orgs?.opep?.members.includes(a) && s.orgs.opep.members.includes(b)) v += 8;
+  // Communautés économiques : le rapprochement le plus fort l'emporte
+  const shared = sharedCommunities(s, a, b);
+  if (shared.length) v += Math.max(...shared.map((c) => c.relations));
   const d = desecrators(s);
   if (d.get(na.religion)?.has(b)) v -= 20;
   if (d.get(nb.religion)?.has(a)) v -= 20;
@@ -274,4 +295,34 @@ export function loseForces(n: Nation, kind: 'army' | 'navy', amount: number) {
 /** Développement actuel d'une province : sa valeur de départ plus ce qu'elle a gagné avec le niveau de vie. */
 export function provDev(s: GameState, w: World, pid: Pid): number {
   return w.provinces[pid].dev + (s.provinces[pid].devGain ?? 0);
+}
+
+// ————— Communautés économiques —————
+
+/** Membres actuels d'une communauté (la composition de 2026 si la partie n'en garde pas trace). */
+export function communityMembers(s: GameState, cid: string): Id[] {
+  return s.communities?.[cid] ?? COMMUNITIES.find((c) => c.id === cid)?.members ?? [];
+}
+
+/** Communautés dont une nation est membre. */
+export function communitiesOf(s: GameState, id: Id): string[] {
+  const ix = index(s);
+  if (!ix.communities) {
+    ix.communities = new Map();
+    for (const c of COMMUNITIES) for (const m of communityMembers(s, c.id)) ix.communities.set(m, [...(ix.communities.get(m) ?? []), c.id]);
+  }
+  return ix.communities.get(id) ?? [];
+}
+
+/** Communautés partagées par deux nations. */
+export function sharedCommunities(s: GameState, a: Id, b: Id) {
+  const mine = communitiesOf(s, a);
+  if (!mine.length) return [];
+  const theirs = communitiesOf(s, b);
+  return COMMUNITIES.filter((c) => mine.includes(c.id) && theirs.includes(c.id));
+}
+
+/** Avantage commercial entre deux nations (prime de vente en plus, marge d'achat en moins), plafonné à 10 %. */
+export function marketAdvantage(s: GameState, a: Id, b: Id): number {
+  return Math.min(0.1, sharedCommunities(s, a, b).reduce((x, c) => x + c.market, 0));
 }

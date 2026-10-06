@@ -76,6 +76,7 @@ export interface Nation {
   exhaustion: number;
   nuclear: boolean;
   nukeProgram: number | null;
+  invasionReady?: number; // mois (absolu) à partir duquel un nouveau débarquement est possible
   hawk: number; // tempérament IA 0-1
   bloc: Id | null;
   claims: Id[]; // casus belli détenus
@@ -263,6 +264,7 @@ export interface GameState {
   passes: Record<string, number>; // droits de passage achetés : détroit → mois restants
   notForSale: Good[]; // marchandises retirées de la vente (pas d'offres)
   orgs: Record<string, Org>; // organisations internationales
+  communities?: Record<string, Id[]>; // communautés économiques : membres actuels
   prosperity: { points: number; satisfaction: number; months: number }; // progression vers le palier suivant (0-100)
   storePolicy: Partial<Record<Good, number>>; // part du surplus de production mise en stock (0, 0,5 ou 1)
   prevPrices: Record<string, number>; // cours du mois précédent (tendance)
