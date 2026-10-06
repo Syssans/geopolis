@@ -1,3 +1,4 @@
+import { personaOf } from './ai-strategy';
 import { tierFromGdp } from '../data/tiers';
 import { adminCost } from './needs';
 import { initOrgs } from './orgs';
@@ -179,6 +180,7 @@ export function createGame(world: World, player: Id, seed = Date.now()): GameSta
   }
   initOrgs(s);
   initCommunities(s);
+  for (const n of alive(s)) if (n.id !== player) personaOf(s, n); // tempérament de chaque gouvernement IA
   initCampaign(s, world);
   seedConvoys(s, world);
   seedPriceHistory(s);

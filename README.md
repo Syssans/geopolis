@@ -63,7 +63,7 @@ npm run build      # build de production dans dist/ (PWA installable)
 | **Lieux saints** | Jérusalem, La Mecque, Médine, Najaf, Qom, Rome, Constantinople, Varanasi, Bodh-Gaya, Lhassa… : ferveur pour le détenteur de même foi, colère des fidèles sinon, et **guerre sainte** possible. |
 | **Diplomatie** | Relations (religion, blocs, commerce, lieux saints + historique), accords commerciaux, embargos, alliances et blocs (OTAN, OTSC…), garanties informelles des grandes puissances. |
 | **Guerre** | Sièges province par province, score de guerre selon le développement occupé, traités à la carte (annexion de provinces précises, satellisation, réparations). Dissuasion et tension nucléaires. |
-| **IA** | Chaque nation place ses marchands, gère armée et flotte, envoie des missionnaires, arme des insurgés coreligionnaires, ferme ses détroits en guerre, proclame des guerres saintes et attaque les voisins faibles. |
+| **IA** | Chaque gouvernement joue comme un humain, selon son tempérament (bâtisseur, diplomate, prudent ou dépensier, ambitieux) visible sur sa fiche : il garde une réserve, modernise ses provinces et tente des forages, fait monter (ou retomber) son niveau de vie, dimensionne armée et flotte selon les menaces et ses ambitions outre-mer, adhère aux communautés économiques (ou les quitte), forme des alliances, aide ses amis endettés. Ses estimations sont imparfaites : il peut se tromper. Il place aussi ses marchands, envoie des missionnaires, arme des insurgés coreligionnaires, ferme ses détroits en guerre et proclame des guerres saintes. |
 | **Identité visuelle** | L'interface prend les couleurs de la culture jouée : 15 thèmes (latin, anglo-saxon, nordique, slave, arabe, persan, turc, chinois, japonais, coréen, indien, Asie du Sud-Est, africain, latino-américain, israélien) avec leur police, leur palette, un motif traditionnel dans le HUD (seigaïha, frette chinoise, étoile à huit branches, kente…) et une mer teintée. Polices embarquées, jouables hors ligne. |
 
 ## Architecture
@@ -82,7 +82,8 @@ src/data/routes.ts            ports et tracés réels des voies commerciales
   missions.ts, crises.ts        campagne, missions, score, rival et crises
   religion.ts                   agitation, insurrections, missionnaires, ferveur
   war.ts                        guerres, sièges, traités
-  ai.ts, events.ts, tick.ts     IA, événements, boucle mensuelle
+  ai.ts, ai-strategy.ts         IA : guerre, foi, diplomatie ; budget, développement, niveau de vie, communautés
+  events.ts, tick.ts            événements, boucle mensuelle
 src/ui/                       carte SVG (d3-geo + d3-zoom), HUD, fiches, modales
   themes.ts, fonts.ts           thèmes culturels (palettes, motifs, polices)
 tests/                        commerce, religion, guerre, simulation de 30 ans

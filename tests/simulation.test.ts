@@ -560,3 +560,23 @@ describe('finances publiques, contrats et équilibrage', () => {
     }
   });
 });
+
+describe('IA : un gouvernement qui joue comme un humain', () => {
+  it('investit, adhère aux communautés et garde un tempérament', () => {
+    const s = createGame(world, 'France', 7);
+    const ai = alive(s).filter((n) => n.id !== s.player);
+    expect(ai.every((n) => n.persona)).toBe(true);
+    const members0 = Object.values(s.communities ?? {}).reduce((a, m) => a + m.length, 0);
+    for (let i = 0; i < 36; i++) {
+      s.events = [];
+      advanceMonth(s, world);
+    }
+    const levels = s.provinces.filter((p) => p.owner !== s.player).reduce((a, p) => a + (p.level ?? 0) + (p.works ? 1 : 0), 0);
+    expect(levels).toBeGreaterThan(100);
+    const members = Object.values(s.communities ?? {}).reduce((a, m) => a + m.length, 0);
+    expect(members).toBeGreaterThan(members0);
+    // Le développement suit le niveau de vie, et l'index du développement total reste juste
+    const sum = (id: string) => owned(s, id).reduce((a, pid) => a + world.provinces[pid].dev + (s.provinces[pid].devGain ?? 0), 0);
+    expect(devOf(s, 'Germany')).toBe(sum('Germany'));
+  });
+});

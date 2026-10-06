@@ -1,9 +1,10 @@
 import {
   addToBloc, appealToFaithful, fabricateClaim, holyWarClaim, holyWarReasons, improveRelations, merchantNodes,
-  merchantSlots, nationalUnity, recruit, disband, sendMissionary, setMerchant, signTrade, supportRebels, toggleEmbargo,
+  merchantSlots, nationalUnity, sendMissionary, setMerchant, signTrade, supportRebels, toggleEmbargo,
   toggleStrait,
 } from './actions';
 import { pushEvent, termsToParams } from './events';
+import { aiStrategy, personaOf, threatOf } from './ai-strategy';
 import { pick, rand, shuffle } from './rng';
 import { alive, atWar, embargoes, hasTrade, inReach, neighbours, owned, power, rel, sameBloc, warsOf, provDev } from './state';
 import { STRAITS } from '../data/trade';
@@ -17,7 +18,7 @@ const MAX_AI_WARS = 5;
 export function runAI(s: GameState, w: World) {
   for (const n of shuffle(s, alive(s))) {
     if (n.id === s.player) continue;
-    military(s, n);
+    aiStrategy(s, w, n);
     faith(s, w, n);
     diplomacy(s, w, n);
     straits(s, w, n);
@@ -46,14 +47,6 @@ export function runMerchantAI(s: GameState, w: World, includePlayer: boolean) {
   }
 }
 
-function military(s: GameState, n: Nation) {
-  const inc = n.income.production + n.income.trade + n.income.tolls;
-  const upkeep = n.income.upkeep;
-  const target = inc * n.milShare * (atWar(s, n.id) ? 1.5 : 1);
-  if (n.treasury < 0 && n.army > 2) disband(s, n.id);
-  else if (upkeep < target * 0.9 && n.treasury > inc * 3 && rand(s) < 0.3) recruit(s, n.id, n.navy > 0 && rand(s) < 0.25);
-}
-
 function faith(s: GameState, w: World, n: Nation) {
   if (n.stability < 40 && n.fervor >= 40) nationalUnity(s, n.id);
   if (n.missionary === null && n.policy !== 'tolerance' && n.fervor >= 30 && rand(s) < 0.2) {
@@ -76,20 +69,6 @@ function faith(s: GameState, w: World, n: Nation) {
     if (t) holyWarClaim(s, w, n.id, t);
   }
   if (n.fervor > 200 && rand(s) < 0.05) appealToFaithful(s, n.id);
-}
-
-/** Menace du voisin hostile le plus fort, rapportée à sa propre puissance ; `min` écarte d'avance les voisins trop faibles pour compter. */
-function threatOf(s: GameState, w: World, n: Nation, min = 0): number {
-  const own = Math.max(power(n), 1);
-  let t = min * own;
-  let found = 0;
-  for (const o of neighbours(s, w, n.id)) {
-    const p = power(s.nations[o]);
-    // La puissance d'abord (bon marché), les relations ensuite (coûteuses)
-    if (p <= t) continue;
-    if (rel(s, n.id, o) < -30 && !sameBloc(s, n.id, o)) (t = p), (found = p);
-  }
-  return found / own;
 }
 
 function diplomacy(s: GameState, w: World, n: Nation) {
@@ -171,17 +150,20 @@ function blocDeterrence(s: GameState, target: Id): { power: number; nuclear: boo
 
 function war(s: GameState, w: World, n: Nation) {
   if (atWar(s, n.id) || n.stability < 35 || n.exhaustion > 30) return;
+  // Un pays ambitieux vise aussi au-delà de ses frontières (projection navale, superpuissance)
+  const ambition = personaOf(s, n).ambition;
   const rivals = () =>
     alive(s).filter(
-      (o) => o.id !== n.id && (rel(s, n.id, o.id) <= -40 || n.claims.includes(o.id) || n.holyClaims.includes(o.id)) && inReach(s, w, n.id, o.id, false),
+      (o) => o.id !== n.id && (rel(s, n.id, o.id) <= -40 || n.claims.includes(o.id) || n.holyClaims.includes(o.id)) && inReach(s, w, n.id, o.id, ambition > 0.5),
     );
   if (n.hawk >= 0.3 && !n.cbProgress && n.influence >= 60 && rand(s) < 0.05) {
     const r = pick(s, rivals().filter((o) => !n.claims.includes(o.id)));
     if (r) fabricateClaim(s, w, n.id, r.id);
   }
   if (s.wars.length >= MAX_AI_WARS) return;
-  if (rand(s) > n.hawk * 0.008 * (n.policy === 'proselytisme' ? 1.5 : 1)) return;
-  const me = power(n);
+  if (rand(s) > (0.002 + n.hawk * 0.008) * (0.6 + 0.8 * ambition) * (n.policy === 'proselytisme' ? 1.5 : 1)) return;
+  // Le rapport de force est estimé, pas connu : un gouvernement peut se surestimer… et le payer
+  const me = power(n) * (0.75 + 0.5 * rand(s));
   const targets = rivals().filter((o) => {
     const d = blocDeterrence(s, o.id);
     return !d.nuclear && me > (n.holyClaims.includes(o.id) ? 1.3 : 1.7) * d.power && canDeclareWar(s, w, n.id, o.id).ok;

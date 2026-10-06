@@ -20,7 +20,7 @@ export const CONVERSIONS: { good: Good; minDev: number }[] = [
 ];
 
 /** Ressources du sous-sol que la prospection peut révéler. */
-const DEPOSITS: Good[] = ['petrole', 'gaz', 'metaux', 'terres_rares', 'uranium'];
+export const DEPOSITS: Good[] = ['petrole', 'gaz', 'metaux', 'terres_rares', 'uranium'];
 
 export interface Result {
   ok: boolean;
@@ -120,7 +120,7 @@ export function toggleForSale(s: GameState, good: Good): Result {
   return { ok: true, msg: `${GOODS[good].name} : plus d'offres de contrat` };
 }
 
-/** Avancement des chantiers, et investissements de l'IA. */
+/** Avancement des chantiers (les investissements de l'IA sont décidés dans ai-strategy.ts). */
 export function monthlyWorks(s: GameState, w: World) {
   s.provinces.forEach((p, pid) => {
     if (!p.works || p.occupiedBy || p.revolt) return;
@@ -145,17 +145,6 @@ export function monthlyWorks(s: GameState, w: World) {
     }
     p.works = undefined;
   });
-
-  // L'IA modernise sa province la plus rentable quand elle a de la trésorerie
-  for (const n of alive(s)) {
-    if (n.id === s.player || rand(s) > 0.03) continue;
-    const inc = n.income.production + n.income.trade + n.income.tolls;
-    if (n.treasury < inc * 12) continue;
-    const best = owned(s, n.id)
-      .filter((pid) => !s.provinces[pid].works && (s.provinces[pid].level ?? 0) < MAX_LEVEL)
-      .sort((a, b) => production(s, w, b) - production(s, w, a))[0];
-    if (best !== undefined) upgrade(s, w, n.id, best);
-  }
 }
 
 /** Provinces du joueur produisant une marchandise. */
@@ -175,7 +164,7 @@ export const DEV_RATE = [0, 0.015, 0.022, 0.03, 0.038, 0.046]; // progression me
 export function monthlyDevelopment(s: GameState, w: World) {
   for (const n of alive(s)) {
     const player = n.id === s.player;
-    const sat = player ? (s.prosperity?.satisfaction ?? 1) : 0.85;
+    const sat = player ? (s.prosperity?.satisfaction ?? 1) : (n.aiSat ?? 0.85);
     const blocked = player && n.treasury < 0;
     // Progression proportionnelle à la satisfaction (nulle sous 70 %) et à la stabilité (nulle sous 35)
     const fSat = clamp((sat - 0.7) / 0.2, 0, 1.25);

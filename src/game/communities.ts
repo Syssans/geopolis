@@ -41,7 +41,7 @@ export function joinCommunity(s: GameState, id: Id, cid: string): { ok: boolean;
   for (const m of communityMembers(s, cid)) addRel(s, id, m, 5);
   s.communities = { ...(s.communities ?? {}), [cid]: [...communityMembers(s, cid), id] };
   invalidate(s);
-  log(s, `${c.icon} ${s.nations[id].name} rejoint ${c.name}.`, 'diplo', [id]);
+  log(s, `${c.icon} ${s.nations[id].name} rejoint ${c.name}.`, 'diplo', [id, ...communityMembers(s, cid)]);
   return { ok: true, msg: `Vous êtes membre de ${c.name} : commerce facilité avec ses membres.` };
 }
 
@@ -53,7 +53,7 @@ export function leaveCommunity(s: GameState, id: Id, cid: string): { ok: boolean
   for (const m of ms) if (m !== id) addRel(s, id, m, -15);
   s.nations[id].stability = clamp(s.nations[id].stability - 5, 0, 100);
   invalidate(s);
-  log(s, `${c.icon} ${s.nations[id].name} quitte ${c.name}.`, 'diplo', [id]);
+  log(s, `${c.icon} ${s.nations[id].name} quitte ${c.name}.`, 'diplo', [id, ...ms]);
   return { ok: true, msg: `Vous quittez ${c.name} : relations −15 avec ses membres, stabilité −5.` };
 }
 
